@@ -1,0 +1,51 @@
+# macOS
+.DS_Store
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dependencies and generated files
+node_modules/
+.next/
+dist/
+coverage/
+.turbo/
+playwright-report/
+test-results/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDE local state
+.vscode/
+.idea/
+
+# Cursor: version only shared skills and rules
+.cursor/*
+!.cursor/skills/
+!.cursor/skills/**
+!.cursor/rules/
+!.cursor/rules/**
+
+# Claude Code: version only shared skills
+.claude/*
+!.claude/skills/
+!.claude/skills/**
+
+# Codex: version only shared skills
+.agents/*
+!.agents/skills/
+!.agents/skills/**
+
+# OpenCode: version only shared commands
+.opencode/*
+!.opencode/commands/
+!.opencode/commands/**
