@@ -1,0 +1,86 @@
+openapi: 3.1.0
+info:
+  title: AulaNorma health check
+  version: 1.0.0
+  description: >-
+    Comprobación de estado de la aplicación mínima de AulaNorma (FR-006). "Operativa" significa
+    que el servicio arrancó con una configuración válida y responde. Con una configuración
+    inválida, el preflight termina con código 1 antes de que arranque el servidor, tanto en
+    `npm run dev` como en `npm start`, por lo que nunca se atienden peticiones y este contrato
+    no define una respuesta de error para ese caso. No requiere autenticación y no expone
+    configuración, entorno, rutas, commit, hora de arranque ni dependencias. `/api/health` es la
+    única ruta del servicio: cualquier otra responde 404 sin cuerpo (FR-009,
+    x-aulanorma-not-found).
+servers:
+  - url: http://127.0.0.1:3000
+    description: Ejecución local (solo interfaz de bucle local).
+paths:
+  /api/health:
+    get:
+      operationId: getHealth
+      summary: Confirma que el servicio está operativo.
+      security: []
+      responses:
+        "200":
+          description: El servicio arrancó con una configuración válida y responde.
+          headers:
+            Cache-Control:
+              description: La respuesta nunca se almacena en caché.
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+              example:
+                status: ok
+                version: 0.1.0
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - version
+      properties:
+        status:
+          type: string
+          const: ok
+        version:
+          type: string
+          description: Versión semántica de la aplicación, tomada de package.json.
+          pattern: "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+x-aulanorma-not-found:
+  description: >-
+    Toda ruta distinta de /api/health, con cualquier método, responde 404 sin cuerpo. Incluye
+    `/`, las rutas anidadas y las rutas reservadas del framework (`/404`, `/500`, `/_not-found`,
+    `/_error`, `/_app`, `/_document` y `/_next/*`). No existe ninguna página HTML, tampoco la 404
+    por defecto del framework. Lo garantizan el Route Handler comodín `src/app/[[...path]]/route.ts`
+    y las reescrituras de `next.config.ts` (research.md, R1).
+  status: 404
+  body: vacío
+  headers:
+    Cache-Control: no-store
+  forbidden:
+    - Content-Type text/html
+    - Cualquier cuerpo
+x-aulanorma-constraints:
+  - La respuesta no incluye la cabecera X-Powered-By (poweredByHeader desactivado).
+  - La respuesta no incluye la cabecera Server.
+  - Ninguna respuesta del servicio contiene HTML.
+  - HEAD /api/health responde 200 con las mismas cabeceras y sin cuerpo.
+  - Los demás métodos sobre /api/health responden sin cuerpo; el framework responde 405 a POST,
+    PUT, PATCH y DELETE, y 204 a OPTIONS.
+  - Una configuración recargada en caliente con valores inválidos durante `next dev` hace que
+    /api/health responda 500 sin cuerpo; nunca responde "ok" con una configuración inválida.
+  - Las URL no canónicas (barra final, como `/api/health/`, o barras repetidas, como `//`)
+    responden 308 hacia la URL canónica, con la ruta de destino como texto plano y sin HTML; la
+    URL canónica responde según este contrato.
+  - La cabecera Vary que añade el framework es un residuo conocido; no revela versiones ni
+    configuración (research.md, R1).
+  - Fuera del contrato solo queda el espacio de herramientas del servidor de desarrollo de
+    Next.js (`/__nextjs_*`). Existe únicamente en `next dev`, escuchando en 127.0.0.1, se atiende
+    antes del enrutado de la aplicación y no forma parte del artefacto de `next start`
+    (research.md, R1 y K11).
