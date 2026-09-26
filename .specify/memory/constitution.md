@@ -110,8 +110,26 @@ texto libre hace frágil la trazabilidad, la revisión y la publicación.
   fichero, no solo la extensión), tamaño máximo, número de páginas y estructura; los PDF
   cifrados, corruptos o con contenido activo se rechazan. Los nombres de fichero se sanean y el
   procesamiento se realiza de forma aislada del resto del sistema.
-- **Control de acceso**: toda operación requiere autenticación y autorización comprobada en el
-  servidor, con denegación por defecto.
+- **Control de acceso**: toda operación que acceda, modifique o exponga información de negocio,
+  datos personales, contenido protegido o acciones privilegiadas DEBE requerir autenticación y
+  autorización comprobadas en el servidor, con denegación por defecto. Cualquier otra operación
+  está sujeta a la misma exigencia, salvo la excepción del apartado siguiente.
+- **Excepción: comprobación técnica pública de estado**: puede existir excepcionalmente una
+  comprobación técnica de disponibilidad o estado accesible sin autenticación, únicamente si
+  cumple simultáneamente todas estas condiciones:
+  - es de solo lectura;
+  - no accede a datos de negocio ni a datos personales;
+  - no usa persistencia ni servicios externos;
+  - no cambia el estado del sistema;
+  - devuelve un contrato mínimo, explícito y cerrado;
+  - no revela configuración, entorno, rutas, commits, tiempos internos, dependencias,
+    infraestructura ni ninguna otra información sensible;
+  - la excepción está declarada expresamente en la especificación de la funcionalidad y se
+    comprueba mediante pruebas.
+
+  Toda operación que no cumpla todas estas condiciones sigue sujeta a autenticación y
+  autorización. Esta excepción NO DEBE extenderse por analogía a operaciones ni endpoints de
+  producto.
 - **Auditoría**: los eventos sensibles (inicio de sesión, cambios de permisos, subida de
   documentos, aprobaciones, rechazos, publicaciones) DEBEN registrarse en un registro de
   auditoría de solo inserción.
@@ -122,7 +140,9 @@ texto libre hace frágil la trazabilidad, la revisión y la publicación.
   inyección de instrucciones) y el HTML generado DEBE sanearse antes de mostrarse o publicarse.
 
 **Justificación**: la plataforma maneja credenciales de Moodle, documentos subidos y cuentas de
-docentes; una brecha afectaría a centros formativos y alumnado.
+docentes; una brecha afectaría a centros formativos y alumnado. La única excepción al control de
+acceso se limita a una comprobación técnica sin datos ni efectos, necesaria para verificar de
+forma automática que el servicio está operativo.
 
 ### VI. Publicación idempotente y recuperable en Moodle (NO NEGOCIABLE)
 
@@ -309,7 +329,8 @@ fácil de operar; la complejidad solo se añade cuando está justificada.
   3. ¿Es imposible publicar sin aprobación docente explícita y vigente? (III)
   4. ¿Las salidas críticas se validan contra esquemas versionados? (IV)
   5. ¿Se aplican mínimo privilegio, gestión de secretos, validación de archivos, control de
-     acceso y auditoría? (V)
+     acceso y auditoría? Si existe una comprobación técnica pública de estado, ¿cumple todas las
+     condiciones de la excepción? (V)
   6. ¿La publicación es idempotente, reanudable y sin duplicados? (VI)
   7. ¿Es una porción vertical pequeña dentro del alcance vigente (UF0517 primero)? (VII)
   8. ¿Están planificadas las pruebas obligatorias? (VIII)
@@ -323,7 +344,9 @@ fácil de operar; la complejidad solo se añade cuando está justificada.
 - **Supremacía**: esta constitución prevalece sobre especificaciones, planes, tareas y
   cualquier práctica posterior. En caso de conflicto, el artefacto posterior DEBE corregirse
   para ajustarse a ella; `analyze` DEBE clasificar como CRÍTICO cualquier conflicto detectado.
-- **Excepciones**: los principios no admiten excepciones puntuales. La complejidad adicional se
+- **Excepciones**: los principios no admiten excepciones puntuales. Solo se admiten las
+  excepciones que el propio texto de un principio define con condiciones cerradas, como la
+  comprobación técnica pública de estado del principio V. La complejidad adicional se
   justifica mediante el mecanismo del principio XII (ADR y "Complexity Tracking"); cualquier otra
   desviación exige enmendar antes la constitución.
 - **Procedimiento de enmienda**: toda enmienda se realiza con `/speckit-constitution` en una rama
@@ -340,4 +363,4 @@ fácil de operar; la complejidad solo se añade cuando está justificada.
   DEBE verificar el cumplimiento; al cerrar cada porción vertical DEBE revisarse si la
   constitución sigue siendo adecuada.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-24 | **Last Amended**: 2026-09-24
+**Version**: 1.1.0 | **Ratified**: 2026-09-24 | **Last Amended**: 2026-09-26
