@@ -167,7 +167,7 @@ crudo, la equivalencia entre modos y la auditoría de registros. Además, los pa
   - **datos**: la frontera solo lee `httpVersion`, `method`, `url`, `rawHeaders` y el estado imprescindible de la respuesta; no consume el cuerpo, no lee la dirección del cliente ni otros datos de la petición y ningún manejo escribe registros.
 
   Esas respuestas son de rechazo o de transporte: no ejecutan una operación de producto, no constituyen autorización y no amplían la excepción. Debe fallar hasta T038 (FR-009)
-- [ ] T025 [P] [US1] Escribir en `scripts/smoke-test.mjs` (Node sin dependencias) la parte común y el **modo producción**:
+- [X] T025 [P] [US1] Escribir en `scripts/smoke-test.mjs` (Node sin dependencias) la parte común y el **modo producción**:
   - **Higiene**: construir el entorno de cada caso desde cero, eliminando toda `AULANORMA_*` heredada; usar el puerto fijo `127.0.0.1:3000` de los puntos de entrada, comprobando antes de cada arranque que está libre y fallando con un mensaje claro si no lo está; cada servidor en su propio grupo de procesos, terminado completo al acabar el caso; espera de señales observables, sin pausas fijas; negarse a ejecutar, con mensaje claro, si existen `.env`, `.env.local`, `.env.production` o `.env.production.local`.
   - **Cliente TCP crudo** sin dependencias, que registra estado, cuerpo, cabeceras en su orden, cierre de la conexión y ausencia de respuesta.
   - **`npm start` inválido**: con variable ausente, vacía, valor inválido (centinela) y clave desconocida, el proceso termina con código distinto de 0 en menos de 20 s, el puerto no acepta ninguna conexión en toda la vida del proceso, y la salida nombra la clave y el problema sin el centinela, sin rutas absolutas, sin nombres de ficheros `.env` y sin trazas.
