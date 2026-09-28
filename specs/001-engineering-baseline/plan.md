@@ -380,8 +380,9 @@ directorios `frontend/` ni `backend/` separados (principio XII y ADR 0001).
   contrato, `Content-Type: application/json` y `Cache-Control: no-store`; `OPTIONS` responde 204
   con cuerpo vacío, `Allow: GET, HEAD, OPTIONS` y `no-store`; cualquier otro método recibe un
   405 defensivo. El módulo no hace ningún trabajo falible al evaluarse: dentro del `try` de cada
-  manejo llama a `readRuntimeConfig()` y, si el resultado es correcto, obtiene la versión con el
-  módulo `version`. Si el resultado es un fallo, responde el 500 cerrado. No llama a
+  manejo llama a `readRuntimeConfig()` y, si el resultado es correcto, obtiene el estado, versión
+  incluida, con `buildHealthStatus()` de `health`, sin llamar además a `getVersion()`. Si el
+  resultado es un fallo, responde el 500 cerrado. No llama a
   `loadConfig`, no lee `process.env`, no registra problemas ni valores y no conserva datos de la
   petición. Si ocurre un fallo dentro del manejador
   y todavía no se ha iniciado la respuesta, responde 500 con cuerpo vacío, `no-store`,
@@ -443,6 +444,27 @@ directorios `frontend/` ni `backend/` separados (principio XII y ADR 0001).
   configuración, secretos ni datos personales. `redact` censura con `"[REDACTED]"` las rutas
   `*.password`, `*.secret`, `*.token`, `*.apiKey`, `authorization` y `cookie`, con la
   semántica de rutas de Pino (lista mínima y ampliable).
+- **Interfaz de estado y versión** (`src/platform/version/index.ts` y
+  `src/platform/health/index.ts`). Responsabilidades separadas: `version` lee y valida la
+  versión y `health` compone el estado.
+  - `getVersion()`: única exportación de `version`, síncrona. El módulo importa estáticamente
+    el `package.json` raíz como módulo JSON (`with { type: "json" }`), sin `node:fs` ni
+    `process.cwd()`, y no lee configuración ni `process.env`. Al importarse no valida ni
+    transforma la versión. Al invocarse, valida que `version` sea texto conforme a
+    `^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$` y devuelve exactamente ese texto; ante
+    ausencia, tipo distinto, versión preliminar, metadatos `+…` u otro formato, lanza un error
+    genérico sin el valor, rutas, nombres de fichero ni datos del manifiesto;
+  - `buildHealthStatus()`: única exportación de `health`, síncrona y sin argumentos. Importa
+    `getVersion` de `@/platform/version`, la llama exactamente una vez al invocarse y devuelve
+    un objeto nuevo exactamente igual a `{ status: "ok", version }`; si `getVersion` lanza, la
+    excepción se propaga. No lee configuración, `process.env`, `package.json` ni datos de la
+    petición, no registra, no genera `requestId` y no usa red, persistencia ni servicios
+    externos.
+
+  Importar cualquiera de los dos módulos no hace trabajo: el sistema de módulos, o el
+  empaquetador de Next.js, resuelve y conserva la importación JSON estática, pero la validación
+  y la composición solo ocurren al invocar las funciones, dentro del `try` de la API Route. La
+  ruta obtiene la versión únicamente a través de `buildHealthStatus()`.
 
 ## Comandos npm
 

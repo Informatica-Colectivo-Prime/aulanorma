@@ -560,8 +560,9 @@ ficheros. El cargador de `@next/env` es sustituible en las pruebas para observar
   una vez**, después de validar y de empezar a escuchar. No convierte `node server.mjs` sin
   preflight en un punto de entrada admitido: los únicos son `npm run dev` y `npm start`.
 - **Ruta de estado**. `src/pages/api/health.ts` no hace trabajo falible al evaluar el módulo:
-  dentro del `try` de cada manejo llama a `readRuntimeConfig()` y obtiene la versión con el
-  módulo `version`; no llama a `loadConfig` ni lee `process.env`. Si el resultado es un fallo, o ante cualquier otro fallo dentro del manejador antes de iniciar la respuesta,
+  dentro del `try` de cada manejo llama a `readRuntimeConfig()` y obtiene el estado, versión
+  incluida, con `buildHealthStatus()` del módulo `health`, que llama a `getVersion()` del módulo
+  `version`; no llama a `loadConfig` ni lee `process.env`. Si el resultado es un fallo, o ante cualquier otro fallo dentro del manejador antes de iniciar la respuesta,
   responde ella misma el 500 cerrado (cuerpo vacío, `no-store`, `Content-Length: 0` y
   `Connection: close`) y nunca "ok"; no lanza la excepción a Next.js.
 - **Sin `instrumentation`**. Se elimina del diseño: no puede impedir que el puerto se abra
