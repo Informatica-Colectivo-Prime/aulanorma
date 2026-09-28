@@ -78,9 +78,12 @@
 - Los usuarios de esta funcionalidad son desarrolladores y revisores, por lo que se usan
   términos como "pull request", "comando" o "integración continua"; describen el resultado
   esperado, no la solución técnica.
-- No se nombran lenguajes, frameworks, herramientas de calidad ni proveedores de integración
-  continua; su elección queda para `/speckit-plan` y las decisiones relevantes se registran
-  mediante ADR (FR-027).
+- Los requisitos funcionales no nombran lenguajes, frameworks, herramientas de calidad ni
+  proveedores de integración continua; su elección queda para `/speckit-plan` y las decisiones
+  relevantes se registran mediante ADR (FR-027). Hay dos menciones deliberadas en los criterios
+  de éxito: SC-001 menciona Node.js para fijar el entorno de aceptación, y SC-005 menciona
+  Vitest para fijar el ejecutor cuya ausencia de red se comprueba. Son criterios de aceptación
+  aprobados, no acoplamiento funcional.
 - UF0517 y ADGG0408 solo aparecen en FR-024, que prohíbe lógica específica de ambos.
 - Valores por defecto asumidos (documentados en Assumptions): tiempos de SC-001, SC-002 y
   SC-004 (30, 10 y 15 minutos).
@@ -91,3 +94,49 @@
   de UF0517/ADGG0408), VIII (pruebas deterministas), X (accesibilidad si hay página), XI
   (registros estructurados), XII (sin decisiones de infraestructura en la especificación) y
   regla de línea base de integración continua.
+- Quinta revisión (2026-09-27), alineación previa a `/speckit-checklist` tras adoptar la
+  constitución 1.1.0:
+  - FR-006 declara `/api/health` como la excepción cerrada del principio V y exige comprobar
+    mediante pruebas todas sus condiciones, sin extenderla a otras operaciones.
+  - Los procedimientos de aceptación de SC-002, SC-006 y SC-007 usan clones limpios y completos
+    propios, independientes de que SC-001 esté Pendiente; la evidencia de Linux registra
+    expresamente instalación, configuración, arranque, estado y controles aplicables.
+  - La congelación absoluta de `main` comienza con la primera ejecución satisfactoria de los
+    nueve controles y dura hasta que los nueve quedan configurados como requeridos. Las
+    correcciones anteriores se integran mediante pull requests normales.
+  - SC-001 y SC-008 DEBEN estar Superado antes de integrar. Si falta la persona externa, el
+    criterio queda Pendiente, el pull request permanece abierto, no se integra y no comienza
+    la primera funcionalidad de producto. No existe cierre posterior.
+- Sexta revisión (2026-09-27), convergencia documental posterior a las listas de
+  seguridad-gobernanza y de CI-aceptación: la quinta revisión admitía integrar con SC-001 o
+  SC-008 Pendiente. Esa posibilidad se elimina; la trazabilidad de FR-026, SC-001 y SC-008
+  queda en Superado obligatorio antes de integrar, sin tarea de cierre posterior.
+- Séptima revisión (2026-09-28), convergencia documental de la condición C6 del principio V,
+  revalidada con todos los puntos superados:
+  - FR-006 distingue la operación de estado, que no consume datos de la petición, de la
+    frontera de transporte, que solo puede inspeccionar la versión HTTP, el destino crudo, el
+    método, `Host`, `Content-Length`, `Transfer-Encoding`, `Expect` y los metadatos de
+    negociación de la compresión, sin conservarlos, registrarlos, reflejarlos ni entregarlos a
+    la lógica de estado. C4 declara transitorio el estado de conexión; C5 admite únicamente
+    `Vary: Accept-Encoding`; C6 prohíbe cualquier otra `Vary` y las cabeceras que revelan un
+    framework; se definen los metadatos de transporte `Date`, `Connection` y
+    `Keep-Alive: timeout=5`, distintos de los tiempos internos.
+  - FR-009 sustituye las redirecciones de canonicalización por una frontera de transporte con
+    precedencia versión → `Host` → destino → método → cuerpo, destino crudo exacto, contrato
+    cerrado de rechazo (400, 404, 405, 500 y 505), `OPTIONS` como respuesta técnica de
+    transporte, rechazo cerrado de `CONNECT` y `Upgrade`, `Expect` sin respuestas automáticas,
+    estado de conexión, escucha fija en la interfaz local y equivalencia entre modos.
+  - FR-005 exige reiniciar para aplicar cambios de configuración; FR-008 prohíbe registros por
+    petición o por rechazo en ambos modos. Se añaden dos casos límite y la entidad "Estado de
+    conexión".
+  - Los requisitos funcionales siguen sin nombrar lenguajes, frameworks ni herramientas: los
+    términos nuevos son del protocolo HTTP. Ningún elemento se reabre porque la especificación
+    queda completa, inequívoca y verificable.
+  - Corrección posterior al análisis (2026-09-28): FR-009 acota el 500 cerrado a los fallos
+    dentro del manejador, al fallo de la delegación antes de las cabeceras y a la destrucción de
+    la conexión si la respuesta ya empezó, y excluye expresamente los errores internos del
+    entorno de ejecución anteriores al manejador. FR-006 C2 deja de afirmar que
+    `Accept-Encoding` determina la codificación: solo puede provocar `Vary: Accept-Encoding`, sin
+    `Content-Encoding`. FR-008 fija un único registro de arranque completado por arranque, y
+    FR-009 declara que el 204 de `OPTIONS` cumple por sí mismo C1 a C7. Los criterios de éxito
+    no cambian.

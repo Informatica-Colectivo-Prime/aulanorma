@@ -3,10 +3,12 @@
 **Funcionalidad**: `001-engineering-baseline` | **Plan**: [plan.md](./plan.md)
 
 Recorrido reproducible desde un clon limpio para validar la base de ingeniería de principio a
-fin en **macOS** (arm64 o x64) y **Linux** (x64 o arm64). Es la base de los procedimientos de
-aceptación de SC-001 a SC-009; el apartado 10 resume cómo se recoge la evidencia, y el detalle
-está en la [matriz de aceptación](./plan.md#matriz-de-aceptación). La documentación permanente
-del repositorio (`README.md` y `docs/engineering/`) reproducirá estos pasos durante la
+fin. Los **perfiles verificados** son exactamente dos: **macOS arm64** del mantenedor y
+**Linux x64** de la integración continua y de la aceptación. Otras arquitecturas pueden
+funcionar, pero no se declaran verificadas. Es la base de los procedimientos de aceptación de
+SC-001 a SC-009; el apartado 10 resume cómo se recoge la evidencia, y el detalle está en la
+[matriz de aceptación](./plan.md#matriz-de-aceptación). La documentación permanente del
+repositorio (`README.md` y `docs/engineering/`) reproducirá estos pasos durante la
 implementación.
 
 ## Requisitos previos
@@ -30,6 +32,7 @@ verificación oficial.
 ```bash
 git clone https://github.com/Informatica-Colectivo-Prime/aulanorma.git
 cd aulanorma
+# En aceptación: fijar el SHA base (`git checkout <SHA>`). No clonar una rama mutable.
 node --version          # v24.21.0 en la aceptación
 npm ci                  # instala desde package-lock.json; no ejecuta scripts de instalación
 ```
@@ -57,7 +60,16 @@ npm run dev
 
 `npm run dev` ejecuta primero el preflight (`scripts/preflight.mjs dev`), que carga
 `.env.development.local` igual que Next.js y valida la configuración. Solo si es válida arranca
-`next dev`.
+`server.mjs` en modo desarrollo, que escucha en `127.0.0.1:3000`. El script fija
+`NODE_ENV=development` para los dos procesos, así que un `NODE_ENV` definido en la terminal no
+cambia el modo. La dirección y el puerto son
+fijos.
+
+`npm run dev` y `npm start` son los **únicos puntos de entrada**: ambos ejecutan el preflight y
+`server.mjs`. No uses `npx next dev`, `next dev`, `npx next start` ni `next start`: eluden la
+frontera HTTP y no están admitidos. `node server.mjs` directo tampoco es una entrada admitida:
+se salta el preflight, y la validación defensiva interna de `server.mjs` no lo convierte en un
+punto de entrada soportado. Usa solo `npm run dev` o `npm start`.
 
 En otra terminal:
 
@@ -68,26 +80,37 @@ curl -i http://127.0.0.1:3000/api/health
 **Resultado esperado** (según el [contrato](./contracts/health.openapi.yaml)):
 
 - `HTTP/1.1 200 OK`, `content-type: application/json` y `cache-control: no-store`;
+- `vary: Accept-Encoding` puede aparecer; es la única `vary` admitida;
 - cuerpo **exacto**: `{"status":"ok","version":"0.1.0"}` (con la versión de `package.json`);
-- sin cabecera `x-powered-by`.
+- sin cabeceras `x-powered-by`, `server`, `etag` ni `x-nextjs-*`.
 
-Comprueba también que no hay ninguna página:
+En desarrollo, la primera consulta puede tardar algo más, porque la ruta se compila en ese
+momento.
+
+Comprueba también los rechazos cerrados de la frontera HTTP:
 
 ```bash
-curl -i http://127.0.0.1:3000/
-curl -i http://127.0.0.1:3000/404
-curl -i http://127.0.0.1:3000/_not-found
+curl -i http://127.0.0.1:3000/api/health/                 # destino no exacto
+curl -i -X POST http://127.0.0.1:3000/api/health          # método no admitido
+curl -i -X GET --data 'x' http://127.0.0.1:3000/api/health  # cuerpo no permitido
+node -e 'const s=require("node:net").connect(3000,"127.0.0.1",()=>s.end("GET /api/health HTTP/2.0\r\nHost: 127.0.0.1:3000\r\n\r\n"));s.pipe(process.stdout)'
 ```
 
-**Resultado esperado**: las tres responden `404`, **sin cuerpo** (`content-length: 0` o sin
-contenido) y sin `content-type: text/html` (contrato, `x-aulanorma-not-found`).
+**Resultado esperado**, en ese orden:
+
+- `404` **sin redirección**: sin `location` ni `refresh`;
+- `405` con `allow: GET, HEAD, OPTIONS`;
+- `400`;
+- `505`, porque la versión no es HTTP/1.0 ni HTTP/1.1.
+
+Los cuatro tienen `content-length: 0`, `cache-control: no-store` y `connection: close`, ningún
+cuerpo y ningún `content-type` (contrato, `x-aulanorma-rejection-contract`). Cualquier otra ruta,
+como `/`, `/404` o `/_next/…`, responde el mismo `404` cerrado: ninguna página HTML se sirve.
 
 Detén el servidor con `Ctrl+C`.
 
-Si cambias `.env.development.local` con el servidor en marcha, Next.js recarga el fichero y
-vuelve a evaluar las rutas. Si los valores nuevos son inválidos, `/api/health` responde `500` sin
-cuerpo y nunca "ok". Para aplicar cualquier cambio de configuración, reinicia `npm run dev`: es
-el único procedimiento soportado, y el preflight volverá a validar los valores.
+Los cambios de `.env.development.local` **requieren reiniciar** `npm run dev`, que vuelve a
+pasar el preflight. No se promete la recarga en caliente de la configuración.
 
 ## 4. Comprobar el rechazo de una configuración inválida en ambos modos
 
@@ -112,12 +135,12 @@ AULANORMA_ENVIRONMENT=development npm start ; echo "exit=$?"
 - se muestra un registro `fatal` `startup.config_invalid` que nombra la clave
   (`AULANORMA_LOG_LEVEL`) y el problema (`invalid_value` o `missing`), **sin** mostrar el valor
   `loud`;
-- Next.js no llega a arrancar, así que ningún proceso queda escuchando y `/api/health` nunca
-  responde.
+- `server.mjs` no llega a arrancar, así que ningún proceso queda escuchando y `/api/health`
+  nunca responde.
 
-Este comportamiento se verificó con Next.js 16.3.6 en los dos modos (research.md, R8).
-`npm run check:build` lo comprueba automáticamente en ambos modos, con los casos de variable
-ausente, vacía, inválida y desconocida.
+El comportamiento del preflight se verificó con Next.js 16.3.6 en los dos modos (research.md,
+R8). `npm run check:build` lo comprueba automáticamente en ambos modos, con los casos de
+variable ausente, vacía, inválida y desconocida.
 
 ## 5. Ejecutar todos los controles
 
@@ -130,10 +153,12 @@ npm run check           # las ocho categorías: formato, lint, tipos, pruebas, b
 el entorno de referencia (`docs/engineering/reference-environment.md`), `npm run check` tarda
 menos de 10 minutos (SC-002).
 
-`npm run check:secrets` examina todo el historial Git alcanzable desde `HEAD` y además el árbol
-de trabajo: los ficheros versionados, con sus cambios sin commit, y los **ficheros nuevos sin
-seguimiento que no estén ignorados**. Nunca examina lo que ignora `.gitignore` (`node_modules/`,
-`.env.*`, `.next/`, `.tools/`). Trabaja sobre una copia temporal y no modifica el repositorio.
+`npm run check:secrets` ejecuta tres análisis separados: (1) todo el historial alcanzable
+desde `HEAD`, (2) el contenido del índice de Git y (3) los ficheros versionados modificados y
+los ficheros nuevos no ignorados del árbol de trabajo. Nunca examina lo que ignora `.gitignore`
+(`node_modules/`, `.env.*`, `.next/`, `.tools/`) ni sigue enlaces simbólicos. Falla cerrado si
+falta la herramienta, si su SHA-256 no coincide o si el análisis no puede completarse. Trabaja
+sobre una copia temporal y no modifica el repositorio.
 
 Para cronometrarlo:
 
@@ -183,9 +208,23 @@ cada fichero de registro muestra los mismos recuentos de ficheros y pruebas.
 
 ## 8. Verificación en Linux
 
-Repite los pasos 1 a 6 en una máquina o máquina virtual Linux (x64 o arm64) con los mismos
-requisitos previos, también con Node.js 24.21.0. **Resultado esperado**: los mismos resultados
-que en macOS (FR-001 y SC-001).
+En un clon limpio y completo propio fijado al SHA base, independiente de cualquier ejecución
+de SC-001, repite los pasos locales aplicables 1 a 6 en una máquina o máquina virtual Linux
+x64, con los mismos requisitos previos y Node.js 24.21.0.
+
+La evidencia de Linux registra expresamente, con sus códigos de salida y salidas relevantes:
+
+- instalación de dependencias y herramientas (`npm ci` y `npm run tools:install`);
+- configuración local sin secretos y su comprobación;
+- arranque del servicio;
+- respuesta exacta de la consulta de estado;
+- controles positivos de las ocho categorías;
+- pruebas negativas mediante `npm run verify:negative`;
+- commit, sistema operativo, arquitectura y versiones usadas.
+
+**Resultado esperado**: instalación, configuración, arranque, estado y todos los controles
+aplicables producen los mismos resultados que en macOS. Esta evidencia pertenece al
+procedimiento local de SC-003 y no presupone que SC-001 se haya ejecutado o superado.
 
 ## 9. Qué hace la integración continua y qué se hace solo en la aceptación
 
@@ -206,28 +245,57 @@ que en macOS (FR-001 y SC-001).
   ("usado en pruebas"), se registra la autorización en `acceptance.md` sin copiar el valor, se
   vuelve a enviar la rama, se comprueba que el control `secrets` falla, se cierra el pull
   request sin integrar y se elimina la rama. Esto no elude la protección de `main`: el pull
-  request sigue en borrador, no se integra y debe mostrar el control fallido.
+  request sigue en borrador, no se integra y debe mostrar el control fallido. Esta
+  autorización es puntual de un dato de prueba: no es una excepción a FR-020. Si no puede
+  autorizarse, SC-003 queda sin superar. Cualquier alerta se cierra como dato sintético usado
+  en una prueba; su permanencia en las referencias del pull request cerrado es un riesgo
+  aceptado.
+
+### Secuencia tras integrar en `main`
+
+1. Cada integración produce una ejecución de los nueve controles en `main`.
+2. Si una ejecución falla, la corrección se prepara e integra mediante un pull request normal,
+   con los nueve controles en verde. Pueden existir las integraciones correctivas necesarias
+   hasta obtener la primera ejecución satisfactoria en `main`.
+3. La congelación absoluta comienza al concluir esa primera ejecución satisfactoria de los nueve
+   controles, no antes. Desde ese momento y hasta que los nueve queden configurados como
+   requeridos no se integra ningún cambio.
+4. SC-009 registra exactamente ese intervalo: SHA y final de la primera ejecución satisfactoria,
+   hora de activación y ausencia de commits intermedios. Las correcciones anteriores son parte de
+   la secuencia normal de pull requests previa a la congelación.
+5. El primer pull request posterior, ya sujeto a los nueve controles requeridos, incorpora el
+   registro de activación, la evidencia posterior y el cambio de los ADR 0001 y 0002, junto
+   con `docs/adr/README.md`, de Propuesto a Aceptado.
 
 ## 10. Recogida de evidencias de aceptación
 
-La aceptación se hace una vez, sobre el último commit del pull request de la funcionalidad (y
-se repite lo afectado si ese commit cambia), con Node.js **24.21.0** en todas las mediciones.
-No son controles: ningún workflow las ejecuta y no se repiten en cada pull request. Toda la
-evidencia se guarda en `specs/001-engineering-baseline/acceptance.md`, con el estado
-**Superado**, **No superado** o **Pendiente** por criterio, y nunca incluye secretos, valores
-de tokens ni datos personales reales.
+La aceptación se hace una vez sobre el **SHA base de aceptación** (código, dependencias,
+workflows y documentación de procedimiento). El **HEAD de evidencia** puede añadir solamente
+`acceptance.md`: ese commit no obliga a repetir mediciones, pero vuelve a ejecutar los
+controles automáticos. Cualquier otro cambio crea una nueva base y obliga a repetir lo
+afectado. Todas las mediciones usan Node.js **24.21.0**. No son controles: ningún workflow las
+ejecuta y no se repiten en cada pull request. Toda la evidencia se guarda en
+`specs/001-engineering-baseline/acceptance.md`, con el estado **Superado**, **No superado** o
+**Pendiente** por criterio. Los enlaces a GitHub son admisibles; no se copian nombres de
+personas, rutas locales ni salidas sin redactar. Las personas externas se identifican con un
+seudónimo no reidentificable. Cada procedimiento local usa su propio clon completo, limpio y
+fijado al SHA evaluado; no se clona una rama mutable. Ninguno depende del clon ni del estado
+de SC-001. SC-001 y SC-008 DEBEN estar Superado antes de integrar.
 
 | Criterio | Cómo se recoge la evidencia | Cuándo |
 |----------|-----------------------------|--------|
-| SC-001 | Pasos 1 a 3 cronometrados desde un clon limpio en el macOS de referencia, por una persona sin conocimiento previo y sin ayuda (menos de 30 minutos), y repetidos en Linux (paso 8). El mantenedor puede preparar el entorno y observar o registrar la prueba, pero no sustituir a esa persona. Se anotan inicio, fin, duración, versiones y salida de `curl`. Solo es Superado cuando esa persona completa el recorrido dentro del límite y la evidencia queda registrada. Sin esa persona, queda **Pendiente**, nunca Superado, como en SC-008, aunque cada criterio tiene su propio procedimiento | Antes de integrar |
-| SC-002 | Cada comando de categoría y `time npm run check` (paso 5) en el macOS de referencia: todos con código 0 y el agregado en menos de 10 minutos | Antes de integrar |
-| SC-003 | Salida de `npm run verify:negative` con el estado de Git antes y después (paso 6), y enlaces a los ocho pull requests negativos y a sus ejecuciones fallidas (apartado 9), con la autorización de push si la hubo. Al final no queda ninguna rama `negative-test/*` | Antes de integrar |
-| SC-004 | En el pull request de la funcionalidad, la ejecución inicial y dos reejecuciones completas sobre el mismo commit, esperando a que termine cada una; después, la ejecución de `main` tras integrar. De cada una se anotan identificador, número de intento, inicio, final y duración de los nueve jobs (cada uno en menos de 15 minutos) | Pull request antes de integrar; `main` justo después |
-| SC-005 | Cinco ejecuciones de `npm run check:test` con red y cinco sin red (paso 7), con código de salida y recuentos de cada una | Antes de integrar |
-| SC-006 | `diff .env.example .env.development.local` sin diferencias, `.env.example` sin secretos y ningún `secrets.*` ni token pasado explícitamente en `.github/workflows` | Antes de integrar |
-| SC-007 | `npm run check:secrets` sobre un clon completo (no superficial), que recorre todo el historial alcanzable desde `HEAD`, sin hallazgos no justificados, y enlaces a los jobs `secrets` del pull request y de `main` | Antes de integrar y confirmación en `main` |
-| SC-008 | Una persona que no ha participado en la implementación lee solo la documentación e identifica las cuatro capas y los nueve controles. Se anotan un identificador no personal, sus respuestas y el resultado. Sin esa persona, queda **Pendiente**, nunca Superado | Cuando la documentación está completa |
-| SC-009 | Tras la ejecución de `main`, respuesta de la API de GitHub con los nueve controles requeridos y lista de commits de `main` que muestra que no se integró nada antes de activarlos | Justo después de la ejecución de `main`; se registra en el primer pull request posterior |
+| SC-001 | Pasos 1 a 3 cronometrados desde un clon limpio fijado al SHA base en el macOS arm64 de referencia, por una persona sin conocimiento previo al comenzar el primer recorrido y sin ayuda (menos de 30 minutos), y el mismo recorrido propio repetido en Linux x64, sin límite de 30 minutos. No reutiliza el clon ni la evidencia del paso 8. El mantenedor puede preparar requisitos previos, observar y registrar; cualquier explicación o corrección invalida el intento. Superado solo con ambos recorridos y evidencia registrada. Sin esa persona, queda **Pendiente**, el pull request permanece abierto y no se integra | Antes de integrar |
+| SC-002 | En un clon limpio y completo propio del SHA base, independiente de SC-001: preparación, cada comando de categoría (incluidos `check:secrets`, `check:deps` y `check:workflows`) y `time npm run check` (paso 5) en el macOS de referencia; todos con código 0 y el agregado en menos de 10 minutos | Antes de integrar, aunque SC-001 esté Pendiente |
+| SC-003 | En clones limpios y completos propios fijados al SHA: `verify:negative` con causa y ubicación esperadas (paso 6) en macOS; en Linux x64, evidencia explícita de instalación, configuración, arranque, estado, controles positivos y negativos (paso 8). Enlaces a los ocho pull requests negativos; fallos colaterales registrados; controles no afectados en verde; ningún commit de esas ramas alcanzable desde `main` | Antes de integrar |
+| SC-004 | En el pull request, la ejecución inicial y dos reejecuciones completas sobre el mismo SHA, con los dos workflows del mismo SHA; cada uno de los nueve jobs concluye con éxito en menos de 15 minutos. Un timeout o un fallo no excluido reinicia la serie. Una cancelación por `concurrency` no cuenta. En `main`, la primera ejecución satisfactoria del par sobre el mismo SHA. Una indisponibilidad excluida requiere enlace a la incidencia pública del proveedor | Pull request antes de integrar; `main` antes de activar los controles requeridos |
+| SC-005 | Diez ejecuciones de `check:test` en una misma máquina y clon propio: cinco con red y cinco con conectividad externa desactivada y comprobada (paso 7). Equivalencia de código de salida y recuentos de Vitest | Antes de integrar |
+| SC-006 | En un clon limpio y completo propio del SHA base, independiente de SC-001: `diff` sin diferencias, `.env.example` sin secretos, ningún token pasado en los workflows y revisión visual de otras formas de pasar el contexto | Antes de integrar, aunque SC-001 esté Pendiente |
+| SC-007 | En un clon limpio y completo propio del SHA base: `check:secrets` con los tres análisis sobre el historial alcanzable desde el commit evaluado, sin hallazgos no justificados; enlaces a los jobs `secrets` del pull request y de la primera ejecución satisfactoria de `main` | Antes de integrar, aunque SC-001 esté Pendiente, y confirmación en `main` |
+| SC-008 | Una persona que no ha participado en la implementación, y que si también ejecuta SC-001 lo hace después, identifica trece resultados: cuatro elementos compuestos de capa (ubicación y responsabilidad) y los nueve nombres exactos. Seudónimo no reidentificable. Sin esa persona, queda **Pendiente** y no se integra | Cuando la documentación está completa y, si aplica, después de SC-001 |
+| SC-009 | Desde la primera ejecución satisfactoria de los nueve controles en `main`: SHA y hora final, respuesta de la API con los nueve controles requeridos, hora de activación y lista de commits que demuestra que no se integró nada durante ese intervalo. Evidencia y aceptación de los ADR en el primer pull request posterior | Activación inmediatamente después de la primera ejecución satisfactoria; evidencia en el primer pull request posterior |
+
+Si SC-001 o SC-008 están **Pendiente**, el pull request permanece abierto, no se integra y no
+comienza la primera funcionalidad de producto. No existe cierre posterior.
 
 ## Resolución de problemas
 
@@ -235,9 +303,15 @@ de tokens ni datos personales reales.
 |---------|----------------|--------|
 | `npm ci` rechaza la versión de Node.js | Node.js fuera del rango `>=24.21.0 <25` (por ejemplo, 24.13.0 o 26.x) | Instalar la versión de `.node-version` (24.21.0), obligatoria en la aceptación |
 | `npm start` termina con `missing` | `npm start` no carga `.env.development.local` | Es lo esperado: en producción la configuración viene del entorno; para desarrollo, usar `npm run dev` |
+| El preflight termina con `NODE_ENV` y `mode_mismatch` | Se ejecutó `scripts/preflight.mjs` a mano con un `NODE_ENV` distinto del modo | Usar solo `npm run dev` o `npm start`, que fijan `NODE_ENV` en los dos procesos |
+| El arranque termina con `environment` y `env_load_failed` | Un fichero `.env*` del modo no se puede leer o analizar; por diseño, el mensaje no muestra el fichero ni el error (FR-005) | Revisar los permisos y la sintaxis de los ficheros `.env*` del modo |
 | `npm run dev` termina con `missing` o `invalid_value` aunque `.env.development.local` es correcto | La terminal tiene definida la variable, quizá vacía, y prevalece sobre el fichero | Ejecutar `unset AULANORMA_LOG_LEVEL AULANORMA_ENVIRONMENT` y repetir |
-| `/api/health` responde `500` con `npm run dev` en marcha | Se ha cambiado `.env.development.local` a un valor inválido y Next.js lo ha recargado | Corregir el fichero y reiniciar `npm run dev` |
+| `/api/health` responde `500` sin cuerpo | Fallo propio de la ruta de estado, por ejemplo una configuración que dejó de ser válida con el servidor en marcha | Corregir la configuración y reiniciar `npm run dev` o `npm start`; los cambios de `.env*` siempre exigen reinicio |
+| Un cambio de `.env.development.local` no se aplica | La configuración solo se valida al arrancar | Reiniciar `npm run dev` |
+| El arranque falla porque la dirección está en uso | Otro proceso usa `127.0.0.1:3000`, por ejemplo otro `npm run dev` | Detener ese proceso; la dirección y el puerto son fijos |
+| `/api/health/` u otra variante responde `404` | La frontera solo admite el destino exacto `/api/health` y no redirige | Usar exactamente `/api/health` |
+| Alguien sugiere `next dev`, `next start` o `node server.mjs` directo | Eluden la frontera HTTP o el preflight y no son entradas admitidas | Usar solo `npm run dev` o `npm start` |
 | La prueba de humo se niega a ejecutarse | Existe `.env`, `.env.local` o `.env.production*` | Eliminarlos o renombrarlos a `.env.development.local` |
-| `check:secrets` informa de un fichero que aún no está en Git | Contiene un valor con forma de secreto y no está ignorado | Quitar el valor; si es un secreto real, revocarlo (`SECURITY.md`). Si el fichero debe quedar fuera de Git, añadirlo a `.gitignore` |
+| `check:secrets` informa de un fichero que aún no está en Git | Contiene un valor con forma de secreto y no está ignorado | Quitar el valor; si es un secreto real, revocarlo de inmediato (`SECURITY.md`). Añadir una ruta a `.gitignore` solo si el fichero no debe versionarse (configuración local); ese cambio es revisable y tiene impacto de seguridad (FR-003). No es una excepción a FR-020 ni sirve para conservar una credencial expuesta |
 | `check:secrets` o `check:workflows` no encuentran la herramienta | Falta `npm run tools:install` | Ejecutarlo; necesita acceso a GitHub |
 | `check:deps` falla sin cambios de código | Se ha publicado un aviso nuevo de gravedad alta o crítica | Actualizar la dependencia o registrar una excepción justificada (FR-020) |
