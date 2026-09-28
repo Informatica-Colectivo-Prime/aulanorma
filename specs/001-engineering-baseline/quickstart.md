@@ -38,8 +38,10 @@ npm ci                  # instala desde package-lock.json; no ejecuta scripts de
 ```
 
 **Resultado esperado**: `npm ci` termina sin errores. Con una versión de Node.js fuera del
-rango `>=24.21.0 <25`, por ejemplo 24.13.0 o 26.x, termina con un error que indica el rango
-requerido (`devEngines`). Una 24.x posterior a 24.21.0 se acepta.
+rango `>=24.21.0 <25`, termina antes de instalar con un error que indica el rango requerido:
+`EBADDEVENGINES` con npm 11 (por ejemplo, Node.js 24.13.0) o `EBADENGINE` con clientes que no
+aplican `devEngines`, como npm 10 (por ejemplo, Node.js 20.20.0). Node.js 26 queda excluido por
+el rango, aunque no se ha probado. Una 24.x posterior a 24.21.0 se acepta.
 
 ## 2. Configurar sin secretos
 
@@ -301,7 +303,7 @@ comienza la primera funcionalidad de producto. No existe cierre posterior.
 
 | Síntoma | Causa probable | Acción |
 |---------|----------------|--------|
-| `npm ci` rechaza la versión de Node.js | Node.js fuera del rango `>=24.21.0 <25` (por ejemplo, 24.13.0 o 26.x) | Instalar la versión de `.node-version` (24.21.0), obligatoria en la aceptación |
+| `npm ci` rechaza la versión de Node.js (`EBADDEVENGINES` o `EBADENGINE`) | Node.js o npm fuera de los rangos `>=24.21.0 <25` y `>=11.19.0 <12` (por ejemplo, 24.13.0, 20.x o 26.x) | Instalar la versión de `.node-version` (24.21.0), obligatoria en la aceptación |
 | `npm start` termina con `missing` | `npm start` no carga `.env.development.local` | Es lo esperado: en producción la configuración viene del entorno; para desarrollo, usar `npm run dev` |
 | El preflight termina con `NODE_ENV` y `mode_mismatch` | Se ejecutó `scripts/preflight.mjs` a mano con un `NODE_ENV` distinto del modo | Usar solo `npm run dev` o `npm start`, que fijan `NODE_ENV` en los dos procesos |
 | El arranque termina con `environment` y `env_load_failed` | Un fichero `.env*` del modo no se puede leer o analizar; por diseño, el mensaje no muestra el fichero ni el error (FR-005) | Revisar los permisos y la sintaxis de los ficheros `.env*` del modo |

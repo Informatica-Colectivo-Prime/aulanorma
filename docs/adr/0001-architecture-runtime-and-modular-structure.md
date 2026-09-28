@@ -53,16 +53,20 @@ decisión lo adopta pese a la complejidad que añade (plan.md, Complexity Tracki
    - **versión reproducible de referencia y de la integración continua**: **24.21.0**, fijada
      en `.node-version`. Las mediciones de aceptación se realizan obligatoriamente con ella;
    - **rango oficialmente soportado para desarrollo**: `>=24.21.0 <25`, aplicado por
-     `devEngines.runtime` con `onFail: "error"`. `npm ci` rechaza las versiones fuera del
-     rango, no cualquier versión distinta de 24.21.0.
+     `devEngines.runtime` con `onFail: "error"`, que aplica npm 11, y con el mismo rango por
+     `engines.node` con `engine-strict=true`, que cubre clientes como npm 10, que no aplican
+     `devEngines`. `npm ci` rechaza antes de instalar las versiones fuera del rango, no
+     cualquier versión distinta de 24.21.0. Node.js 26 queda excluido por el rango, pero no se
+     ha ejecutado en la validación.
 
    Las pruebas desechables de la investigación se hicieron con 24.13.0, de la misma línea LTS.
    Son evidencia exploratoria y no sustituyen la aceptación con 24.21.0.
 3. **Lenguaje**: **TypeScript 6.0.3** en modo estricto, con opciones adicionales
    (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` y otras).
 4. **Gestor de paquetes**: **npm** 11 (incluido con Node) con `package-lock.json`, `npm ci`,
-   versiones exactas e `ignore-scripts=true`. `devEngines.packageManager` declara npm con un
-   rango coherente con el de Node.js, cuyo mínimo es la versión incluida con 24.21.0.
+   versiones exactas, `ignore-scripts=true` y `engine-strict=true`.
+   `devEngines.packageManager` y `engines.npm` declaran npm con el mismo rango, coherente con el
+   de Node.js, cuyo mínimo es la versión incluida con 24.21.0 (`>=11.19.0 <12`).
    `package.json` declara `"type": "module"`.
 5. **Estructura modular**:
    - `src/modules/normative-source`, `structured-interpretation`, `didactic-content` y

@@ -27,7 +27,7 @@ tiene cuatro piezas:
   aplica la frontera HTTP antes de delegar en Next.js (research.md, R1). Sin App Router
   operativo. Con npm, sobre Node.js 24 LTS: 24.21.0 es la versión reproducible de referencia y
   de la integración continua (`.node-version`), y el rango soportado para desarrollo es
-  `>=24.21.0 <25` (`devEngines`).
+  `>=24.21.0 <25` (`devEngines`, y `engines` con `engine-strict`).
 - TypeScript **6.0.3** estricto, en lugar de 7: `typescript-eslint` no admite TypeScript 7.
 - Zod para la configuración, Pino para los registros JSON y Vitest para las pruebas.
 - ESLint 10 plano, **sin** `eslint-config-next`, y Prettier.
@@ -88,11 +88,19 @@ la configuración real y el mismo SHA candidato (`check:build` y `acceptance.md`
 - **Versión reproducible de referencia y de la integración continua**: Node.js **24.21.0**,
   fijada en `.node-version`. `actions/setup-node` la lee con `node-version-file`, y las
   mediciones de aceptación se realizan obligatoriamente con ella.
-- **Rango oficialmente soportado para desarrollo**: `>=24.21.0 <25`, aplicado por
-  `devEngines.runtime` con `onFail: "error"`. `npm ci` rechaza las versiones fuera del rango,
-  no cualquier versión distinta de 24.21.0.
-- `devEngines.packageManager` declara npm con un rango coherente con el de Node.js: como mínimo
-  la versión de npm incluida con 24.21.0 y por debajo de la siguiente versión mayor.
+- **Rango oficialmente soportado para desarrollo**: `>=24.21.0 <25`. Lo aplican dos mecanismos
+  con los mismos rangos, Node.js `>=24.21.0 <25` y npm `>=11.19.0 <12`:
+  - `devEngines.runtime` y `devEngines.packageManager`, con `onFail: "error"`, que aplica
+    npm 11;
+  - `engines` en `package.json` con `engine-strict=true` en `.npmrc`, que cubre los clientes que
+    no aplican `devEngines`, como npm 10.
+
+  `npm ci` rechaza las versiones fuera del rango antes de instalar, no cualquier versión
+  distinta de 24.21.0. Se verificó el rechazo de 24.13.0 con npm 11.6.2 (`EBADDEVENGINES`) y de
+  20.20.0 con npm 10.8.2 (`EBADENGINE`). Node.js 26 queda excluido por el rango, pero no se ha
+  ejecutado en esta validación.
+- El rango de npm es coherente con el de Node.js: como mínimo la versión de npm incluida con
+  24.21.0 (11.19.0) y por debajo de la siguiente versión mayor.
 - **TypeScript ejecutado por Node.js** (research.md, R4): `tsconfig.json` DEBE declarar
   `noEmit: true`, `allowJs: true`, `allowImportingTsExtensions: true` y
   `erasableSyntaxOnly: true`, e incluir `server.mjs` en la comprobación; `server.mjs` lleva

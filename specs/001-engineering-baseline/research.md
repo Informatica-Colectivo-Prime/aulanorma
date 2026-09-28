@@ -254,7 +254,8 @@ Deberá rediseñar la frontera en su propio ADR (K23).
   el 2026-09-07 y fijada en `.node-version`. La integración continua la lee de ese fichero, y
   las mediciones de aceptación se realizan obligatoriamente con ella.
 - **Rango oficialmente soportado para desarrollo**: `>=24.21.0 <25`, declarado en
-  `devEngines.runtime` de `package.json` con `onFail: "error"`.
+  `devEngines.runtime` de `package.json` con `onFail: "error"` y, con el mismo rango, en
+  `engines.node`, que `engine-strict=true` de `.npmrc` hace obligatorio.
 
 **Justificación**:
 
@@ -262,14 +263,21 @@ Deberá rediseñar la frontera en su propio ADR (K23).
   2026-10-20 y tiene soporte hasta el **2028-04-30**. Cubre de sobra la duración del TFM.
 - Todas las dependencias lo admiten: Next.js `>=20.9.0`, Vitest `^24.0.0`, ESLint `>=24`,
   Vite `>=22.12.0`.
-- Se usa `devEngines` en lugar de `engines` con `engine-strict`, porque este último también
-  aplicaría las restricciones de `engines` de cada dependencia transitiva.
+- Se usan juntos `devEngines` y `engines` con `engine-strict`, con los mismos rangos.
+  `devEngines` es el contrato que aplica npm 11, pero los clientes anteriores no lo aplican:
+  con Node.js 20.20.0 y npm 10.8.2, `npm ci` instalaba el proyecto solo con avisos. `engines`
+  con `engine-strict` cubre esos clientes. Como contrapartida, `engine-strict` también aplica
+  las restricciones de `engines` de cada dependencia transitiva: una dependencia que dejara
+  fuera la versión de referencia haría fallar la instalación en lugar de avisar. Con las
+  dependencias actuales, `npm ci` con 24.21.0 no produce ningún aviso de ese tipo.
 
 **Consecuencias**:
 
-- `npm ci` rechaza, con un mensaje claro, las versiones **fuera del rango**, no cualquier
-  versión distinta de 24.21.0. Por ejemplo, rechaza 24.13.0 (por debajo del mínimo) y 26.x, y
-  admite una 24.x posterior a 24.21.0 para desarrollar.
+- `npm ci` rechaza antes de instalar, con un mensaje claro, las versiones **fuera del rango**,
+  no cualquier versión distinta de 24.21.0: rechaza 24.13.0, por debajo del mínimo
+  (`EBADDEVENGINES` con npm 11.6.2), y 20.20.0 (`EBADENGINE` con npm 10.8.2), y admite una 24.x
+  posterior a 24.21.0 para desarrollar. Node.js 26 queda excluido por el rango, pero no se ha
+  ejecutado en esta validación.
 - El equipo del mantenedor tiene hoy Node 24.13.0, fuera del rango. Para la aceptación debe
   instalar 24.21.0, la versión de `.node-version`, y registrarla en
   `docs/engineering/reference-environment.md`. Una versión posterior de la línea 24 es válida
@@ -289,9 +297,11 @@ Deberá rediseñar la frontera en su propio ADR (K23).
 
 **Decisión**: npm, en la versión incluida con Node 24.21.0 (serie 11), con `package-lock.json`
 versionado e instalación con `npm ci`. El `.npmrc` del proyecto fija `ignore-scripts=true`,
-`save-exact=true`, `fund=false` y `audit=true`. `devEngines.packageManager` declara npm con un
-rango coherente con el de Node.js: como mínimo la versión de npm incluida con 24.21.0, que se
-anota durante la implementación, y por debajo de la siguiente versión mayor. Una versión exacta
+`save-exact=true`, `fund=false`, `audit=true` y `engine-strict=true`.
+`devEngines.packageManager` y `engines.npm` declaran npm con el mismo rango, coherente con el
+de Node.js: como mínimo la versión de npm incluida con 24.21.0 (11.19.0) y por debajo de la
+siguiente versión mayor (`>=11.19.0 <12`). `devEngines` lo aplica npm 11; `engines` con
+`engine-strict` lo aplica también a clientes como npm 10 (R2). Una versión exacta
 de npm rechazaría las versiones posteriores de Node.js 24 que el rango admite.
 
 **Justificación**:
