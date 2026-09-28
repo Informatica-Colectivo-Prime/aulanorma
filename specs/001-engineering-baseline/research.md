@@ -393,8 +393,9 @@ reglas del núcleo de ESLint, sin complementos extra:
 - **Límites entre capas**: `no-restricted-imports` configurado por directorio (bloques `files`
   de la configuración plana) según la matriz de [`data-model.md`](./data-model.md#matriz-de-dependencias-entre-capas).
 - **Sin llamadas externas en `src/`**: `no-restricted-globals` para `fetch`, `WebSocket` y
-  `EventSource`, y `no-restricted-imports` para `node:http`, `node:https`, `node:net`,
-  `node:tls`, `node:dgram` y `node:dns`. En `src/**/*.ts` se usa la variante de
+  `EventSource`, y `no-restricted-imports` para `node:http`, `node:https`, `node:http2`,
+  `node:net`, `node:tls`, `node:dgram` y `node:dns`, también sin el prefijo `node:` y con sus
+  subrutas. En `src/**/*.ts` se usa la variante de
   `typescript-eslint` de esa regla con `allowTypeImports`, para que
   `src/platform/http-boundary` pueda usar `import type` de `node:http` sin importarlo en
   ejecución.

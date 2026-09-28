@@ -18,7 +18,7 @@ const EXACT_VERSION = /^\d+\.\d+\.\d+$/;
 
 describe("versiones enlazadas de next y @next/env", () => {
   test("ambas son dependencias de ejecución con versión exacta, sin rango", () => {
-    const next = manifest.dependencies?.["next"];
+    const next = manifest.dependencies?.next;
     const nextEnv = manifest.dependencies?.["@next/env"];
     expect(next).toMatch(EXACT_VERSION);
     expect(nextEnv).toMatch(EXACT_VERSION);
@@ -26,7 +26,7 @@ describe("versiones enlazadas de next y @next/env", () => {
 
   test("declaran la misma versión", () => {
     expect(manifest.dependencies?.["@next/env"]).toBe(
-      manifest.dependencies?.["next"],
+      manifest.dependencies?.next,
     );
   });
 });

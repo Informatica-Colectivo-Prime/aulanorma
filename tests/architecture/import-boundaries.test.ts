@@ -8,6 +8,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ESLint, type Linter } from "eslint";
+import tseslint from "typescript-eslint";
 import { beforeAll, describe, expect, test } from "vitest";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -47,12 +48,14 @@ const PORTABLE_MODULES = [
 const NETWORK_MODULES = [
   "node:http",
   "node:https",
+  "node:http2",
   "node:net",
   "node:tls",
   "node:dgram",
   "node:dns",
   "http",
   "https",
+  "http2",
   "net",
   "tls",
   "dgram",
@@ -285,8 +288,17 @@ forbidden.push({
 
 let eslint: ESLint;
 
+// Esta prueba verifica las reglas de arquitectura con entradas sintéticas en
+// rutas que pueden no existir todavía, y typescript-eslint no puede tipar un
+// fichero inexistente. Carga la configuración real del repositorio y solo
+// desactiva las reglas que requieren información de tipos; las restricciones de
+// capas, importaciones, red y `process.env` siguen activas. La configuración
+// tipada completa se comprueba con `npm run check:lint` sobre ficheros reales.
 beforeAll(() => {
-  eslint = new ESLint({ cwd: repoRoot });
+  eslint = new ESLint({
+    cwd: repoRoot,
+    overrideConfig: tseslint.configs.disableTypeChecked,
+  });
 });
 
 async function lint(testCase: BoundaryCase): Promise<Linter.LintMessage[]> {
