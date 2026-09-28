@@ -328,6 +328,28 @@ directorios `frontend/` ni `backend/` separados (principio XII y ADR 0001).
   importaciones relativas ni `@/`; no importa `node:http` en ejecución (solo `import type`).
   Contiene la decisión de la frontera y el estado de conexión, y se prueba con un `handle`
   inyectado.
+- **Interfaz de la frontera**. En ejecución, el módulo exporta únicamente
+  `createHttpBoundary(handle)`, con `handle: (req: IncomingMessage, res: ServerResponse) =>
+  Promise<void>`; `IncomingMessage`, `ServerResponse` y `Duplex` solo se importan como tipos, y
+  las interfaces y tipos borrables pueden exportarse. La fábrica devuelve un objeto
+  `HttpBoundary` cuyos métodos conecta `server.mjs` con los eventos del mismo nombre:
+  - `request(req, res): Promise<void>` (T038): decide con la precedencia de FR-009; si delega,
+    llama a `handle(req, res)` exactamente una vez, con los mismos objetos; si rechaza, escribe
+    y finaliza el rechazo cerrado con la API de `ServerResponse` sin llamar a `handle`. Si
+    `handle` falla, de forma síncrona o asíncrona, antes de enviar cabeceras, escribe el 500
+    cerrado; si la respuesta ya empezó, no escribe nada más y destruye la conexión una sola vez
+    (`res.destroy()` o `req.socket.destroy()`). Se resuelve cuando termina ese tratamiento y
+    nunca rechaza por un fallo de `handle`. Solo lee `httpVersion`, `method`, `url`,
+    `rawHeaders` y el estado imprescindible de la respuesta; no consume el cuerpo, no normaliza
+    ni decodifica la URL (sin `URL`, `decodeURI` ni `decodeURIComponent`), no lee la dirección
+    del cliente, cookies, la consulta analizada, `User-Agent` ni datos personales, y no registra
+    nada;
+  - `checkContinue(req, res): Promise<void>`, `checkExpectation(req, res): Promise<void>`,
+    `connect(req, socket, head): void`, `upgrade(req, socket, head): void` y
+    `clientError(error, socket): void` (T040), con el estado por socket.
+
+  T038 implementa la fábrica y `request`; T040 añade los otros cinco métodos, sin métodos
+  provisionales entretanto.
 - `server.mjs` queda en la raíz como **adaptador mínimo** con `// @ts-check`:
   - crea el servidor con `http.createServer({ requireHostHeader: false }, …)`, para que la
     validación de `Host` la haga la frontera y su rechazo quede contabilizado en el estado de
