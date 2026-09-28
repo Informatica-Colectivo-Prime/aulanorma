@@ -667,12 +667,24 @@ un validador que luego habría que sustituir.
 ## R9. Registros estructurados: Pino 10
 
 **Decisión**: Pino 10.3.1, que por defecto escribe JSON en la salida estándar, sin transportes
-ni hilos de trabajo. La función que crea el logger acepta un destino inyectable para las
-pruebas. Configuración:
+ni hilos de trabajo. `src/platform/logging` exporta en ejecución únicamente
+`createLogger({ environment, level, destination? })`, que devuelve un manejador opaco de la
+aplicación y no el logger de Pino, `logStartupCompleted(logger)` y
+`logConfigInvalid(logger, mode, problems)` (plan.md, «Interfaz de registros»). El destino es
+inyectable para las pruebas. Configuración:
 
-- campos base `service: "aulanorma"` y `environment`, con marcas de tiempo ISO;
+- campos base `service: "aulanorma"` y `environment`, sin `pid` ni `hostname`, con `level`
+  como etiqueta textual y marcas de tiempo ISO;
 - redacción integrada (`redact`) con censura `"[REDACTED]"` para rutas como `*.password`,
-  `*.secret`, `*.token`, `*.apiKey`, `authorization` y `cookie`;
+  `*.secret`, `*.token`, `*.apiKey`, `authorization` y `cookie`, con la semántica de rutas de
+  Pino: `*.password` cubre un único nivel de anidamiento;
+- `startup.completed` se registra con nivel `info` y sin otros campos propios, y
+  `startup.config_invalid` con nivel `fatal`, `environment` igual al modo explícito, `mode` y
+  `problems` reconstruido copiando solo `key` y `problem`. Ningún nivel operativo, incluido
+  `silent`, suprime estos eventos: en Pino 10.3.1 se verificó con los siete niveles que un hijo
+  creado con nivel propio (`child({}, { level })`) escribe exactamente una línea aunque el
+  padre esté en `silent`, mientras que un `fatal` del propio padre en `silent` no escribe
+  nada;
 - eventos: únicamente `startup.completed`, que registra `server.mjs` **exactamente una vez**
   por arranque satisfactorio, después de validar la configuración y de empezar a escuchar, y
   `startup.config_invalid`, que registran el preflight o `server.mjs`. El preflight nunca

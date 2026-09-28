@@ -421,6 +421,28 @@ directorios `frontend/` ni `backend/` separados (principio XII y ADR 0001).
 
   Solo `src/platform/config` lee claves de `process.env`; `server.mjs` solo lee
   `process.env.NODE_ENV`.
+- **Interfaz de registros** (`src/platform/logging/index.ts`, research.md R9). En ejecución
+  exporta únicamente tres funciones:
+  - `createLogger({ environment, level, destination? })`: devuelve un manejador opaco de la
+    aplicación, no el logger de Pino, así que no expone `info`, `fatal`, `child` ni ningún
+    otro método. `level` es uno de los siete niveles admitidos y `destination` es un destino
+    inyectable con `write`; sin él, escribe en la salida estándar. Importar el módulo o crear
+    el manejador no escribe nada;
+  - `logStartupCompleted(logger)`: escribe una línea `info` con `msg: "startup.completed"` y
+    ningún otro campo propio;
+  - `logConfigInvalid(logger, mode, problems)`: escribe una línea `fatal` con
+    `msg: "startup.config_invalid"`, `environment` igual al modo explícito, `mode` y
+    `problems`, reconstruida copiando solo `key` y `problem` de cada elemento; ignora
+    cualquier otro campo, valor, objeto `Error`, ruta o traza.
+
+  Cada llamada escribe exactamente una línea, y ninguno de los siete niveles, incluido
+  `silent`, suprime los dos eventos: el preflight y `server.mjs` pueden registrarlos aunque la
+  configuración no sea válida. Cada línea es un único objeto JSON con `level` como etiqueta
+  textual, `time` en ISO, `service: "aulanorma"`, `environment` y `msg` con el nombre exacto
+  del evento, sin `pid`, `hostname`, `requestId`, datos de la petición, valores de
+  configuración, secretos ni datos personales. `redact` censura con `"[REDACTED]"` las rutas
+  `*.password`, `*.secret`, `*.token`, `*.apiKey`, `authorization` y `cookie`, con la
+  semántica de rutas de Pino (lista mínima y ampliable).
 
 ## Comandos npm
 
@@ -654,7 +676,7 @@ commits alcanzables desde el commit evaluado (research.md, R11), la rama
 | Auditoría de registros | `scripts/smoke-test.mjs` en ambos modos | Integración (bucle local) | Fuera del arranque no aparece ninguna línea: ningún registro automático del framework por petición (método, estado, ruta, tiempos o compilación), ni avisos, errores o trazas; sin valores de `Host`, rutas locales ni credenciales |
 | Sin campos adicionales | Misma prueba y `smoke-test.mjs` | Contrato | `Object.keys(body)` es exactamente `["status", "version"]`; sin cabeceras `x-powered-by` ni `server` |
 | Ausencia de interfaz | `tests/unit/platform/http-boundary.test.ts` y `smoke-test.mjs` | Unitaria e integración | Todo destino distinto de `/api/health` (`/`, `/foo`, `/api`, `/api/health/`, `/api/health/extra`, `/favicon.ico`, `/404`, `/500`, `/_error`, `/_not-found`, `/_next/…`, `/__nextjs_…`, `/api/health.rsc` y variantes codificadas) recibe 404 cerrado sin cuerpo y sin HTML, en ambos modos |
-| Registros sin datos sensibles | `tests/unit/platform/logging.test.ts` | Unitaria | Destino en memoria; cada línea es JSON con `level`, `time`, `service`, `environment` y `msg`; los campos sensibles sintéticos quedan como `[REDACTED]`; el error de configuración no contiene el valor |
+| Registros sin datos sensibles | `tests/unit/platform/logging.test.ts` | Unitaria | Destino en memoria; solo las tres exportaciones y un manejador opaco; cada evento es una línea JSON con `level` como etiqueta, `time` ISO, `service`, `environment` y `msg`, sin `pid`, `hostname` ni `requestId`; `startup.completed` y `startup.config_invalid` se emiten con los siete niveles, incluido `silent`; `problems` solo con `key` y `problem`; los campos sensibles sintéticos quedan como `[REDACTED]`; el error de configuración no contiene el valor; importar o crear no escribe nada |
 | Límites de importación | `tests/architecture/import-boundaries.test.ts` | Arquitectura | Con la API de ESLint (`lintText` y una ruta sintética en cada ubicación), cada dependencia prohibida de la matriz da error y cada dependencia permitida no. Incluye: `src/pages` o `server.mjs` que importa `@/modules/<capa>` da error; `src/pages` que importa `@/platform/<área>` no; `@/platform/<área>/<interno>` desde fuera da error; `process.env` fuera de `src/platform/config` da error, y en `server.mjs` solo se admite `process.env.NODE_ENV`; una importación relativa o con `@/` en un módulo portable da error; `node:http` en ejecución dentro de `src/` da error y `import type` desde `node:http` en `src/platform/http-boundary` no; `node:http2` y los demás módulos de red, con o sin el prefijo `node:`, dan error. Carga la configuración real con `disableTypeChecked`, porque las rutas sintéticas pueden no existir y no admiten análisis tipado, sin ningún mensaje fatal; `npm run check:lint` comprueba la configuración tipada completa sobre los ficheros reales |
 | Versiones enlazadas | `tests/architecture/dependency-versions.test.ts` | Arquitectura | `package.json` declara `next` y `@next/env` con la misma versión exacta (K12) |
 | Sin lógica de dominio | `tests/architecture/no-domain-specifics.test.ts` | Arquitectura | Sin coincidencias de los códigos de certificado en los ficheros versionados y en los ficheros nuevos no versionados que Git no ignora, dentro de `src/`, `tests/` y `scripts/`, más los ficheros operativos de la raíz, excluyendo Markdown y cualquier fichero ignorado. La lista se obtiene con `git ls-files -z --cached --others --exclude-standard`, sin duplicados, en orden determinista y conservando correctamente los nombres con espacios. El patrón se construye a partir de fragmentos para que el propio test no contenga los códigos (FR-024) |
