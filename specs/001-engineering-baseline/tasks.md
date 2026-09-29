@@ -186,7 +186,7 @@ crudo, la equivalencia entre modos y la auditoría de registros. Además, los pa
   - **Muestra de destinos no exactos**, incluido `/__nextjs_…`, y un `Upgrade` de recarga de desarrollo: 404 o 405 cerrados, sin HTML.
 
   Depende de T025 (mismo fichero)
-- [ ] T027 [P] [US1] Escribir `tests/unit/platform/http-boundary-connection.test.ts`, con un `handle` inyectado y sockets simulados, sobre el estado de conexión (FR-006 C4, FR-009):
+- [X] T027 [P] [US1] Escribir `tests/unit/platform/http-boundary-connection.test.ts`, con un `handle` inyectado y sockets simulados, sobre el estado de conexión (FR-006 C4, FR-009):
   - contador de respuestas pendientes que aumenta al aceptar una petición y disminuye una sola vez cuando su respuesta termina o se cierra;
   - después de un rechazo no se delega ni se responde ninguna otra petición del socket;
   - `clientError` sin respuestas pendientes produce el 400 cerrado inmediato; con respuestas pendientes se difiere; al terminar la última se emite (*flush*); si el socket se cierra antes, se descarta sin escribir (*dropped*); con un rechazo previo se suprime sin escribir; `ECONNRESET` descarta el diferido y destruye el socket; nunca hay una segunda respuesta;
