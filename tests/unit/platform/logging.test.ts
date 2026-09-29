@@ -752,7 +752,12 @@ function runIsolated(action: "import" | "create" | "event"): {
   const result = spawnSync(
     process.execPath,
     ["--input-type=module", "-e", script, LOGGING_MODULE_PATH, action],
-    { cwd: repoRoot, env: {}, encoding: "utf8", timeout: 15_000 },
+    {
+      cwd: repoRoot,
+      env: {} as NodeJS.ProcessEnv,
+      encoding: "utf8",
+      timeout: 15_000,
+    },
   );
   expect(result.status, "código de salida del proceso aislado").toBe(0);
   return { stdout: result.stdout, stderr: result.stderr };

@@ -1109,7 +1109,7 @@ async function runIsolated(
     });
     const child = spawn(process.execPath, [runner, plan], {
       cwd: repoRoot,
-      env: { ...environment },
+      env: { ...environment } as NodeJS.ProcessEnv,
       stdio: ["ignore", "pipe", "pipe", "ipc"],
       timeout: 15_000,
     });
