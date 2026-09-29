@@ -6,8 +6,9 @@
 // Contiene la infraestructura común, el modo producción con `npm start` en el
 // repositorio (T025) y, después y nunca a la vez, el modo desarrollo con
 // `npm run dev` (T026); la matriz negativa por TCP crudo contra `npm start`
-// (T029), y la misma matriz en `npm run dev`, comparada caso a caso con la de
-// producción (T030). T031 añade la auditoría de registros.
+// (T029); la misma matriz en `npm run dev`, comparada caso a caso con la de
+// producción (T030), y la auditoría de registros de todos los arranques de
+// ambos modos (T031).
 //
 // El modo desarrollo se ejecuta en una copia temporal (research.md, R14): los
 // ficheros regulares de `git ls-files --cached --others --exclude-standard`,
@@ -92,9 +93,20 @@ const VALID_CONFIG = {
   AULANORMA_LOG_LEVEL: "info",
   AULANORMA_ENVIRONMENT: "ci",
 };
-const VERSION = JSON.parse(
+// Arranques satisfactorios auditados (T031): script de npm y entorno esperado
+// en `startup.completed`, el de la configuración válida en ambos modos.
+const PRODUCTION_STARTUP = {
+  script: "start",
+  environment: VALID_CONFIG.AULANORMA_ENVIRONMENT,
+};
+const DEVELOPMENT_STARTUP = {
+  script: "dev",
+  environment: VALID_CONFIG.AULANORMA_ENVIRONMENT,
+};
+const MANIFEST = JSON.parse(
   readFileSync(path.join(ROOT, "package.json"), "utf8"),
-).version;
+);
+const VERSION = MANIFEST.version;
 
 // Redacción de todo lo que se imprime.
 function realOrSelf(value) {
@@ -169,6 +181,247 @@ function hasStartupCompleted(output) {
       return false;
     }
   });
+}
+
+// Auditoría de registros (T031; FR-006 C4 y FR-008; research.md, R9). La
+// salida de cada proceso contiene un único evento estructurado aprobado:
+// - un arranque satisfactorio termina con `startup.completed`;
+// - un arranque rechazado, con `startup.config_invalid`.
+// Antes del evento solo se admiten líneas vacías y, si el proceso se lanzó con
+// npm, las dos líneas con las que npm anuncia el script, exactamente una vez y
+// en orden; en un proceso directo, ninguna. Después del evento no aparece
+// ninguna línea: ni registros por petición o rechazo, ni avisos, errores o
+// trazas.
+// Cada evento es una sola línea JSON con exactamente los campos aprobados; el
+// contrato completo del formato es de `tests/unit/platform/logging.test.ts`.
+// Los problemas se describen con etiquetas, nunca con la salida.
+const ISO_TIME =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+const COMPLETED_FIELDS = ["environment", "level", "msg", "service", "time"];
+const CONFIG_INVALID_FIELDS = [
+  "environment",
+  "level",
+  "mode",
+  "msg",
+  "problems",
+  "service",
+  "time",
+];
+const PROBLEM_CODES = new Set([
+  "missing",
+  "invalid_value",
+  "unknown_key",
+  "mode_mismatch",
+  "env_load_failed",
+]);
+
+function sameFields(value, fields) {
+  return (
+    JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...fields])
+  );
+}
+
+function logRecord(line) {
+  if (!line.startsWith("{")) {
+    return undefined;
+  }
+  try {
+    const value = JSON.parse(line);
+    return typeof value === "object" && value !== null && !Array.isArray(value)
+      ? value
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// Líneas completas de la salida, clasificadas, y el fragmento final sin salto
+// de línea, si lo hay.
+function logLines(output) {
+  const lines = output.split("\n");
+  const partial = lines.pop() ?? "";
+  return {
+    partial,
+    entries: lines.map((line) => {
+      if (line.trim() === "") {
+        return { kind: "vacía" };
+      }
+      const record = logRecord(line);
+      return record === undefined
+        ? { kind: "texto", line }
+        : { kind: "evento", record };
+    }),
+  };
+}
+
+// Cabecera de npm para el script, derivada de `package.json`: su nombre, su
+// versión, el nombre del script y su comando exacto. Sin script, ninguna.
+function npmBanner(script) {
+  return script === undefined
+    ? []
+    : [
+        `> ${String(MANIFEST.name)}@${String(VERSION)} ${script}`,
+        `> ${String(MANIFEST.scripts?.[script])}`,
+      ];
+}
+
+// Lo que rodea al evento de la posición `index`: antes, solo líneas vacías y
+// la cabecera exacta de npm; después, nada. Sin evento, se revisa toda la
+// salida como anterior a él.
+function framingProblems({ entries, partial }, index, script, event) {
+  const problems = [];
+  const banner = npmBanner(script);
+  const before = (
+    index === undefined ? entries : entries.slice(0, index)
+  ).filter(({ kind }) => kind !== "vacía");
+  if (
+    before.some(
+      (entry) => entry.kind !== "texto" || !banner.includes(entry.line),
+    )
+  ) {
+    problems.push(
+      script === undefined
+        ? `la salida contiene líneas distintas de ${event}`
+        : `la salida contiene líneas distintas de la cabecera de npm y ${event}`,
+    );
+  } else if (
+    before.length !== banner.length ||
+    before.some(({ line }, position) => line !== banner[position])
+  ) {
+    problems.push(
+      "la cabecera de npm no aparece exactamente una vez y en orden",
+    );
+  }
+  if ((index !== undefined && entries.length > index + 1) || partial !== "") {
+    problems.push(`hay líneas después de ${event}`);
+  }
+  return problems;
+}
+
+function baseProblems(record, fields, level) {
+  const problems = [];
+  if (!sameFields(record, fields)) {
+    problems.push("campos");
+  }
+  if (record.level !== level) {
+    problems.push("nivel");
+  }
+  if (record.service !== "aulanorma") {
+    problems.push("servicio");
+  }
+  if (
+    typeof record.time !== "string" ||
+    !ISO_TIME.test(record.time) ||
+    Number.isNaN(Date.parse(record.time))
+  ) {
+    problems.push("marca de tiempo");
+  }
+  return problems;
+}
+
+// `startup.completed`: nivel `info`, sin campos propios y con el entorno de la
+// configuración validada.
+function completedProblems(record, environment) {
+  const problems = baseProblems(record, COMPLETED_FIELDS, "info");
+  if (record.environment !== environment) {
+    problems.push("entorno");
+  }
+  return problems;
+}
+
+// `startup.config_invalid`: nivel `fatal`, el modo explícito como `mode` y
+// como `environment`, y una lista de `{ key, problem }` sin ningún otro dato.
+function configInvalidProblems(record, mode) {
+  const problems = baseProblems(record, CONFIG_INVALID_FIELDS, "fatal");
+  if (record.mode !== mode) {
+    problems.push("modo");
+  }
+  if (record.environment !== mode) {
+    problems.push("entorno");
+  }
+  const list = record.problems;
+  if (
+    !Array.isArray(list) ||
+    list.length === 0 ||
+    list.some(
+      (item) =>
+        typeof item !== "object" ||
+        item === null ||
+        Array.isArray(item) ||
+        !sameFields(item, ["key", "problem"]) ||
+        typeof item.key !== "string" ||
+        !PROBLEM_CODES.has(item.problem),
+    )
+  ) {
+    problems.push("lista de problemas");
+  }
+  return problems;
+}
+
+// Arranque satisfactorio, auditado antes de detener el proceso: cabecera de
+// npm, un único `startup.completed` y nada más después.
+function startupLogProblems(output, { script, environment }) {
+  const lines = logLines(output);
+  const { entries } = lines;
+  const problems = [];
+  const completed = entries.flatMap((entry, index) =>
+    entry.kind === "evento" && entry.record.msg === "startup.completed"
+      ? [index]
+      : [],
+  );
+  const [first] = completed;
+  if (first === undefined) {
+    problems.push("el arranque no registró startup.completed");
+  } else {
+    if (completed.length > 1) {
+      problems.push(
+        `startup.completed se registró ${String(completed.length)} veces`,
+      );
+    }
+    const format = completedProblems(entries[first].record, environment);
+    if (format.length > 0) {
+      problems.push(
+        `startup.completed no tiene el formato aprobado (${format.join(", ")})`,
+      );
+    }
+  }
+  problems.push(
+    ...framingProblems(lines, first, script, "startup.completed"),
+    ...leakProblems(output),
+  );
+  return problems.map((problem) => `registros: ${problem}`);
+}
+
+// Arranque rechazado por la configuración: cabecera de npm si se lanzó con
+// npm y un único `startup.config_invalid` aprobado, sin ninguna otra línea.
+function configInvalidLogProblems(output, { script, mode }) {
+  const lines = logLines(output);
+  const { entries } = lines;
+  const problems = [];
+  const positions = entries.flatMap((entry, index) =>
+    entry.kind === "evento" && entry.record.msg === "startup.config_invalid"
+      ? [index]
+      : [],
+  );
+  const events = positions.map((index) => entries[index]);
+  if (events.length !== 1) {
+    problems.push(
+      `startup.config_invalid se registró ${String(events.length)} veces en lugar de 1`,
+    );
+  }
+  const [event] = events;
+  if (event !== undefined) {
+    const format = configInvalidProblems(event.record, mode);
+    if (format.length > 0) {
+      problems.push(
+        `startup.config_invalid no tiene el formato aprobado (${format.join(", ")})`,
+      );
+    }
+  }
+  problems.push(
+    ...framingProblems(lines, positions[0], script, "startup.config_invalid"),
+  );
+  return problems.map((problem) => `registros: ${problem}`);
 }
 
 // Entorno de cada caso, construido desde cero: `PATH` del proceso padre, los
@@ -426,8 +679,12 @@ async function waitReady(proc) {
     if (!proc.running()) {
       return "el proceso terminó antes de estar listo";
     }
-    if (hasStartupCompleted(proc.output()) && (await portAccepts())) {
-      return undefined;
+    // `startup.completed` se registra después de empezar a escuchar (T031):
+    // en cuanto aparece, el puerto ya debe aceptar conexiones.
+    if (hasStartupCompleted(proc.output())) {
+      return (await portAccepts())
+        ? undefined
+        : "registros: startup.completed se registró antes de escuchar";
     }
     await delay(POLL_MS);
   }
@@ -1615,6 +1872,13 @@ async function invalidStart(
     problems.push("se registró startup.completed");
   }
   problems.push(...leakProblems(output));
+  const script = args.at(-1);
+  problems.push(
+    ...configInvalidLogProblems(output, {
+      script,
+      mode: script === "dev" ? "development" : "production",
+    }),
+  );
   return problems;
 }
 
@@ -1651,6 +1915,56 @@ async function preflightMismatch(
   problems.push(...mismatchProblems(output, nodeEnv));
   if (hasStartupCompleted(output)) {
     problems.push("el preflight registró startup.completed");
+  }
+  problems.push(...leakProblems(output));
+  problems.push(
+    ...configInvalidLogProblems(output, {
+      mode: mode === "dev" ? "development" : "production",
+    }),
+  );
+  return problems;
+}
+
+// El preflight con una configuración válida termina con código 0 sin escribir
+// nada, sin `startup.completed`, que solo registra `server.mjs`, y sin abrir
+// el puerto (T031).
+async function preflightValid({
+  mode = "start",
+  cwd = ROOT,
+  variables = VALID_CONFIG,
+} = {}) {
+  await ensurePortFree();
+  const proc = launch(
+    process.execPath,
+    ["scripts/preflight.mjs", mode],
+    caseEnvironment({
+      ...variables,
+      NODE_ENV: mode === "dev" ? "development" : "production",
+    }),
+    cwd,
+  );
+  const problems = [];
+  try {
+    const { opened, timedOut } = await watchNeverOpens(proc);
+    if (timedOut) {
+      problems.push("no terminó en menos de 20 s");
+    }
+    if (opened) {
+      problems.push("el puerto aceptó conexiones");
+    }
+  } finally {
+    await stop(proc);
+  }
+  const { code } = await exitResult(proc);
+  const output = proc.output();
+  if (code !== 0) {
+    problems.push(`terminó con código ${String(code)} en lugar de 0`);
+  }
+  if (hasStartupCompleted(output)) {
+    problems.push("registros: el preflight registró startup.completed");
+  }
+  if (output !== "") {
+    problems.push("registros: el preflight válido escribió en la salida");
   }
   problems.push(...leakProblems(output));
   return problems;
@@ -1706,6 +2020,7 @@ async function serverDefense() {
     problems.push("se registró startup.completed");
   }
   problems.push(...leakProblems(output));
+  problems.push(...configInvalidLogProblems(output, { mode: "production" }));
   return problems;
 }
 
@@ -1734,6 +2049,7 @@ async function validStart(variables, full) {
         problems.push("se registró algo por las consultas");
       }
     }
+    problems.push(...startupLogProblems(proc.output(), PRODUCTION_STARTUP));
   } finally {
     await stop(proc);
   }
@@ -1761,6 +2077,7 @@ async function wireStart() {
       problems.push(...matrix.problems);
       productionWire = matrix.results;
     }
+    problems.push(...startupLogProblems(proc.output(), PRODUCTION_STARTUP));
   } finally {
     await stop(proc);
   }
@@ -2058,6 +2375,7 @@ async function developmentStart(variables, full) {
         );
       }
     }
+    problems.push(...startupLogProblems(proc.output(), DEVELOPMENT_STARTUP));
   } finally {
     await stop(proc);
   }
@@ -2141,6 +2459,7 @@ async function developmentEquivalence() {
         }
       }
     }
+    problems.push(...startupLogProblems(proc.output(), DEVELOPMENT_STARTUP));
   } finally {
     await stop(proc);
   }
@@ -2186,6 +2505,17 @@ const DEVELOPMENT_CASES = [
     () => {
       writeDevelopmentConfig(VALID_CONFIG);
       return preflightMismatch("test", {
+        mode: "dev",
+        cwd: developmentCopy,
+        variables: {},
+      });
+    },
+  ],
+  [
+    "preflight dev válido: sin salida",
+    () => {
+      writeDevelopmentConfig(VALID_CONFIG);
+      return preflightValid({
         mode: "dev",
         cwd: developmentCopy,
         variables: {},
@@ -2252,6 +2582,7 @@ const CASES = [
     "preflight start con NODE_ENV=development",
     () => preflightMismatch("development"),
   ],
+  ["preflight start válido: sin salida", () => preflightValid()],
   ["server.mjs directo con NODE_ENV=test", () => serverDefense()],
   [
     "npm start válido: contrato, métodos y destinos",
