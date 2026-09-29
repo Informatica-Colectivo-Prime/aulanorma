@@ -177,7 +177,7 @@ crudo, la equivalencia entre modos y la auditoría de registros. Además, los pa
   - **Destinos no exactos**: `/`, `/foo`, `/api`, `/api/health/`, `/api/health/extra`, `/favicon.ico`, `/404`, `/500`, `/_error`, `/_not-found`, `/_next/data/…`, `/_next/image…`, `/_next/static/…`, `/__nextjs_…` y `/api/health.rsc` responden 404 cerrado, sin redirección y sin HTML.
 
   Todos los casos se ejecutan sin ningún secreto real (FR-004). No arranca `next start` ni `next dev` directos: no están admitidos (T032)
-- [ ] T026 [US1] Ampliar `scripts/smoke-test.mjs` con el **modo desarrollo**:
+- [X] T026 [US1] Ampliar `scripts/smoke-test.mjs` con el **modo desarrollo**:
   - **Copia temporal**: se crea con `fs.mkdtemp` a partir de `git ls-files -z --cached --others --exclude-standard`, con dependencias instaladas mediante `npm ci --ignore-scripts --prefer-offline --no-audit --no-fund` (sin enlace a `node_modules`) y eliminada en `finally`. Se ejecuta después del modo producción, nunca a la vez, porque ambos usan `127.0.0.1:3000`.
   - **Configuración por caso**: la prueba escribe su propio `.env.development.local` en cada caso.
   - **Casos inválidos**: valor inválido en el fichero, clave ausente en el fichero y variable de proceso vacía que prevalece sobre un fichero válido. En los tres, código distinto de 0, puerto nunca abierto y sin centinela.
