@@ -775,6 +775,171 @@ describe("loadConfig(mode): logger controlado y errores de carga", () => {
   });
 });
 
+// Independencia entre llamadas: cada resultado fallido es una estructura nueva
+// (objeto exterior, lista y problemas) y modificar uno no altera los
+// siguientes. No se exige que el resultado sea inmutable.
+function failureParts(result: ConfigResult): {
+  readonly outer: ConfigResult;
+  readonly list: readonly ConfigProblem[];
+} {
+  if (result.ok) {
+    expect.fail("se esperaba una lista de problemas");
+  }
+  return { outer: result, list: result.problems };
+}
+
+function expectIndependent(results: readonly ConfigResult[]): void {
+  const parts = results.map(failureParts);
+  parts.forEach((left, index) => {
+    for (const right of parts.slice(index + 1)) {
+      expect(left.outer, "objeto exterior nuevo").not.toBe(right.outer);
+      expect(left.list, "lista problems nueva").not.toBe(right.list);
+      for (const item of left.list) {
+        expect(right.list, "problemas nuevos").not.toContain(item);
+      }
+    }
+  });
+}
+
+// Manipula un resultado fallido por todas sus partes mutables.
+function tamper(result: ConfigResult): void {
+  const { list } = failureParts(result);
+  for (const item of list) {
+    Reflect.set(item, "key", "clave-manipulada");
+    Reflect.set(item, "problem", "missing");
+  }
+  Reflect.apply(Array.prototype.push, list, [
+    { key: "clave-añadida", problem: "unknown_key" },
+  ]);
+  Reflect.set(result, "ok", true);
+}
+
+describe("loadConfig(mode): resultados independientes entre llamadas", () => {
+  const EXACT_MODE_MISMATCH = {
+    ok: false,
+    problems: [{ key: "NODE_ENV", problem: "mode_mismatch" }],
+  };
+  const EXACT_ENV_LOAD_FAILED = {
+    ok: false,
+    problems: [{ key: "environment", problem: "env_load_failed" }],
+  };
+
+  function markedFailure(): LoadEnvConfig {
+    return (...args) => {
+      args[2]?.error(`Failed to load env from ${SYNTHETIC_PATH}`);
+      return loads(VALID_SOURCE)(...args);
+    };
+  }
+
+  function thrownFailure(): LoadEnvConfig {
+    return () => {
+      throw syntheticError();
+    };
+  }
+
+  test("mode_mismatch: cada llamada devuelve un objeto, una lista y un problema nuevos", () => {
+    setVariable("NODE_ENV", "test");
+    loader.mockImplementation(loads(VALID_SOURCE));
+    const before: ConfigSource = { ...process.env };
+    const results = [
+      observe(() => config.loadConfig("development")).value,
+      observe(() => config.loadConfig("production")).value,
+      observe(() => config.loadConfig("development")).value,
+    ];
+    expectIndependent(results);
+    for (const result of results) {
+      expect(result).toStrictEqual(EXACT_MODE_MISMATCH);
+    }
+    expect(loader).not.toHaveBeenCalled();
+    expect(changedKeys(before, { ...process.env })).toEqual([]);
+  });
+
+  test("mode_mismatch: modificar un resultado no altera las llamadas siguientes", () => {
+    setVariable("NODE_ENV", "test");
+    loader.mockImplementation(loads(VALID_SOURCE));
+    const before: ConfigSource = { ...process.env };
+    const first = observe(() => config.loadConfig("development")).value;
+    const second = observe(() => config.loadConfig("development")).value;
+    tamper(first);
+    expect(second, "resultado anterior intacto").toStrictEqual(
+      EXACT_MODE_MISMATCH,
+    );
+    const third = observe(() => config.loadConfig("production")).value;
+    expect(third, "llamada posterior").toStrictEqual(EXACT_MODE_MISMATCH);
+    tamper(third);
+    expect(observe(() => config.loadConfig("development")).value).toStrictEqual(
+      EXACT_MODE_MISMATCH,
+    );
+    expect(loader).not.toHaveBeenCalled();
+    expect(changedKeys(before, { ...process.env })).toEqual([]);
+  });
+
+  test("env_load_failed: el logger y la excepción devuelven estructuras nuevas, sin estado compartido", () => {
+    loader
+      .mockImplementationOnce(markedFailure())
+      .mockImplementationOnce(thrownFailure())
+      .mockImplementationOnce(markedFailure())
+      .mockImplementationOnce(thrownFailure());
+    const results = [
+      loadWithMode("development").value,
+      loadWithMode("development").value,
+      loadWithMode("production").value,
+      loadWithMode("production").value,
+    ];
+    expectIndependent(results);
+    for (const result of results) {
+      expect(result).toStrictEqual(EXACT_ENV_LOAD_FAILED);
+    }
+    expect(loader).toHaveBeenCalledTimes(4);
+  });
+
+  test("env_load_failed: modificar un resultado no altera las llamadas siguientes", () => {
+    loader
+      .mockImplementationOnce(markedFailure())
+      .mockImplementationOnce(thrownFailure())
+      .mockImplementationOnce(markedFailure())
+      .mockImplementationOnce(loads(VALID_SOURCE));
+    const marked = loadWithMode("development").value;
+    tamper(marked);
+    const thrown = loadWithMode("development").value;
+    expect(thrown, "tras manipular un fallo marcado").toStrictEqual(
+      EXACT_ENV_LOAD_FAILED,
+    );
+    tamper(thrown);
+    expect(
+      loadWithMode("development").value,
+      "tras manipular una excepción",
+    ).toStrictEqual(EXACT_ENV_LOAD_FAILED);
+    expectSuccess(loadWithMode("development").value, VALID_CONFIG);
+  });
+
+  test("validateConfig también devuelve estructuras independientes", () => {
+    const invalid = { [LOG_LEVEL]: SENTINEL };
+    const expected = config.validateConfig(invalid);
+    const results = [
+      config.validateConfig(invalid),
+      config.validateConfig(invalid),
+    ];
+    expectIndependent(results);
+    const [first, second] = results;
+    if (first === undefined || second === undefined) {
+      expect.fail("faltan resultados");
+    }
+    tamper(first);
+    expect(second).toStrictEqual(expected);
+    expect(config.validateConfig(invalid)).toStrictEqual(expected);
+    const valid = [
+      config.validateConfig(VALID_SOURCE),
+      config.validateConfig(VALID_SOURCE),
+    ];
+    expect(valid[0]).not.toBe(valid[1]);
+    expect(valid[0]?.ok === true && valid[1]?.ok === true).toBe(true);
+    if (valid[0]?.ok === true && valid[1]?.ok === true) {
+      expect(valid[0].config).not.toBe(valid[1].config);
+    }
+  });
+});
+
 describe("readRuntimeConfig()", () => {
   test("lee el process.env preparado sin llamar al cargador", () => {
     setVariable(LOG_LEVEL, "debug");

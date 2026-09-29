@@ -299,6 +299,29 @@ function exposedMembers(value: unknown, depth = 0): string[] {
   return found;
 }
 
+// Nombres de los miembros invocables de toda la cadena de prototipos, incluido
+// `Object.prototype`.
+function inheritedFunctions(value: object): string[] {
+  const found: string[] = [];
+  for (
+    let current = Object.getPrototypeOf(value) as object | null;
+    current !== null;
+    current = Object.getPrototypeOf(current) as object | null
+  ) {
+    for (const key of Reflect.ownKeys(current)) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(current, key);
+      if (
+        typeof descriptor?.value === "function" ||
+        descriptor?.get !== undefined ||
+        descriptor?.set !== undefined
+      ) {
+        found.push(String(key));
+      }
+    }
+  }
+  return found;
+}
+
 // Nombres de las claves de entorno que difieren, sin sus valores.
 function changedKeys(
   before: Readonly<Record<string, string | undefined>>,
@@ -374,8 +397,13 @@ describe("interfaz pública", () => {
       );
       expect(typeof handle).toBe("object");
       expect(handle).not.toBeNull();
+      const opaque = Object(handle) as object;
+      expect(Object.getPrototypeOf(opaque), "prototipo nulo").toBeNull();
+      expect(Reflect.ownKeys(opaque), "sin claves propias").toEqual([]);
+      expect(Object.isFrozen(opaque), "congelado").toBe(true);
+      expect(inheritedFunctions(opaque), "miembros heredados").toEqual([]);
       for (const member of PINO_MEMBERS) {
-        expect(Reflect.get(Object(handle), member), member).toBeUndefined();
+        expect(Reflect.get(opaque, member), member).toBeUndefined();
       }
       expect(exposedMembers(handle), "miembros expuestos").toEqual([]);
     },
