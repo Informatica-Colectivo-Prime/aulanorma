@@ -5,8 +5,9 @@
 //
 // Contiene la infraestructura común, el modo producción con `npm start` en el
 // repositorio (T025) y, después y nunca a la vez, el modo desarrollo con
-// `npm run dev` (T026). T029 añade la matriz negativa por TCP crudo, T030 la
-// equivalencia entre modos y T031 la auditoría de registros.
+// `npm run dev` (T026); la matriz negativa por TCP crudo contra `npm start`
+// (T029), y la misma matriz en `npm run dev`, comparada caso a caso con la de
+// producción (T030). T031 añade la auditoría de registros.
 //
 // El modo desarrollo se ejecuta en una copia temporal (research.md, R14): los
 // ficheros regulares de `git ls-files --cached --others --exclude-standard`,
@@ -719,6 +720,864 @@ const NON_EXACT_TARGETS = [
   "/api/health.rsc",
 ];
 
+// Matriz negativa por TCP crudo (T029; research.md, R1, K18, K19 y K24):
+// subconjunto permanente del oráculo de viabilidad. Cada caso envía bytes
+// exactos por una conexión nueva, sin un cliente HTTP que normalice nada; lee
+// hasta que el servidor cierra y analiza las respuestas en orden, como máximo
+// una por petición y sin bytes adicionales. Donde el analizador HTTP de Node.js
+// puede rechazar la entrada antes de la frontera, el 400 cerrado de error de
+// análisis es una alternativa contractual (K18); el cierre ordenado y el
+// reinicio de la conexión son equivalentes (K19). No cubre los errores internos
+// del framework anteriores al manejador (K25). Los métodos y destinos de
+// `checkContract` no se repiten aquí.
+const WIRE_LIMIT_MS = 5_000;
+const WIRE_HOST = `Host: ${HOST}:${String(PORT)}`;
+const WIRE_RUN = randomUUID();
+const PARSE_ALTERNATIVE = 400;
+const EXPECTED_BODY_LENGTH = Buffer.byteLength(
+  JSON.stringify({ status: "ok", version: VERSION }),
+);
+
+// Identificador de compilación del repositorio, si existe: nunca debe aparecer
+// en una respuesta.
+function buildId() {
+  try {
+    return readFileSync(path.join(ROOT, ".next", "BUILD_ID"), "utf8").trim();
+  } catch {
+    return undefined;
+  }
+}
+
+// Petición en bruto: línea, cabeceras y cuerpo, sin añadir nada.
+function wire(line, headers = [], body = "") {
+  return `${[line, ...headers].join("\r\n")}\r\n\r\n${body}`;
+}
+
+// Envía los bytes y lee hasta el cierre del servidor. Con `resetAfterWrite`,
+// el cliente reinicia la conexión justo después de escribir.
+function wireExchange(bytes, { resetAfterWrite = false } = {}) {
+  return new Promise((resolve) => {
+    const chunks = [];
+    let settled = false;
+    const socket = net.connect({ host: HOST, port: PORT });
+    const finish = (closed) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      socket.destroy();
+      resolve({ data: Buffer.concat(chunks), closed });
+    };
+    const timer = setTimeout(() => finish("abierta"), WIRE_LIMIT_MS);
+    socket.on("data", (chunk) => chunks.push(chunk));
+    socket.once("end", () => finish("cerrada"));
+    socket.once("close", () => finish("cerrada"));
+    socket.once("error", (error) => {
+      finish(error?.code === "ECONNRESET" ? "reiniciada" : "error");
+    });
+    socket.once("connect", () => {
+      socket.write(Buffer.from(bytes, "latin1"));
+      if (resetAfterWrite) {
+        socket.resetAndDestroy();
+        finish("reiniciada por el cliente");
+      }
+    });
+  });
+}
+
+// Respuestas encadenadas del flujo recibido, en orden. `methods` indica el
+// método de cada petición, porque la respuesta a `HEAD` no tiene cuerpo.
+function parseWire(data, methods) {
+  const responses = [];
+  let offset = 0;
+  let index = 0;
+  while (offset < data.length) {
+    const end = data.indexOf("\r\n\r\n", offset, "latin1");
+    if (end === -1) {
+      return { responses, leftover: data.length - offset };
+    }
+    const [statusLine = "", ...lines] = data
+      .subarray(offset, end)
+      .toString("latin1")
+      .split("\r\n");
+    const match = /^HTTP\/1\.[01] (\d{3})(?: [^\r\n]*)?$/.exec(statusLine);
+    if (match === null) {
+      return { responses, leftover: data.length - offset };
+    }
+    const status = Number(match[1]);
+    const headers = lines.map((line) => {
+      const colon = line.indexOf(":");
+      return [line.slice(0, colon).trim(), line.slice(colon + 1).trim()];
+    });
+    const method = methods[index];
+    const declared = headers.find(
+      ([name]) => name.toLowerCase() === "content-length",
+    )?.[1];
+    const start = end + 4;
+    let length = data.length - start;
+    if (status < 200 || status === 204 || method === "HEAD") {
+      length = 0;
+    } else if (declared !== undefined && /^\d+$/.test(declared)) {
+      length = Number(declared);
+    }
+    const body = data.subarray(start, start + length);
+    if (body.length < length) {
+      return { responses, leftover: data.length - offset };
+    }
+    responses.push({ responded: true, status, headers, body, method });
+    offset = start + length;
+    if (status >= 200) {
+      index += 1;
+    }
+  }
+  return { responses, leftover: 0 };
+}
+
+function wireHeader(response, name) {
+  return response.headers.find(([key]) => key.toLowerCase() === name)?.[1];
+}
+
+// Contrato de cada respuesta según su estado, y auditoría común: sin
+// respuestas provisionales, sin HTML, sin 500 y con `Keep-Alive: timeout=5`
+// solo en respuestas satisfactorias sobre conexiones persistentes (K24). Los
+// conjuntos cerrados de cabeceras excluyen las del framework, `Vary` distinta
+// de `Accept-Encoding`, `ETag`, `Server`, `X-Powered-By`, `Location`,
+// `Refresh`, `Content-Encoding` y `Transfer-Encoding`.
+function wireResponseProblems(response) {
+  const { status } = response;
+  const problems = [];
+  if (status < 200) {
+    return [`respuesta provisional ${String(status)} prohibida`];
+  }
+  if (status === 500) {
+    return ["500 inesperado"];
+  }
+  if (looksLikeHtml(response)) {
+    problems.push("contiene HTML");
+  }
+  const vary = { vary: (value) => value === "Accept-Encoding" };
+  if (status === 200 && response.method === "HEAD") {
+    problems.push(
+      ...headerProblems(response, successHeaders(EXPECTED_BODY_LENGTH), {
+        ...TRANSPORT,
+        ...vary,
+      }),
+    );
+    if (response.body.length > 0) {
+      problems.push("HEAD con cuerpo");
+    }
+  } else if (status === 200) {
+    problems.push(...getProblems(response));
+  } else if (status === 204) {
+    problems.push(
+      ...headerProblems(
+        response,
+        { allow: ALLOW, "cache-control": "no-store" },
+        TRANSPORT,
+      ),
+    );
+    if (response.body.length > 0) {
+      problems.push("204 con cuerpo");
+    }
+  } else if ([400, 404, 405, 505].includes(status)) {
+    problems.push(
+      ...headerProblems(
+        response,
+        status === 405
+          ? { ...CLOSED_REJECTION, allow: ALLOW }
+          : CLOSED_REJECTION,
+        { date: anyValue },
+      ),
+    );
+    if (response.body.length > 0) {
+      problems.push("el rechazo tiene cuerpo");
+    }
+  }
+  if (
+    wireHeader(response, "keep-alive") !== undefined &&
+    wireHeader(response, "connection") !== "keep-alive"
+  ) {
+    problems.push("Keep-Alive sin una conexión persistente");
+  }
+  return problems;
+}
+
+// Nada de la petición, del repositorio ni de la compilación se refleja.
+function wireLeaks(response, markers) {
+  const text = [
+    ...response.headers.map(([name, value]) => `${name}: ${value}`),
+    response.body.toString("latin1"),
+  ].join("\n");
+  const secrets = [
+    ROOT,
+    realOrSelf(ROOT),
+    os.homedir(),
+    ...privatePaths,
+    buildId(),
+    ...markers,
+  ].filter((value) => value !== undefined && value !== "");
+  return secrets.some((value) => text.includes(value))
+    ? ["refleja una ruta, la compilación o un valor de la petición"]
+    : [];
+}
+
+// Resultado comparable entre modos (T030): estados, conjunto de cabeceras
+// (salvo el valor de `Date`), cuerpos y cierre, sin distinguir el cierre
+// ordenado del reinicio (K19).
+function comparable(responses, closed) {
+  return JSON.stringify({
+    responses: responses.map((response) => ({
+      status: response.status,
+      headers: response.headers
+        .map(([name, value]) => {
+          const key = name.toLowerCase();
+          return `${key}: ${key === "date" ? "<fecha>" : value}`;
+        })
+        .sort(),
+      body: response.body.toString("base64"),
+    })),
+    closed: closed === "cerrada" || closed === "reiniciada",
+  });
+}
+
+const GET_CLOSE = ["GET"];
+const REJECTED = (...statuses) => [statuses];
+
+function wireCase(family, name, bytes, methods, expect, markers = []) {
+  return { family, name, bytes, methods, expect, markers };
+}
+
+// Cabeceras de control del framework (tasks.md, T029): 21 casos sobre el
+// destino canónico, con un marcador sintético único por valor.
+const FRAMEWORK_FAMILIES = [
+  "RSC",
+  "Next-Router-State-Tree",
+  "Next-Router-Prefetch",
+  "Next-Router-Segment-Prefetch",
+  "Next-Url",
+  "x-middleware-subrequest",
+  "x-invoke-path",
+  "x-invoke-status",
+  "x-invoke-error",
+  "x-nextjs-data",
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-proto",
+  "x-forwarded-port",
+  "Purpose",
+];
+const FORWARDED = [
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-proto",
+  "x-forwarded-port",
+];
+const ROUTER = [
+  "RSC",
+  "Next-Router-State-Tree",
+  "Next-Router-Prefetch",
+  "Next-Router-Segment-Prefetch",
+  "Next-Url",
+];
+const FRAMEWORK_CASES = [
+  ["GET", ["RSC"]],
+  ["HEAD", ["RSC"]],
+  ["GET", ["Next-Router-State-Tree"]],
+  ["HEAD", ["Next-Router-State-Tree"]],
+  ["GET", ["Next-Router-Prefetch"]],
+  ["HEAD", ["Next-Router-Prefetch"]],
+  ["GET", ["Next-Router-Segment-Prefetch"]],
+  ["HEAD", ["Next-Router-Segment-Prefetch"]],
+  ["GET", ROUTER],
+  ["HEAD", ROUTER],
+  ["GET", ["Next-Url"]],
+  ["GET", ["x-invoke-path"]],
+  ["GET", ["x-invoke-status"]],
+  ["GET", ["x-invoke-error"]],
+  ["GET", ["x-middleware-subrequest"]],
+  ["GET", ["x-nextjs-data"]],
+  ["GET", ["Purpose"]],
+  ["GET", FORWARDED],
+  ["HEAD", FORWARDED],
+  ["GET", ["Next-Router-Prefetch", "x-nextjs-data"]],
+  ["GET", FRAMEWORK_FAMILIES],
+];
+
+function frameworkCase([method, names], index) {
+  const number = String(index + 1);
+  const markers = [];
+  const headers = names.map((name, position) => {
+    if (name === "Purpose") {
+      return "Purpose: prefetch";
+    }
+    const marker = `marca-${number}-${String(position)}-${WIRE_RUN}`;
+    markers.push(marker);
+    return `${name}: ${marker}`;
+  });
+  return wireCase(
+    "cabeceras de control del framework",
+    `${number}: ${method} con ${names.length === FRAMEWORK_FAMILIES.length ? "las quince familias" : names.join(", ")}`,
+    wire(`${method} ${TARGET} HTTP/1.1`, [
+      WIRE_HOST,
+      ...headers,
+      "Connection: close",
+    ]),
+    [method],
+    [[200]],
+    markers,
+  );
+}
+
+const CLOSE = "Connection: close";
+const UPGRADE = [
+  "Connection: Upgrade",
+  "Upgrade: websocket",
+  "Sec-WebSocket-Version: 13",
+  `Sec-WebSocket-Key: ${Buffer.from(WIRE_RUN.slice(0, 16)).toString("base64")}`,
+];
+const MALFORMED = `GET ${TARGET} HTTX/1.1\r\n${WIRE_HOST}\r\n\r\n`;
+const VERSION_REJECTED = REJECTED(505, PARSE_ALTERNATIVE);
+
+const WIRE_CASES = [
+  // Versiones.
+  wireCase(
+    "versión",
+    "HTTP/1.0 sin Host",
+    wire(`GET ${TARGET} HTTP/1.0`),
+    GET_CLOSE,
+    [[200]],
+  ),
+  wireCase(
+    "versión",
+    "HEAD en HTTP/1.0",
+    wire(`HEAD ${TARGET} HTTP/1.0`, [WIRE_HOST]),
+    ["HEAD"],
+    [[200]],
+  ),
+  wireCase(
+    "versión",
+    "HTTP/1.1",
+    wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST, CLOSE]),
+    GET_CLOSE,
+    [[200]],
+  ),
+  wireCase(
+    "versión",
+    "HTTP/2.0 en texto plano",
+    wire(`GET ${TARGET} HTTP/2.0`, [WIRE_HOST]),
+    GET_CLOSE,
+    VERSION_REJECTED,
+  ),
+  wireCase(
+    "versión",
+    "HTTP/0.9 con versión",
+    wire(`GET ${TARGET} HTTP/0.9`, [WIRE_HOST]),
+    GET_CLOSE,
+    VERSION_REJECTED,
+  ),
+  wireCase(
+    "versión",
+    "HTTP/0.9 sin versión",
+    `GET ${TARGET}\r\n\r\n`,
+    GET_CLOSE,
+    VERSION_REJECTED,
+  ),
+  wireCase(
+    "versión",
+    "HTTP/1.2",
+    wire(`GET ${TARGET} HTTP/1.2`, [WIRE_HOST]),
+    GET_CLOSE,
+    VERSION_REJECTED,
+  ),
+  wireCase(
+    "versión",
+    "HTTP/3.0",
+    wire(`GET ${TARGET} HTTP/3.0`, [WIRE_HOST]),
+    GET_CLOSE,
+    VERSION_REJECTED,
+  ),
+  wireCase("versión", "protocolo mal formado", MALFORMED, GET_CLOSE, [[400]]),
+  wireCase(
+    "versión",
+    "líneas terminadas solo en LF",
+    `GET ${TARGET} HTTP/1.1\n${WIRE_HOST}\n\n`,
+    GET_CLOSE,
+    [[400]],
+  ),
+  wireCase(
+    "versión",
+    "cabecera sin dos puntos",
+    wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST, "Cabecera"]),
+    GET_CLOSE,
+    [[400]],
+  ),
+  // Host.
+  wireCase(
+    "Host",
+    "ausente en HTTP/1.1",
+    wire(`GET ${TARGET} HTTP/1.1`),
+    GET_CLOSE,
+    [[400]],
+  ),
+  wireCase(
+    "Host",
+    "duplicado con distinto uso de mayúsculas",
+    wire(`GET ${TARGET} HTTP/1.1`, [
+      WIRE_HOST,
+      `host: ${HOST}:${String(PORT)}`,
+    ]),
+    GET_CLOSE,
+    [[400]],
+  ),
+  wireCase(
+    "Host",
+    "duplicado idéntico",
+    wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST, WIRE_HOST]),
+    GET_CLOSE,
+    [[400]],
+  ),
+  wireCase(
+    "Host",
+    "vacío",
+    wire(`GET ${TARGET} HTTP/1.1`, ["Host:"]),
+    GET_CLOSE,
+    [[400]],
+  ),
+  wireCase(
+    "Host",
+    "solo espacios",
+    wire(`GET ${TARGET} HTTP/1.1`, ["Host:    "]),
+    GET_CLOSE,
+    [[400]],
+  ),
+  wireCase(
+    "Host",
+    "con coma",
+    wire(`GET ${TARGET} HTTP/1.1`, [`${WIRE_HOST},otro`]),
+    GET_CLOSE,
+    [[400]],
+  ),
+  wireCase(
+    "Host",
+    "con \\x01",
+    wire(`GET ${TARGET} HTTP/1.1`, ["Host: a\x01b"]),
+    GET_CLOSE,
+    [[400]],
+  ),
+  wireCase(
+    "Host",
+    "con \\x7f",
+    wire(`GET ${TARGET} HTTP/1.1`, ["Host: a\x7fb"]),
+    GET_CLOSE,
+    [[400]],
+  ),
+  wireCase(
+    "Host",
+    "con tabulador interno",
+    wire(`GET ${TARGET} HTTP/1.1`, ["Host: a\tb"]),
+    GET_CLOSE,
+    [[400]],
+  ),
+  wireCase(
+    "Host",
+    "con coma en HTTP/1.0",
+    wire(`GET ${TARGET} HTTP/1.0`, ["Host: a,b"]),
+    GET_CLOSE,
+    [[400]],
+  ),
+  // Cuerpo y framing.
+  wireCase(
+    "cuerpo y framing",
+    "Content-Length: 5 con cuerpo",
+    wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST, "Content-Length: 5"], "12345"),
+    GET_CLOSE,
+    [[400]],
+  ),
+  wireCase(
+    "cuerpo y framing",
+    "Content-Length: 0",
+    wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST, "Content-Length: 0", CLOSE]),
+    GET_CLOSE,
+    [[200]],
+  ),
+  wireCase(
+    "cuerpo y framing",
+    "Transfer-Encoding: chunked",
+    wire(
+      `GET ${TARGET} HTTP/1.1`,
+      [WIRE_HOST, "Transfer-Encoding: chunked"],
+      "0\r\n\r\n",
+    ),
+    GET_CLOSE,
+    [[400]],
+  ),
+  wireCase(
+    "cuerpo y framing",
+    "Transfer-Encoding: identity",
+    wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST, "Transfer-Encoding: identity"]),
+    GET_CLOSE,
+    [[400]],
+  ),
+  wireCase(
+    "cuerpo y framing",
+    "Transfer-Encoding y Content-Length",
+    wire(
+      `GET ${TARGET} HTTP/1.1`,
+      [WIRE_HOST, "Transfer-Encoding: chunked", "Content-Length: 0"],
+      "0\r\n\r\n",
+    ),
+    GET_CLOSE,
+    [[400]],
+  ),
+  wireCase(
+    "cuerpo y framing",
+    "Content-Length duplicado y conflictivo",
+    wire(`GET ${TARGET} HTTP/1.1`, [
+      WIRE_HOST,
+      "Content-Length: 0",
+      "Content-Length: 5",
+    ]),
+    GET_CLOSE,
+    [[400]],
+  ),
+  wireCase(
+    "cuerpo y framing",
+    "Content-Length negativo",
+    wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST, "Content-Length: -1"]),
+    GET_CLOSE,
+    [[400]],
+  ),
+  wireCase(
+    "cuerpo y framing",
+    "Transfer-Encoding en HTTP/1.0",
+    wire(`GET ${TARGET} HTTP/1.0`, ["Transfer-Encoding: chunked"], "0\r\n\r\n"),
+    GET_CLOSE,
+    [[400]],
+  ),
+  wireCase(
+    "cuerpo y framing",
+    "POST con cuerpo: el método precede",
+    wire(`POST ${TARGET} HTTP/1.1`, [WIRE_HOST, "Content-Length: 5"], "12345"),
+    ["POST"],
+    [[405]],
+  ),
+  // Expect.
+  wireCase(
+    "Expect",
+    "100-continue sin cuerpo",
+    wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST, "Expect: 100-continue", CLOSE]),
+    GET_CLOSE,
+    [[200]],
+  ),
+  wireCase(
+    "Expect",
+    "100-continue con longitud, sin enviar el cuerpo",
+    wire(`GET ${TARGET} HTTP/1.1`, [
+      WIRE_HOST,
+      "Expect: 100-continue",
+      "Content-Length: 5",
+    ]),
+    GET_CLOSE,
+    [[400]],
+  ),
+  wireCase(
+    "Expect",
+    "100-continue con POST",
+    wire(`POST ${TARGET} HTTP/1.1`, [
+      WIRE_HOST,
+      "Expect: 100-continue",
+      "Content-Length: 5",
+    ]),
+    ["POST"],
+    [[405]],
+  ),
+  wireCase(
+    "Expect",
+    "otra expectativa",
+    wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST, "Expect: x-sintetico", CLOSE]),
+    GET_CLOSE,
+    [[200]],
+  ),
+  wireCase(
+    "Expect",
+    "otra expectativa con PUT",
+    wire(`PUT ${TARGET} HTTP/1.1`, [WIRE_HOST, "Expect: x-sintetico"]),
+    ["PUT"],
+    [[405]],
+  ),
+  // CONNECT y Upgrade.
+  wireCase(
+    "CONNECT",
+    "hacia otra autoridad",
+    wire(`CONNECT ${HOST}:${String(PORT)} HTTP/1.1`, [WIRE_HOST]),
+    ["CONNECT"],
+    [[404]],
+  ),
+  wireCase(
+    "CONNECT",
+    "hacia /api/health",
+    wire(`CONNECT ${TARGET} HTTP/1.1`, [WIRE_HOST]),
+    ["CONNECT"],
+    [[405]],
+  ),
+  wireCase(
+    "Upgrade",
+    "websocket hacia /api/health",
+    wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST, ...UPGRADE]),
+    GET_CLOSE,
+    [[405]],
+  ),
+  wireCase(
+    "Upgrade",
+    "websocket de recarga de desarrollo",
+    wire("GET /_next/webpack-hmr HTTP/1.1", [WIRE_HOST, ...UPGRADE]),
+    GET_CLOSE,
+    [[404]],
+  ),
+  wireCase(
+    "Upgrade",
+    "h2c hacia /",
+    wire("GET / HTTP/1.1", [
+      WIRE_HOST,
+      "Connection: Upgrade, HTTP2-Settings",
+      "Upgrade: h2c",
+      "HTTP2-Settings: AAMAAABkAARAAAAAAAIAAAAA",
+    ]),
+    GET_CLOSE,
+    [[404]],
+  ),
+  wireCase(
+    "Upgrade",
+    "POST hacia /api/health",
+    wire(`POST ${TARGET} HTTP/1.1`, [WIRE_HOST, ...UPGRADE]),
+    ["POST"],
+    [[405]],
+  ),
+  // Destinos codificados y variantes.
+  ...[
+    "/api%2fhealth",
+    "/%61pi/health",
+    "/api/health%2F",
+    "/API/health",
+    "//api/health",
+    "/api//health",
+    "/api/./health",
+    "/api/health?x=1",
+    "/api/health#x",
+    "/api/health;x",
+    `http://${HOST}:${String(PORT)}${TARGET}`,
+  ].map((target) =>
+    wireCase(
+      "destino",
+      target,
+      wire(`GET ${target} HTTP/1.1`, [WIRE_HOST]),
+      GET_CLOSE,
+      [[404]],
+    ),
+  ),
+  wireCase(
+    "destino",
+    "OPTIONS *",
+    wire("OPTIONS * HTTP/1.1", [WIRE_HOST]),
+    ["OPTIONS"],
+    [[404]],
+  ),
+  // Métodos no cubiertos por `checkContract` y respuestas admitidas.
+  wireCase(
+    "método",
+    "PROPFIND",
+    wire(`PROPFIND ${TARGET} HTTP/1.1`, [WIRE_HOST]),
+    ["PROPFIND"],
+    [[405]],
+  ),
+  wireCase(
+    "método",
+    "MKCOL",
+    wire(`MKCOL ${TARGET} HTTP/1.1`, [WIRE_HOST]),
+    ["MKCOL"],
+    [[405]],
+  ),
+  wireCase(
+    "método",
+    "SEARCH",
+    wire(`SEARCH ${TARGET} HTTP/1.1`, [WIRE_HOST]),
+    ["SEARCH"],
+    [[405]],
+  ),
+  wireCase(
+    "método",
+    "HEAD",
+    wire(`HEAD ${TARGET} HTTP/1.1`, [WIRE_HOST, CLOSE]),
+    ["HEAD"],
+    [[200]],
+  ),
+  wireCase(
+    "método",
+    "OPTIONS",
+    wire(`OPTIONS ${TARGET} HTTP/1.1`, [WIRE_HOST, CLOSE]),
+    ["OPTIONS"],
+    [[204]],
+  ),
+  wireCase(
+    "método",
+    "GET con Accept-Encoding",
+    wire(`GET ${TARGET} HTTP/1.1`, [
+      WIRE_HOST,
+      "Accept-Encoding: gzip, deflate, br",
+      CLOSE,
+    ]),
+    GET_CLOSE,
+    [[200]],
+  ),
+  // Cabeceras de control del framework.
+  ...FRAMEWORK_CASES.map(frameworkCase),
+  // Canalización: orden, una respuesta por petición, ninguna tras un rechazo
+  // y errores de análisis diferidos.
+  wireCase(
+    "canalización",
+    "GET, HEAD, OPTIONS y GET final con cierre",
+    [
+      wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST]),
+      wire(`HEAD ${TARGET} HTTP/1.1`, [WIRE_HOST]),
+      wire(`OPTIONS ${TARGET} HTTP/1.1`, [WIRE_HOST]),
+      wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST, CLOSE]),
+    ].join(""),
+    ["GET", "HEAD", "OPTIONS", "GET"],
+    [[200], [200], [204], [200]],
+  ),
+  wireCase(
+    "canalización",
+    "un 405 intermedio corta la conexión",
+    [
+      wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST]),
+      wire(`POST ${TARGET} HTTP/1.1`, [WIRE_HOST]),
+      wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST]),
+    ].join(""),
+    ["GET", "POST", "GET"],
+    [[200], [405]],
+  ),
+  wireCase(
+    "canalización",
+    "un 404 intermedio corta la conexión",
+    [
+      wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST]),
+      wire("GET /otra HTTP/1.1", [WIRE_HOST]),
+      wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST]),
+    ].join(""),
+    ["GET", "GET", "GET"],
+    [[200], [404]],
+  ),
+  wireCase(
+    "canalización",
+    "un rechazo inicial no deja delegar la siguiente",
+    [
+      wire("GET /otra HTTP/1.1", [WIRE_HOST]),
+      wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST]),
+    ].join(""),
+    ["GET", "GET"],
+    [[404]],
+  ),
+  wireCase(
+    "canalización",
+    "error de análisis diferido con flush",
+    `${wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST])}${MALFORMED}`,
+    ["GET", "GET"],
+    [[200], [400]],
+  ),
+  wireCase(
+    "canalización",
+    "error de análisis diferido tras dos pendientes",
+    `${wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST])}${wire(`HEAD ${TARGET} HTTP/1.1`, [WIRE_HOST])}${MALFORMED}`,
+    ["GET", "HEAD", "GET"],
+    [[200], [200], [400]],
+  ),
+  {
+    family: "canalización",
+    name: "error de análisis diferido con reinicio del cliente (robustez del descarte)",
+    bytes: `${wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST])}${MALFORMED}`,
+    dropped: true,
+    markers: [],
+  },
+];
+
+// Un caso de la matriz: sus problemas y su resultado comparable.
+async function runWireCase(wireCase) {
+  if (wireCase.dropped) {
+    // Robustez del descarte: el cliente reinicia la conexión justo después de
+    // enviar una petición válida y bytes mal formados. Según la carrera entre
+    // los datos y el reinicio, el servidor descarta el diferido (dropped),
+    // recibe `ECONNRESET` o no llega a ver la petición; desde fuera no se
+    // distingue cuál, y el descarte determinista lo prueba T027. Se exige que
+    // el servidor siga atendiendo con el contrato en una conexión nueva y, como
+    // en toda la matriz, que no registre nada.
+    await wireExchange(wireCase.bytes, { resetAfterWrite: true });
+    const health = await wireExchange(
+      wire(`GET ${TARGET} HTTP/1.1`, [WIRE_HOST, CLOSE]),
+    );
+    const served = parseWire(health.data, GET_CLOSE).responses;
+    const problems =
+      served.length === 1 && served[0]?.status === 200
+        ? getProblems(served[0])
+        : ["el servidor no atiende después del reinicio"];
+    return {
+      problems,
+      result: JSON.stringify({ served: problems.length === 0 }),
+    };
+  }
+  const exchange = await wireExchange(wireCase.bytes);
+  const { responses, leftover } = parseWire(exchange.data, wireCase.methods);
+  const problems = [];
+  if (responses.length !== wireCase.expect.length) {
+    problems.push(
+      `${String(responses.length)} respuestas en lugar de ${String(wireCase.expect.length)}`,
+    );
+  }
+  responses.forEach((response, index) => {
+    const label = `respuesta ${String(index + 1)}`;
+    const allowed = wireCase.expect[index] ?? [];
+    if (!allowed.includes(response.status)) {
+      problems.push(`${label}: estado ${String(response.status)}`);
+    }
+    problems.push(
+      ...wireResponseProblems(response).map(
+        (problem) => `${label}: ${problem}`,
+      ),
+      ...wireLeaks(response, wireCase.markers).map(
+        (problem) => `${label}: ${problem}`,
+      ),
+    );
+  });
+  if (leftover > 0) {
+    problems.push("bytes adicionales o respuesta incompleta");
+  }
+  if (exchange.closed !== "cerrada" && exchange.closed !== "reiniciada") {
+    problems.push("la conexión no se cerró");
+  }
+  return { problems, result: comparable(responses, exchange.closed) };
+}
+
+// Recorre la matriz en orden, sin registros por petición.
+async function runWireMatrix(proc) {
+  const mark = proc.output().length;
+  const problems = [];
+  const results = new Map();
+  for (const wireCase of WIRE_CASES) {
+    throwIfStopping();
+    const { problems: caseProblems, result } = await runWireCase(wireCase);
+    results.set(`${wireCase.family}: ${wireCase.name}`, result);
+    problems.push(
+      ...caseProblems.map(
+        (problem) => `${wireCase.family}, ${wireCase.name}: ${problem}`,
+      ),
+    );
+  }
+  if (proc.output().slice(mark).trim() !== "") {
+    problems.push("se registró algo durante la matriz");
+  }
+  return { problems, results };
+}
+
 // Casos.
 
 // `npm start` o `npm run dev` con una configuración inválida: termina con
@@ -874,6 +1733,33 @@ async function validStart(variables, full) {
       if (proc.output().slice(mark).trim() !== "") {
         problems.push("se registró algo por las consultas");
       }
+    }
+  } finally {
+    await stop(proc);
+  }
+  if (!(await waitUntil(async () => !(await portAccepts()), STOP_LIMIT_MS))) {
+    problems.push("el puerto sigue abierto tras detener el servidor");
+  }
+  return problems;
+}
+
+// Resultados comparables de producción para la equivalencia de T030.
+let productionWire;
+
+// `npm start` con la matriz negativa por TCP crudo (T029). Sus resultados
+// quedan para compararlos con los de desarrollo (T030).
+async function wireStart() {
+  await ensurePortFree();
+  const proc = launch(NPM, ["start"], caseEnvironment(VALID_CONFIG));
+  const problems = [];
+  try {
+    const failure = await waitReady(proc);
+    if (failure !== undefined) {
+      problems.push(failure);
+    } else {
+      const matrix = await runWireMatrix(proc);
+      problems.push(...matrix.problems);
+      productionWire = matrix.results;
     }
   } finally {
     await stop(proc);
@@ -1181,6 +2067,89 @@ async function developmentStart(variables, full) {
   return problems;
 }
 
+// Diferencias entre el resultado de producción y el de desarrollo de un caso.
+function wireDifferences(production, development) {
+  const expected = JSON.parse(production);
+  const observed = JSON.parse(development);
+  if (!("responses" in expected) || !("responses" in observed)) {
+    return production === development ? [] : ["resultado"];
+  }
+  if (expected.responses.length !== observed.responses.length) {
+    return ["número de respuestas"];
+  }
+  const found = new Set();
+  expected.responses.forEach((response, index) => {
+    const other = observed.responses[index];
+    if (response.status !== other.status) {
+      found.add("estado");
+    }
+    if (JSON.stringify(response.headers) !== JSON.stringify(other.headers)) {
+      found.add("cabeceras");
+    }
+    if (response.body !== other.body) {
+      found.add("cuerpo");
+    }
+  });
+  if (expected.closed !== observed.closed) {
+    found.add("cierre");
+  }
+  return [...found];
+}
+
+// `npm run dev` válido con la misma matriz de T029, tras el calentamiento, y
+// su comparación caso a caso con producción (T030): mismos estados, conjunto
+// de cabeceras (salvo el valor de `Date`), cuerpos y cierres, sin distinguir
+// el cierre ordenado del reinicio (K19), y ningún registro durante la matriz
+// en ninguno de los dos modos.
+async function developmentEquivalence() {
+  await ensurePortFree();
+  writeDevelopmentConfig(VALID_CONFIG);
+  const proc = launch(
+    NPM,
+    ["run", "dev"],
+    caseEnvironment({}),
+    developmentCopy,
+  );
+  const problems = [];
+  try {
+    const failure = await waitReady(proc);
+    if (failure !== undefined) {
+      problems.push(failure);
+    } else {
+      problems.push(
+        ...warmupProblems(
+          await rawRequest("GET", TARGET, { limitMs: WARMUP_LIMIT_MS }),
+        ),
+      );
+      const matrix = await runWireMatrix(proc);
+      problems.push(
+        ...matrix.problems.map((problem) => `desarrollo: ${problem}`),
+      );
+      if (productionWire === undefined) {
+        problems.push("sin resultados de producción para comparar");
+      } else {
+        for (const [name, result] of matrix.results) {
+          const found = wireDifferences(
+            productionWire.get(name) ?? "{}",
+            result,
+          );
+          if (found.length > 0) {
+            problems.push(
+              `${name}: difiere de producción en ${found.join(", ")}`,
+            );
+          }
+        }
+      }
+    }
+  } finally {
+    await stop(proc);
+  }
+  if (!(await waitUntil(async () => !(await portAccepts()), STOP_LIMIT_MS))) {
+    problems.push("el puerto sigue abierto tras detener el servidor");
+  }
+  return problems;
+}
+
 const DEVELOPMENT_CASES = [
   [
     "npm run dev inválido: AULANORMA_LOG_LEVEL fuera de la lista en el fichero",
@@ -1235,6 +2204,10 @@ const DEVELOPMENT_CASES = [
     "npm run dev con NODE_ENV heredado production",
     () => developmentStart({ NODE_ENV: "production" }, false),
   ],
+  [
+    "npm run dev: matriz y equivalencia contractual con npm start",
+    () => developmentEquivalence(),
+  ],
 ];
 
 const CASES = [
@@ -1284,6 +2257,7 @@ const CASES = [
     "npm start válido: contrato, métodos y destinos",
     () => validStart({}, true),
   ],
+  ["npm start: matriz negativa por TCP crudo", () => wireStart()],
   [
     "npm start con NODE_ENV heredado development",
     () => validStart({ NODE_ENV: "development" }, false),

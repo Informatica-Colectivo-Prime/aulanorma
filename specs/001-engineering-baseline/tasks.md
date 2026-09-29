@@ -194,7 +194,7 @@ crudo, la equivalencia entre modos y la auditoría de registros. Además, los pa
   - `CONNECT` y `Upgrade` reciben 404 (otro destino) o 405 (`/api/health`) cerrados, sin llamar a `handle`.
 
   Debe fallar hasta T040
-- [ ] T028 [P] [US1] Escribir `tests/unit/platform/http-boundary-request.test.ts` sobre versión, `Host`, `rawHeaders`, cuerpo y framing, con valores sintéticos:
+- [X] T028 [P] [US1] Escribir `tests/unit/platform/http-boundary-request.test.ts` sobre versión, `Host`, `rawHeaders`, cuerpo y framing, con valores sintéticos:
   - versiones: HTTP/1.0 y HTTP/1.1 se admiten; una versión analizada distinta (por ejemplo, HTTP/2.0 o HTTP/0.9) recibe 505;
   - `Host` en HTTP/1.1: ausente, duplicado (con cualquier combinación de mayúsculas, detectado en `rawHeaders`), vacío o solo con espacios, con coma o con caracteres de control (`\x00` a `\x1f` y `\x7f`) recibe 400; en HTTP/1.0, la ausencia se admite y un `Host` presente cumple las mismas reglas;
   - `Host` con obs-text o con espacios internos: se fija el comportamiento vigente, que lo admite, para que cualquier cambio sea visible (research.md, K21);
@@ -202,7 +202,7 @@ crudo, la equivalencia entre modos y la auditoría de registros. Además, los pa
   - la frontera no lee ninguna cabecera fuera de su lista cerrada, y ningún valor inspeccionado aparece en la respuesta, en los registros ni en lo que se entrega a `handle` (FR-006 C2).
 
   Debe fallar hasta T038
-- [ ] T029 [US1] Ampliar `scripts/smoke-test.mjs` con la **matriz negativa por TCP crudo** contra `npm start`, un subconjunto permanente del oráculo de viabilidad (research.md, R1):
+- [X] T029 [US1] Ampliar `scripts/smoke-test.mjs` con la **matriz negativa por TCP crudo** contra `npm start`, un subconjunto permanente del oráculo de viabilidad (research.md, R1):
   - versiones (HTTP/1.0, HTTP/1.1, HTTP/2.0 y HTTP/0.9 en texto plano, y líneas de petición malformadas), `Host` (ausente, duplicado, vacío, con coma y con control), cuerpos y framing (`Content-Length` distinto de cero, `Transfer-Encoding` y combinaciones conflictivas), `Expect`, `CONNECT`, `Upgrade`, destinos codificados y métodos;
   - **Cabeceras de control del framework** sobre el destino canónico: un grupo permanente explícito de 21 casos, que reproduce la cobertura de la prueba de viabilidad. Cada valor es un marcador sintético único para poder detectar su reflejo:
 
@@ -236,7 +236,7 @@ crudo, la equivalencia entre modos y la auditoría de registros. Además, los pa
   - el cierre ordenado y el reinicio de la conexión tras un rechazo se admiten como variantes del contrato (research.md, K19).
 
   Depende de T026 (mismo fichero)
-- [ ] T030 [US1] Ampliar `scripts/smoke-test.mjs` con la **equivalencia contractual entre desarrollo y producción**: en la copia temporal de T026, tras el calentamiento, ejecutar en `npm run dev` el mismo subconjunto de T029 y comprobar, caso a caso, los mismos estados, cuerpos, conjunto de cabeceras (salvo el valor de `Date`) y cierres que en `npm start`. Cualquier diferencia hace fallar la prueba (FR-009). Depende de T029 (mismo fichero)
+- [X] T030 [US1] Ampliar `scripts/smoke-test.mjs` con la **equivalencia contractual entre desarrollo y producción**: en la copia temporal de T026, tras el calentamiento, ejecutar en `npm run dev` el mismo subconjunto de T029 y comprobar, caso a caso, los mismos estados, cuerpos, conjunto de cabeceras (salvo el valor de `Date`) y cierres que en `npm start`. Cualquier diferencia hace fallar la prueba (FR-009). Depende de T029 (mismo fichero)
 - [ ] T031 [US1] Ampliar `scripts/smoke-test.mjs` con la **auditoría de registros en ambos modos**: capturar la salida estándar y de error de `npm start` y de `npm run dev` durante T025 a T030 y comprobar que, fuera del arranque, no aparece ninguna línea: ningún registro automático del framework por petición (método, estado, ruta, tiempos o compilación), ninguna línea de `server.mjs` por petición o rechazo, ni avisos, errores o trazas; que el arranque solo contiene el evento estructurado `startup.completed` y las líneas de arranque del entorno de ejecución; que hay **exactamente un** `startup.completed` por arranque satisfactorio, emitido por `server.mjs` después de validar la configuración y de empezar a escuchar; que el preflight no emite ninguno y ninguna consulta de salud emite otro; y que ni ese evento ni ninguna otra línea contienen valores de configuración, datos de la petición, valores de `Host`, rutas locales ni credenciales (FR-006 C4, FR-008). Depende de T030 (mismo fichero)
 - [ ] T032 [P] [US1] Escribir `tests/architecture/entry-points.test.ts`, que debe fallar hasta T041. Falla si:
   - un script de `package.json` invoca `next dev` o `next start` directamente, o `dev` y `start` no son exactamente el preflight seguido de `server.mjs`;
