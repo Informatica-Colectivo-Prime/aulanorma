@@ -21,7 +21,10 @@
 //   las peticiones del socket no se delegan, no se responden y no se destruyen,
 //   y un `clientError` se suprime sin escribir ni destruir;
 // - `ECONNRESET` nunca escribe: descarta el diferido y destruye el socket una
-//   vez, también después de un rechazo.
+//   vez, también después de un rechazo;
+// - el rechazo en bruto de `CONNECT` y `Upgrade` sigue las mismas reglas que
+//   el de `clientError`: se difiere mientras haya respuestas pendientes y se
+//   suprime tras un rechazo.
 //
 // Los dobles son deterministas y no abren sockets reales. Los datos sintéticos
 // nunca se imprimen: las fugas se informan con etiquetas.
@@ -551,6 +554,17 @@ interface ControlledHandle {
   readonly complete: (response: ResponseDouble) => void;
 }
 
+// Respuesta 200 completa, como la que escribiría la API Route.
+function writeOk(response: ResponseDouble): void {
+  const body = '{"status":"ok","version":"0.0.0"}';
+  response.writeHead(200, {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Content-Length": String(body.length),
+  });
+  response.end(body);
+}
+
 function controlledHandle(): ControlledHandle {
   const pending = new Map<unknown, () => void>();
   const handle = vi.fn<Handle>(
@@ -566,14 +580,45 @@ function controlledHandle(): ControlledHandle {
       if (resolve === undefined) {
         expect.fail(`${response.name} no se delegó`);
       }
-      const body = '{"status":"ok","version":"0.0.0"}';
-      response.writeHead(200, {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-store",
-        "Content-Length": String(body.length),
-      });
-      response.end(body);
+      writeOk(response);
       resolve();
+    },
+  };
+}
+
+// `handle` controlado que además puede hacer fallar una delegación pendiente
+// antes de enviar cabeceras, para provocar el 500 de la frontera.
+interface FailableHandle extends ControlledHandle {
+  readonly fail: (response: ResponseDouble) => void;
+}
+
+function failableHandle(): FailableHandle {
+  const pending = new Map<
+    unknown,
+    { readonly resolve: () => void; readonly reject: (error: Error) => void }
+  >();
+  const handle = vi.fn<Handle>(
+    (_req, res) =>
+      new Promise<void>((resolve, reject) => {
+        pending.set(res, { resolve, reject });
+      }),
+  );
+  const delegated = (response: ResponseDouble) => {
+    const entry = pending.get(response);
+    if (entry === undefined) {
+      expect.fail(`${response.name} no se delegó`);
+    }
+    return entry;
+  };
+  return {
+    handle,
+    complete: (response) => {
+      const { resolve } = delegated(response);
+      writeOk(response);
+      resolve();
+    },
+    fail: (response) => {
+      delegated(response).reject(new Error(`${SYNTHETIC_MESSAGE} ${SENTINEL}`));
     },
   };
 }
@@ -1101,6 +1146,36 @@ describe("rechazo terminal por socket", () => {
     expectUntouched(socket);
   });
 
+  test("un 500 por fallo de handle suprime el diferido: no hay flush al terminar la última pendiente", async () => {
+    const { handle, complete, fail } = failableHandle();
+    const boundary = await boundaryFor(handle);
+    const socket = connection();
+    const first = exchange(socket);
+    const second = exchange(socket);
+    const settledFirst = boundary.request(first.request.proxy, first.response);
+    const settledSecond = boundary.request(
+      second.request.proxy,
+      second.response,
+    );
+    await settle();
+    boundary.clientError(parseError("HPE_INVALID_METHOD"), socket);
+    await settle();
+    expectUntouched(socket);
+
+    fail(second.response);
+    await settledSecond;
+    await settle();
+    expectResponseRejection(second.response, 500);
+
+    complete(first.response);
+    await settledFirst;
+    await settle();
+    expect(handle).toHaveBeenCalledTimes(2);
+    expectAccepted(first.response);
+    expect(second.response.destroys, "sin destruir la respuesta").toBe(0);
+    expectUntouched(socket);
+  });
+
   test("tras un rechazo de checkExpectation, una petición posterior queda en silencio", async () => {
     const { handle } = controlledHandle();
     const boundary = await boundaryFor(handle);
@@ -1278,6 +1353,88 @@ describe("CONNECT y Upgrade", () => {
       await settle();
       expectRawRejection(socket, status);
       expect(handle).not.toHaveBeenCalled();
+    },
+  );
+
+  // Un túnel es otro rechazo en bruto del mismo socket: respeta el orden de
+  // las respuestas pendientes y el rechazo terminal.
+  test.each([
+    ["CONNECT", "connect", "CONNECT", "destino.invalid:443", 404],
+    ["Upgrade", "upgrade", "GET", "/api/health", 405],
+  ] as const)(
+    "%s con una respuesta pendiente se difiere y se emite una vez al terminar",
+    async (_label, method, verb, url, status) => {
+      const { handle, complete } = controlledHandle();
+      const boundary = await boundaryFor(handle);
+      const socket = connection();
+      const first = exchange(socket);
+      const settled = boundary.request(first.request.proxy, first.response);
+      await settle();
+      const result = boundary[method](
+        requestDouble(socket, {
+          method: verb,
+          url,
+          rawHeaders: method === "upgrade" ? UPGRADE : HOST,
+        }).proxy,
+        socket,
+        Buffer.from(`${SENTINEL}\r\n`, "latin1"),
+      );
+      await settle();
+      expect(result).toBeUndefined();
+      expectUntouched(socket);
+
+      complete(first.response);
+      await settled;
+      await settle();
+      expect(handle).toHaveBeenCalledTimes(1);
+      expectAccepted(first.response);
+      expectRawRejection(socket, status);
+      expect(position("socket1.respuesta1:finish")).toBeLessThan(
+        position("socket1:datos"),
+      );
+    },
+  );
+
+  test.each([
+    ["CONNECT tras un 404", "connect", "CONNECT", { url: "/otra" }],
+    ["Upgrade tras un 500", "upgrade", "GET", undefined],
+  ] as const)(
+    "%s: se suprime sin delegar, escribir, cerrar ni destruir",
+    async (_label, method, verb, rejectedOptions) => {
+      const { handle, fail } = failableHandle();
+      const boundary = await boundaryFor(handle);
+      const socket = connection();
+      const rejected = exchange(socket, rejectedOptions);
+      const settled = boundary.request(
+        rejected.request.proxy,
+        rejected.response,
+      );
+      await settle();
+      if (rejectedOptions === undefined) {
+        fail(rejected.response);
+      }
+      await settled;
+      await settle();
+      expectResponseRejection(
+        rejected.response,
+        rejectedOptions === undefined ? 500 : 404,
+      );
+      const delegations = handle.mock.calls.length;
+
+      const result = boundary[method](
+        requestDouble(socket, {
+          method: verb,
+          url: "/api/health",
+          rawHeaders: method === "upgrade" ? UPGRADE : HOST,
+        }).proxy,
+        socket,
+        Buffer.from(`${SENTINEL}\r\n`, "latin1"),
+      );
+      await settle();
+      expect(result).toBeUndefined();
+      expect(handle).toHaveBeenCalledTimes(delegations);
+      expect(rejected.response.destroys).toBe(0);
+      expectUntouched(socket);
     },
   );
 });

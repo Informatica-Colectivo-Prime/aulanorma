@@ -502,6 +502,26 @@ describe("next.config.ts", () => {
         : undefined,
     ).toEqual(["/^\\/api\\/health$/"]);
   });
+
+  test("poweredByHeader es exactamente false", () => {
+    const config = exportedConfig(requireFile(NEXT_CONFIG, "T039"));
+    expect(property(config, "poweredByHeader")?.kind).toBe(
+      ts.SyntaxKind.FalseKeyword,
+    );
+  });
+
+  test("images.unoptimized es exactamente true", () => {
+    const config = exportedConfig(requireFile(NEXT_CONFIG, "T039"));
+    const images = property(config, "images");
+    expect(images !== undefined && ts.isObjectLiteralExpression(images)).toBe(
+      true,
+    );
+    const unoptimized =
+      images !== undefined && ts.isObjectLiteralExpression(images)
+        ? property(images, "unoptimized")
+        : undefined;
+    expect(unoptimized?.kind).toBe(ts.SyntaxKind.TrueKeyword);
+  });
 });
 
 // `server.mjs` (T041).
