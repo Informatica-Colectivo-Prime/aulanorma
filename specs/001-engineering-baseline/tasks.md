@@ -291,8 +291,8 @@ crudo, la equivalencia entre modos y la auditoría de registros. Además, los pa
   - si es válida, termina con código 0 sin registrar `startup.completed`, que solo emite `server.mjs` (research.md, R8 y R9).
 
   Lo verifican T020 (contrato de `loadConfig`), T025 y T026 (arranque real con `NODE_ENV` heredado distinto, discordancia y `.env.test`), T031 (un único `startup.completed`, solo de `server.mjs`) y T032 (`NODE_ENV` en los dos lados de `&&`). Depende de T033 y T034
-- [ ] T043 [P] [US1] Crear `.env.example` con `AULANORMA_LOG_LEVEL` y `AULANORMA_ENVIRONMENT`, cada una documentada (propósito, obligatoria y valores válidos), con valores ficticios válidos y sin ningún secreto (FR-002, FR-004)
-- [ ] T044 [US1] Crear `README.md` con:
+- [X] T043 [P] [US1] Crear `.env.example` con `AULANORMA_LOG_LEVEL` y `AULANORMA_ENVIRONMENT`, cada una documentada (propósito, obligatoria y valores válidos), con valores ficticios válidos y sin ningún secreto (FR-002, FR-004)
+- [X] T044 [US1] Crear `README.md` con:
   - visión general;
   - requisitos previos: Git 2.40 o superior, curl y Node.js en el rango `>=24.21.0 <25`, con 24.21.0 como versión de referencia y obligatoria en la aceptación;
   - perfiles verificados: macOS arm64 y Linux x64; Windows solo mediante WSL, sin verificación;
@@ -301,7 +301,7 @@ crudo, la equivalencia entre modos y la auditoría de registros. Además, los pa
   - la tabla de resolución de problemas.
 
   Un desarrollador debe poder completar el arranque sin leer `specs/` (FR-001, FR-025, SC-001). Depende de T042 y T043
-- [ ] T045 [P] [US1] Crear `docs/engineering/reference-environment.md` con el macOS arm64 de referencia del mantenedor: versión del sistema, arquitectura, procesador, memoria y versiones de Git, Node.js (24.21.0), npm y curl. Indicar que SC-001 y SC-002 se miden en él y que Linux x64 es el otro perfil verificado (FR-001a)
+- [X] T045 [P] [US1] Crear `docs/engineering/reference-environment.md` con el macOS arm64 de referencia del mantenedor: versión del sistema, arquitectura, procesador, memoria y versiones de Git, Node.js (24.21.0), npm y curl. Indicar que SC-001 y SC-002 se miden en él y que Linux x64 es el otro perfil verificado (FR-001a)
 
 **Checkpoint**: `npm run check:test` y `npm run check:build` terminan con éxito. La prueba de humo pasa en los dos modos, con la matriz negativa, la equivalencia entre modos y la auditoría de registros, y T032 confirma que no hay entradas directas.
 
@@ -320,8 +320,8 @@ queda igual.
 
 ### Implementation for User Story 2
 
-- [ ] T046 [P] [US2] Crear `scripts/tools/tools.lock.json` con Gitleaks 8.30.1 y zizmor 1.30.1. Para cada una de las plataformas darwin-arm64, darwin-x64, linux-x64 y linux-arm64, registrar URL de descarga oficial y SHA-256, tomados de las sumas de comprobación publicadas en cada versión (research.md, R11 y R13)
-- [ ] T047 [US2] Crear `scripts/tools/install-tools.mjs` (Node sin dependencias): detecta la plataforma y descarga sin autenticación, sin usar ningún token. Verifica el SHA-256 contra `tools.lock.json` y falla cerrado ante cualquier discrepancia o si falta la herramienta. Instala en `.tools/bin` y es idempotente (depende de T046)
+- [X] T046 [P] [US2] Crear `scripts/tools/tools.lock.json` con Gitleaks 8.30.1 y zizmor 1.30.1. Para cada una de las plataformas darwin-arm64, darwin-x64, linux-x64 y linux-arm64, registrar URL de descarga oficial, SHA-256 del archivo, ruta exacta del binario dentro del archivo y SHA-256 del binario. El SHA-256 del archivo procede, en Gitleaks, del fichero de sumas de comprobación publicado en su release y, en zizmor, que no publica ese fichero, del `digest` SHA-256 que GitHub publica para el asset de la release oficial, corroborado por el sujeto de las dos atestaciones publicadas de la release, cuyas firmas Sigstore no se verifican criptográficamente. El SHA-256 del binario se calcula tras extraerlo del archivo ya verificado. El instalador comprueba la integridad contra estos valores, no firmas ni procedencia de la compilación (research.md, R11 y R13)
+- [X] T047 [US2] Crear `scripts/tools/install-tools.mjs` (Node sin dependencias): detecta la plataforma y descarga sin autenticación, sin usar ningún token. Verifica el SHA-256 contra `tools.lock.json` y falla cerrado ante cualquier discrepancia o si falta la herramienta. Instala en `.tools/bin` y es idempotente (depende de T046)
 - [ ] T048 [P] [US2] Crear `.gitleaksignore` vacío de huellas, con un comentario que remite a `docs/engineering/security-exceptions.md`
 - [ ] T049 [P] [US2] Crear `docs/engineering/security-exceptions.md` como registro estructurado y verificable automáticamente, inicialmente vacío. Por excepción: identificador del hallazgo (huella), responsable, justificación, fecha de aprobación y `reviewBy` en UTC, como máximo 90 días posterior. Correspondencia uno a uno con `.gitleaksignore` (FR-020)
 - [ ] T050 [P] [US2] Crear `security/audit-exceptions.json` vacío, con la estructura de campos `advisory` (GHSA), `package`, `justification`, `owner`, fecha de aprobación y `reviewBy` (ISO 8601, UTC, máximo 90 días) (data-model.md)

@@ -147,7 +147,7 @@ variable ausente, vacía, inválida y desconocida.
 ## 5. Ejecutar todos los controles
 
 ```bash
-npm run tools:install   # descarga gitleaks y zizmor fijados y verifica su SHA-256 en .tools/bin
+npm run tools:install   # descarga gitleaks y zizmor fijados y verifica su SHA-256 en .tools/bin (necesita tar)
 npm run check           # las ocho categorías: formato, lint, tipos, pruebas, build + humo, secretos, dependencias, workflows
 ```
 
