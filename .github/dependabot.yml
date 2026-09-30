@@ -1,0 +1,56 @@
+# Actualizaciones de Dependabot (T058; research.md, R12 y K12). Es un servicio
+# de GitHub, no un workflow: sus pull requests pasan por los mismos controles,
+# sin credenciales del proyecto, y nunca se integran automáticamente.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Etc/UTC
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # `next` y `@next/env` se actualizan siempre juntos, también en versiones
+      # mayores (K12). Va primero: cada dependencia entra en el primer grupo
+      # que la admite.
+      next:
+        applies-to: version-updates
+        patterns:
+          - "next"
+          - "@next/env"
+      npm-minor-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "next"
+          - "@next/env"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Etc/UTC
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      actions-minor-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
