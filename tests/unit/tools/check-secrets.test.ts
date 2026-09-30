@@ -35,6 +35,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const SCRIPT = path.join(repoRoot, "scripts/check-secrets.mjs");
+const VERIFIED_TOOL = path.join(repoRoot, "scripts/tools/verified-tool.mjs");
 const TIMEOUT_MS = 60_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const NOW = Date.parse("2026-06-15T12:00:00.000Z");
@@ -230,8 +231,8 @@ function lock(hash = sha256(FAKE_GITLEAKS)): string {
   });
 }
 
-// Repositorio con el script, el lock sintético, los registros vacíos, un
-// `.gitignore` y un commit base.
+// Repositorio con el script y su módulo de verificación, el lock sintético,
+// los registros vacíos, un `.gitignore` y un commit base.
 function workspace(): Workspace {
   const base = mkdtempSync(path.join(root, "case-"));
   const dir = path.join(base, "repo");
@@ -248,6 +249,11 @@ function workspace(): Workspace {
   };
   git(created, "init", "--quiet", "--initial-branch=main");
   write(created, "scripts/check-secrets.mjs", readFileSync(SCRIPT, "utf8"));
+  write(
+    created,
+    "scripts/tools/verified-tool.mjs",
+    readFileSync(VERIFIED_TOOL, "utf8"),
+  );
   write(created, "scripts/tools/tools.lock.json", lock());
   write(created, ".gitleaksignore", IGNORE_HEADER);
   write(created, "docs/engineering/security-exceptions.md", registry([]));

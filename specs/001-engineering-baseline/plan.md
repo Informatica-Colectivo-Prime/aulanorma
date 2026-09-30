@@ -508,7 +508,7 @@ invocan en ningún script y no deben usarse directamente.
 | `check:build` | `next build && node scripts/smoke-test.mjs` | Construcción (incluye el arranque real en ambos modos) |
 | `check:secrets` | `node scripts/check-secrets.mjs`: historial alcanzable, índice de Git y árbol de trabajo no ignorado, como análisis separados | Secretos |
 | `check:deps` | `node scripts/check-dependencies.mjs` | Dependencias |
-| `check:workflows` | `zizmor --offline --min-severity low .github/workflows` | Seguridad de workflows |
+| `check:workflows` | `node scripts/check-workflows.mjs`: verifica el SHA-256 de zizmor contra `tools.lock.json` y ejecuta `zizmor --offline --min-severity low --no-config --no-ignores` sobre los YAML de `.github/workflows`, sin excepciones (FR-014) | Seguridad de workflows |
 | `check:quality` | format → lint → types → test → build, en secuencia | Agregado de calidad |
 | `check:security` | secrets → deps → workflows, en secuencia | Agregado de seguridad |
 | `check` | `check:quality` y después `check:security` | **Agregado total** (FR-010) |

@@ -340,7 +340,7 @@ queda igual.
   - ejecuta `npm audit signatures`; un código distinto de cero hace fallar el control (FR-017, FR-020; research.md, R12).
 
   Depende de T050
-- [ ] T053 [US2] Crear `scripts/negative-checks.mjs` (`npm run verify:negative [categoría…]`) según plan.md ("Diseño de las pruebas negativas"):
+- [X] T053 [US2] Crear `scripts/negative-checks.mjs` (`npm run verify:negative [categoría…]`) según plan.md ("Diseño de las pruebas negativas"):
   - **Estado inicial**: registrar `git status --porcelain` y `HEAD` del repositorio real.
   - **Copia por categoría**: una copia de `fs.mkdtemp` sin ficheros ignorados, con `npm ci --ignore-scripts --prefer-offline --no-audit --no-fund` y un repositorio Git con commit base.
   - **Alteración y comando**: una alteración sintética por categoría y solo el comando de esa categoría, comprobando que falla **por la causa esperada y en la ubicación esperada**. Un código distinto de cero sin esa causa hace fallar el procedimiento. Las ocho alteraciones: formato (`const  sample={a:1}` en `src/platform`), lint (`src/modules/normative-source/violation.ts` que importa `@/modules/moodle-publication`), tipos (`export const sample: number = "text";`), pruebas (`tests/unit/negative.test.ts` con `expect(1).toBe(2)`), construcción (página temporal del Pages Router con un `getStaticProps` que lanza; ver el punto siguiente), secretos, dependencias (`npm install --package-lock-only --ignore-scripts lodash@4.17.20`) y workflows (`${{ github.event.pull_request.title }}` dentro de `run:`).
@@ -350,14 +350,14 @@ queda igual.
   - **Alcance**: no es un control y ningún workflow lo ejecuta.
 
   Aplica FR-011 (causa y ubicación de cada fallo) y FR-012 (alteraciones controladas reproducibles). Depende de T019, T031, T051 y T052
-- [ ] T054 [US2] Crear `docs/engineering/quality-controls.md` con:
+- [X] T054 [US2] Crear `docs/engineering/quality-controls.md` con:
   - las ocho categorías con su comando local y su job de Linux, incluida `check:workflows`;
   - los nueve controles requeridos con su nombre exacto, explicando que `macos-quality` ejecuta `check:quality` y no es una categoría;
   - los agregados `check:quality`, `check:security` y `check`, y `tools:install`;
   - la tabla de alteraciones negativas, con causa y ubicación esperadas; para la de construcción, los datos que fija T053: causa, ruta lógica del fichero temporal, salida esperada, criterio de restauración y prueba de que el árbol original queda intacto;
   - que `verify:negative` es un procedimiento de aceptación local y no un control;
   - qué comandos necesitan red: `check:deps`, `tools:install` y la categoría de dependencias de `verify:negative` (FR-010 a FR-014, FR-025). Depende de T053
-- [ ] T055 [P] [US2] Crear `SECURITY.md` con:
+- [X] T055 [P] [US2] Crear `SECURITY.md` con:
   - cómo notificar una vulnerabilidad;
   - el procedimiento ante un secreto expuesto: revocarlo inmediatamente; una excepción solo sirve para un falso positivo o un contenido demostrado como no secreto; no se reescribe el historial de `main` ni se fuerza un push;
   - la prohibición de secretos reales, credenciales y datos personales en el repositorio (FR-028)
@@ -377,19 +377,21 @@ el pull request de la funcionalidad aparecen los nueve controles con su nombre e
 
 ### Implementation for User Story 3
 
-- [ ] T056 [US3] Crear `.github/workflows/quality.yml`:
+- [X] T056 [US3] Crear `.github/workflows/quality.yml`:
   - **Disparadores y permisos**: `pull_request` y `push` con `branches: [main]`, sin filtros de rutas, también en borrador; `permissions: {}` a nivel de workflow y `permissions: { contents: read }` por job.
   - **Concurrencia y tiempos**: `concurrency` que cancela automáticamente ejecuciones anteriores solo en pull requests; una ejecución cancelada no cuenta para SC-004; `timeout-minutes: 15` por job.
   - **Entorno de job**: `NEXT_TELEMETRY_DISABLED=1`, `AULANORMA_LOG_LEVEL=info` y `AULANORMA_ENVIRONMENT=ci`.
   - **Acciones fijadas por SHA**: `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1` con `persist-credentials: false`, y `actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0` con `node-version-file: .node-version` y caché de npm.
   - **Jobs**: `format`, `lint`, `types`, `test` y `build` en `ubuntu-24.04`, cada uno con `npm ci` y su `npm run check:*`; `macos-quality` en `macos-26`, con `npm ci` y `npm run check:quality`.
   - **Prohibido**: `secrets.*`, pasar `github.token`, `GITHUB_TOKEN` o `GH_TOKEN` a cualquier paso, `pull_request_target`, `workflow_run` y ejecutar `verify:negative` (FR-015, FR-016, FR-018, FR-019, FR-021, FR-022)
-- [ ] T057 [P] [US3] Crear `.github/workflows/security.yml` con la misma seguridad común que T056 y además `schedule` semanal (lunes 06:00 UTC). Esa ejecución programada no cuenta como actualización de `main`, primera ejecución satisfactoria ni intento de SC-004. Jobs en `ubuntu-24.04`:
+- [X] T057 [P] [US3] Crear `.github/workflows/security.yml` con la misma seguridad común que T056 y además `schedule` semanal (lunes 06:00 UTC). Esa ejecución programada no cuenta como actualización de `main`, primera ejecución satisfactoria ni intento de SC-004. Jobs en `ubuntu-24.04`:
   - `secrets`: checkout con `fetch-depth: 0` y `persist-credentials: false`, `npm run tools:install` y `npm run check:secrets`;
   - `dependencies`: `npm ci` y `npm run check:deps`, con resumen de medias y bajas (paquete, aviso, gravedad y enlace);
   - `workflows`: `npm run tools:install` y `npm run check:workflows`.
 
   Sin `secrets.*` ni token explícito (FR-017, FR-019, FR-021)
+
+  **Paso previo Z (FR-014)**, antes de crear los workflows: `check:workflows` pasa a ser `node scripts/check-workflows.mjs`. Verifica el SHA-256 de zizmor contra `scripts/tools/tools.lock.json` con la verificación compartida `scripts/tools/verified-tool.mjs`, que también usa `check:secrets`, y ejecuta la copia verificada con `--offline --min-severity low --no-config --no-ignores` sobre los YAML de `.github/workflows`. Rechaza las configuraciones de zizmor y las directivas `zizmor: ignore`, porque no hay excepciones de workflows, y falla cerrado si la herramienta falta o no coincide, si no hay workflows o si el análisis no se completa
 - [ ] T058 [P] [US3] Crear `.github/dependabot.yml` con los ecosistemas `npm` y `github-actions`, frecuencia semanal, agrupación de actualizaciones menores, y `next` y `@next/env` en el mismo grupo. No configurar integración automática (research.md, R12 y K12)
 - [ ] T059 [US3] Publicar la rama `001-engineering-baseline` y abrir el pull request de la funcionalidad hacia `main`. Actúa sobre GitHub, sin modificar ficheros. La descripción del pull request registra las comprobaciones manuales reproducibles realizadas hasta ahora y, cuando existan los workflows, debe superarlos. Comprobar que aparecen los nueve controles con sus nombres exactos, también en borrador, que Dependabot no queda como control y que los workflows no ejecutan `verify:negative` (depende de T056 a T058)
 

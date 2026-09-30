@@ -30,13 +30,12 @@
 //
 // Gitleaks escribe un informe JSON redactado en un temporal externo. De cada
 // hallazgo solo se muestra la huella, la ruta relativa, la regla y la línea;
-// nunca el secreto ni la salida completa de Gitleaks. El binario verificado se
-// ejecuta desde una copia en ese temporal, que se elimina siempre.
+// nunca el secreto ni la salida completa de Gitleaks. El binario verificado
+// (`scripts/tools/verified-tool.mjs`) se ejecuta desde una copia en ese
+// temporal, que se elimina siempre.
 import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import {
-  chmod,
   lstat,
   mkdir,
   mkdtemp,
@@ -48,11 +47,13 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import {
+  ToolError,
+  copyVerifiedTool,
+  currentPlatform as toolPlatform,
+} from "./tools/verified-tool.mjs";
+
 const ROOT = path.join(import.meta.dirname, "..");
-const LOCK_FILE = path.join(ROOT, "scripts/tools/tools.lock.json");
-const TOOLS_DIR = path.join(ROOT, ".tools");
-const BIN_DIR = path.join(TOOLS_DIR, "bin");
-const GITLEAKS = path.join(BIN_DIR, "gitleaks");
 const IGNORE_FILE = path.join(ROOT, ".gitleaksignore");
 const REGISTRY_FILE = path.join(
   ROOT,
@@ -60,7 +61,6 @@ const REGISTRY_FILE = path.join(
 );
 const GITLEAKS_CONFIG = path.join(ROOT, ".gitleaks.toml");
 
-const PLATFORMS = ["darwin-arm64", "darwin-x64", "linux-x64", "linux-arm64"];
 // Código de salida de Gitleaks cuando encuentra hallazgos; cualquier otro
 // distinto de 0 es un error de ejecución.
 const FINDINGS_EXIT_CODE = 10;
@@ -74,7 +74,6 @@ const MAX_REVIEW_MS = 90 * DAY_MS;
 const LOG_ERROR = /^\d{1,2}:\d{2}(?:AM|PM) (?:ERR|FTL) /m;
 const COMMITS_SCANNED = /^\d{1,2}:\d{2}(?:AM|PM) INF (\d+) commits scanned\.$/m;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
-const SHA256 = /^[0-9a-f]{64}$/;
 const ENTRY_KEYS = [
   "fingerprint",
   "owner",
@@ -95,10 +94,6 @@ const GIT_LOCATION_VARIABLES = new Set([
 
 // Error con un mensaje apto para mostrarse: sin rutas absolutas ni secretos.
 class CheckError extends Error {}
-
-function sha256(data) {
-  return createHash("sha256").update(data).digest("hex");
-}
 
 // Sustituye los caracteres de control para que un nombre de fichero no pueda
 // alterar la salida del terminal.
@@ -413,76 +408,33 @@ async function readExceptions(now) {
 
 // --- Herramienta ---
 
+// La verificación está en `scripts/tools/verified-tool.mjs`; sus errores se
+// muestran igual que los del control.
+function asCheckError(error) {
+  return error instanceof ToolError ? new CheckError(error.message) : error;
+}
+
 function currentPlatform() {
-  const platform = `${process.platform}-${process.arch}`;
-  if (!PLATFORMS.includes(platform)) {
-    throw new CheckError(`Plataforma no admitida: ${platform}.`);
-  }
-  return platform;
-}
-
-async function expectedGitleaksHash(platform) {
-  let lock;
   try {
-    lock = JSON.parse(await readFile(LOCK_FILE, "utf8"));
-  } catch {
-    throw new CheckError(
-      "No se pudo leer scripts/tools/tools.lock.json como JSON.",
-    );
+    return toolPlatform();
+  } catch (error) {
+    throw asCheckError(error);
   }
-  const entry = lock?.tools?.gitleaks?.platforms?.[platform];
-  if (
-    lock?.schemaVersion !== 1 ||
-    typeof entry?.binarySha256 !== "string" ||
-    !SHA256.test(entry.binarySha256)
-  ) {
-    throw new CheckError(
-      `tools.lock.json no fija el SHA-256 de Gitleaks para ${platform}.`,
-    );
-  }
-  return entry.binarySha256;
 }
 
-// Lee el binario instalado sin seguir enlaces, comprueba su SHA-256 y escribe
-// esos mismos bytes en `destination`, que es lo que se ejecuta.
+// Escribe en `destination` los bytes verificados de `.tools/bin/gitleaks`, que
+// es lo que se ejecuta.
 async function verifiedGitleaks(destination) {
-  const platform = currentPlatform();
-  const expected = await expectedGitleaksHash(platform);
-  const missing =
-    "Falta .tools/bin/gitleaks o no es un fichero regular: ejecuta npm run tools:install.";
-  for (const directory of [TOOLS_DIR, BIN_DIR]) {
-    let stats;
-    try {
-      stats = await lstat(directory);
-    } catch {
-      throw new CheckError(missing);
-    }
-    if (!stats.isDirectory()) {
-      throw new CheckError(".tools o .tools/bin no es un directorio real.");
-    }
-  }
-  let handle;
   try {
-    handle = await open(GITLEAKS, constants.O_RDONLY | constants.O_NOFOLLOW);
-  } catch {
-    throw new CheckError(missing);
+    await copyVerifiedTool({
+      root: ROOT,
+      name: "gitleaks",
+      label: "Gitleaks",
+      destination,
+    });
+  } catch (error) {
+    throw asCheckError(error);
   }
-  let data;
-  try {
-    if (!(await handle.stat()).isFile()) {
-      throw new CheckError(missing);
-    }
-    data = await handle.readFile();
-  } finally {
-    await handle.close();
-  }
-  if (sha256(data) !== expected) {
-    throw new CheckError(
-      "El SHA-256 de .tools/bin/gitleaks no coincide con tools.lock.json: ejecuta npm run tools:install.",
-    );
-  }
-  await writeFile(destination, data, { mode: 0o700 });
-  await chmod(destination, 0o700);
 }
 
 // --- Árbol de trabajo ---
