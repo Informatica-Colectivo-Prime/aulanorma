@@ -393,7 +393,7 @@ el pull request de la funcionalidad aparecen los nueve controles con su nombre e
 
   **Paso previo Z (FR-014)**, antes de crear los workflows: `check:workflows` pasa a ser `node scripts/check-workflows.mjs`. Verifica el SHA-256 de zizmor contra `scripts/tools/tools.lock.json` con la verificación compartida `scripts/tools/verified-tool.mjs`, que también usa `check:secrets`, y ejecuta la copia verificada con `--offline --min-severity low --no-config --no-ignores` sobre los YAML de `.github/workflows`. Rechaza las configuraciones de zizmor y las directivas `zizmor: ignore`, porque no hay excepciones de workflows, y falla cerrado si la herramienta falta o no coincide, si no hay workflows o si el análisis no se completa
 - [X] T058 [P] [US3] Crear `.github/dependabot.yml` con los ecosistemas `npm` y `github-actions`, frecuencia semanal, agrupación de actualizaciones menores, y `next` y `@next/env` en el mismo grupo. No configurar integración automática (research.md, R12 y K12)
-- [ ] T059 [US3] Publicar la rama `001-engineering-baseline` y abrir el pull request de la funcionalidad hacia `main`. Actúa sobre GitHub, sin modificar ficheros. La descripción del pull request registra las comprobaciones manuales reproducibles realizadas hasta ahora y, cuando existan los workflows, debe superarlos. Comprobar que aparecen los nueve controles con sus nombres exactos, también en borrador, que Dependabot no queda como control y que los workflows no ejecutan `verify:negative` (depende de T056 a T058)
+- [X] T059 [US3] Publicar la rama `001-engineering-baseline` y abrir el pull request de la funcionalidad hacia `main`. Actúa sobre GitHub, sin modificar ficheros. La descripción del pull request registra las comprobaciones manuales reproducibles realizadas hasta ahora y, cuando existan los workflows, debe superarlos. Comprobar que aparecen los nueve controles con sus nombres exactos, también en borrador, que Dependabot no queda como control y que los workflows no ejecutan `verify:negative` (depende de T056 a T058)
 
 **Checkpoint**: `npm run check` y `npm run verify:negative workflows` terminan con éxito en local, y el pull request muestra los nueve controles en verde.
 
@@ -411,11 +411,11 @@ Es la base de SC-008.
 
 ### Implementation for User Story 4
 
-- [ ] T060 [P] [US4] Crear `src/modules/normative-source/README.md` con la responsabilidad de la capa (PDF original inmutable y texto extraído por página), dependencias permitidas (`platform`) y nota de que está vacía en esta funcionalidad (FR-023)
-- [ ] T061 [P] [US4] Crear `src/modules/structured-interpretation/README.md` con la responsabilidad (representación validada del certificado), dependencias permitidas (`platform` y `normative-source`) y nota de capa vacía (FR-023)
-- [ ] T062 [P] [US4] Crear `src/modules/didactic-content/README.md` con la responsabilidad (materiales, actividades y evaluaciones generados), dependencias permitidas (`platform` y `structured-interpretation`) y nota de capa vacía (FR-023)
-- [ ] T063 [P] [US4] Crear `src/modules/moodle-publication/README.md` con la responsabilidad (correspondencia entre el contenido aprobado y Moodle, sin generar ni alterar contenido), dependencias permitidas (`platform` y `didactic-content`) y nota de capa vacía (FR-023)
-- [ ] T064 [P] [US4] Crear `docs/engineering/architecture.md` con:
+- [X] T060 [P] [US4] Crear `src/modules/normative-source/README.md` con la responsabilidad de la capa (PDF original inmutable y texto extraído por página), dependencias permitidas (`platform`) y nota de que está vacía en esta funcionalidad (FR-023)
+- [X] T061 [P] [US4] Crear `src/modules/structured-interpretation/README.md` con la responsabilidad (representación validada del certificado), dependencias permitidas (`platform` y `normative-source`) y nota de capa vacía (FR-023)
+- [X] T062 [P] [US4] Crear `src/modules/didactic-content/README.md` con la responsabilidad (materiales, actividades y evaluaciones generados), dependencias permitidas (`platform` y `structured-interpretation`) y nota de capa vacía (FR-023)
+- [X] T063 [P] [US4] Crear `src/modules/moodle-publication/README.md` con la responsabilidad (correspondencia entre el contenido aprobado y Moodle, sin generar ni alterar contenido), dependencias permitidas (`platform` y `didactic-content`) y nota de capa vacía (FR-023)
+- [X] T064 [P] [US4] Crear `docs/engineering/architecture.md` con:
   - las cuatro capas, su ubicación y su responsabilidad;
   - la matriz de dependencias de data-model.md;
   - la regla de entrega limitada a las API públicas de `src/platform`;
@@ -423,21 +423,21 @@ Es la base de SC-008.
   - las áreas de `src/platform`;
   - los módulos portables y quién puede leer `process.env`;
   - cómo se fuerzan los límites: ESLint y `tests/architecture/import-boundaries.test.ts` (FR-023, FR-025)
-- [ ] T065 [P] [US4] Crear `docs/engineering/branch-protection.md` con:
+- [X] T065 [P] [US4] Crear `docs/engineering/branch-protection.md` con:
   - la lista exacta de los nueve controles requeridos y su fuente esperada (aplicación GitHub Actions de este repositorio);
   - la secuencia de plan.md ("Protección de `main`"): mantener la protección básica; integrar solo si SC-001 a SC-008 previos a `main` están Superado; la integración no inicia la congelación; admitir PR correctivos hasta el primer par satisfactorio sobre el mismo SHA; congelación desde ese momento hasta la activación; añadir los nueve inmediatamente (misma sesión administrativa, sin commits intermedios, ambas marcas temporales); si la activación falla, la congelación continúa;
   - los pasos para una regla clásica y para un ruleset;
   - la verificación con `gh api`;
   - las reglas: sin pushes directos ni forzados, sin actores con elusión (tampoco administradores), sin aprobación de otra persona mientras haya un único mantenedor y sin desactivación de emergencia;
   - una sección "Registro de activación" vacía, que se completa en T086 (FR-026)
-- [ ] T066 [P] [US4] Crear `CONTRIBUTING.md` con:
+- [X] T066 [P] [US4] Crear `CONTRIBUTING.md` con:
   - ramas propias y llegada a `main` solo mediante pull request;
   - el flujo Spec Kit completo para funcionalidades críticas (`specify` → `clarify` → `plan` → `checklist` → `tasks` → `analyze` → `implement` → `converge`);
   - la revisión documentada con la lista de comprobación constitucional en la descripción del pull request cuando hay un único autor;
   - la Definition of Done de la constitución;
   - `npm run check` antes de abrir un pull request;
   - la convención de los pull requests negativos (`[NEGATIVE TEST] <identificador> — do not merge`, en borrador y nunca integrados) (FR-025)
-- [ ] T067 [US4] Ampliar `README.md` con una sección de documentación que enlace `docs/engineering/architecture.md`, `quality-controls.md`, `branch-protection.md`, `reference-environment.md`, `CONTRIBUTING.md`, `SECURITY.md` y los ADR en estado Propuesto (depende de T044, T045, T054, T055 y T064 a T066)
+- [X] T067 [US4] Ampliar `README.md` con una sección de documentación que enlace `docs/engineering/architecture.md`, `quality-controls.md`, `branch-protection.md`, `reference-environment.md`, `CONTRIBUTING.md`, `SECURITY.md` y los ADR en estado Propuesto (depende de T044, T045, T054, T055 y T064 a T066)
 
 **Checkpoint**: la documentación de estructura, controles y protección está completa en el pull request.
 

@@ -149,6 +149,27 @@ Next.js.
 La escucha es fija en `127.0.0.1:3000`, y cualquier cambio en los ficheros `.env*` exige
 reiniciar.
 
+## Documentación
+
+- [Arquitectura](docs/engineering/architecture.md): las cuatro capas, su ubicación y
+  responsabilidad, la matriz de dependencias, la frontera HTTP y los puntos de entrada.
+- [Controles de calidad y seguridad](docs/engineering/quality-controls.md): las ocho categorías,
+  los nueve controles de la integración continua y los comandos locales equivalentes.
+- [Protección de `main`](docs/engineering/branch-protection.md): la protección actual, los nueve
+  controles que se añadirán como requeridos y la secuencia de activación.
+- [Entorno de referencia](docs/engineering/reference-environment.md): el equipo macOS arm64 en
+  el que se miden los tiempos de aceptación.
+- [Excepciones de seguridad](docs/engineering/security-exceptions.md): el registro de excepciones
+  de secretos y dependencias.
+- [Cómo contribuir](CONTRIBUTING.md): ramas, pull requests, flujo Spec Kit, revisión con la lista
+  de comprobación constitucional y Definition of Done.
+- [Política de seguridad](SECURITY.md): cómo notificar una vulnerabilidad y qué hacer si se
+  expone un secreto.
+- [Decisiones arquitectónicas](docs/adr/README.md): índice y ciclo de vida de los ADR. Los dos
+  ADR de la base están en estado **Propuesto**:
+  - [ADR 0001: arquitectura, runtime y estructura modular](docs/adr/0001-architecture-runtime-and-modular-structure.md);
+  - [ADR 0002: estrategia de calidad, integración continua y seguridad](docs/adr/0002-quality-ci-and-security-strategy.md).
+
 ## Resolución de problemas
 
 | Síntoma                                                                                           | Causa probable                                                                                                    | Acción                                                                                                 |
