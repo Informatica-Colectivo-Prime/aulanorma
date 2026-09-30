@@ -282,7 +282,7 @@ crudo, la equivalencia entre modos y la auditoría de registros. Además, los pa
   - no registra nada por petición, no usa propiedades privadas de Node.js y no contiene instrumentación de diagnóstico.
 
   Depende de T033, T034, T037, T039 y T040. Con el preflight de T042, hace pasar T025, T026 y T029 a T032
-- [ ] T042 [US1] Crear `scripts/preflight.mjs` con modos `dev` y `start`:
+- [X] T042 [US1] Crear `scripts/preflight.mjs` con modos `dev` y `start`:
   - lo invocan los scripts de T004: `npm run dev` fija `NODE_ENV=development` y `npm start` fija `NODE_ENV=production`, por separado para el preflight y para `server.mjs`, de modo que un `NODE_ENV` heredado distinto no cambia el modo;
   - llama a `loadConfig` de `src/platform/config/index.ts` (T033), importada directamente con eliminación nativa de tipos, con el modo explícito `development` para `dev` y `production` para `start`; no deduce el modo de `NODE_ENV`, no usa `readRuntimeConfig` ni lee `process.env` directamente; un argumento ausente o distinto de `dev` y `start` termina con código 1;
   - si `NODE_ENV` no coincide con el modo, recibe `{ key: "NODE_ENV", problem: "mode_mismatch" }`, sin el valor, y termina con código 1 antes de que `server.mjs` arranque; nunca se carga `.env.test` durante `dev` ni `start`;

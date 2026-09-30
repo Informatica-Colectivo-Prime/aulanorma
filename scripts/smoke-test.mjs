@@ -189,9 +189,13 @@ function hasStartupCompleted(output) {
 // - un arranque rechazado, con `startup.config_invalid`.
 // Antes del evento solo se admiten líneas vacías y, si el proceso se lanzó con
 // npm, las dos líneas con las que npm anuncia el script, exactamente una vez y
-// en orden; en un proceso directo, ninguna. Después del evento no aparece
-// ninguna línea: ni registros por petición o rechazo, ni avisos, errores o
-// trazas.
+// en orden; en un proceso directo, ninguna. En un arranque satisfactorio se
+// admite además, como mucho una vez, entre la cabecera de npm y el evento, la
+// línea informativa que Next.js escribe siempre al preparar la aplicación
+// (`NEXT_STARTUP_LINE`); no es un registro de la aplicación ni se exige. Nunca
+// se admite en un arranque rechazado ni en el preflight. Después del evento no
+// aparece ninguna línea: ni registros por petición o rechazo, ni avisos,
+// errores o trazas.
 // Cada evento es una sola línea JSON con exactamente los campos aprobados; el
 // contrato completo del formato es de `tests/unit/platform/logging.test.ts`.
 // Los problemas se describen con etiquetas, nunca con la salida.
@@ -207,6 +211,32 @@ const CONFIG_INVALID_FIELDS = [
   "service",
   "time",
 ];
+// Línea informativa que Next.js 16.3.6 escribe al cargar `next.config.ts`
+// durante `app.prepare()`, sin ninguna opción pública que la evite. El patrón
+// reproduce exactamente `durationToStringWithNanoseconds`
+// (`next/dist/build/duration-to-string.js` de esa versión), que da formato a la
+// duración con `toFixed` por tramos:
+// - menos de 2 ms: milisegundos con un decimal, de `0.0ms` a `2.0ms`;
+// - de 2 ms a menos de 2 s: milisegundos enteros, de `2ms` a `2000ms`;
+// - de 2 s a menos de 40 s: segundos con un decimal, de `2.0s` a `40.0s`;
+// - de 40 s a menos de 2 min: segundos enteros, de `40s` a `120s`;
+// - desde 2 min: minutos con un decimal, desde `2.0min`.
+// El redondeo puede alcanzar el límite superior de cada tramo.
+// No debe sustituirse por una expresión amplia (`.*`, `\S+`, `[0-9.]+`…): la
+// auditoría de T031 solo admite esta línea porque su forma es cerrada, y una
+// expresión amplia dejaría pasar rutas, PID, valores o cualquier otro texto de
+// Next.js sin detectarlo. Al actualizar Next.js hay que revisar su formateador
+// y ajustar estos tramos.
+const NEXT_DURATION = [
+  String.raw`(?:[01]\.\d|2\.0)ms`,
+  String.raw`(?:[2-9]|[1-9]\d{1,2}|1\d{3}|2000)ms`,
+  String.raw`(?:(?:[2-9]|[1-3]\d)\.\d|40\.0)s`,
+  String.raw`(?:[4-9]\d|1[01]\d|120)s`,
+  String.raw`(?:[2-9]|[1-9]\d+)\.\dmin`,
+].join("|");
+const NEXT_STARTUP_LINE = new RegExp(
+  String.raw`^✓ Running next\.config\.ts took (?:${NEXT_DURATION})$`,
+);
 const PROBLEM_CODES = new Set([
   "missing",
   "invalid_value",
@@ -265,31 +295,51 @@ function npmBanner(script) {
       ];
 }
 
-// Lo que rodea al evento de la posición `index`: antes, solo líneas vacías y
-// la cabecera exacta de npm; después, nada. Sin evento, se revisa toda la
-// salida como anterior a él.
-function framingProblems({ entries, partial }, index, script, event) {
+// Lo que rodea al evento de la posición `index`: antes, solo líneas vacías,
+// la cabecera exacta de npm y, con `nextStartup`, como mucho una línea
+// informativa de Next.js justo antes del evento; después, nada. Sin evento, se
+// revisa toda la salida como anterior a él.
+function framingProblems(
+  { entries, partial },
+  index,
+  script,
+  event,
+  { nextStartup = false } = {},
+) {
   const problems = [];
   const banner = npmBanner(script);
   const before = (
     index === undefined ? entries : entries.slice(0, index)
   ).filter(({ kind }) => kind !== "vacía");
+  const isNextLine = (entry) =>
+    nextStartup && entry.kind === "texto" && NEXT_STARTUP_LINE.test(entry.line);
+  const nextLines = before.filter(isNextLine);
+  const own = before.filter((entry) => !isNextLine(entry));
   if (
-    before.some(
-      (entry) => entry.kind !== "texto" || !banner.includes(entry.line),
-    )
+    own.some((entry) => entry.kind !== "texto" || !banner.includes(entry.line))
   ) {
     problems.push(
       script === undefined
         ? `la salida contiene líneas distintas de ${event}`
-        : `la salida contiene líneas distintas de la cabecera de npm y ${event}`,
+        : nextStartup
+          ? `la salida contiene líneas distintas de la cabecera de npm, la línea informativa de Next.js y ${event}`
+          : `la salida contiene líneas distintas de la cabecera de npm y ${event}`,
     );
   } else if (
-    before.length !== banner.length ||
-    before.some(({ line }, position) => line !== banner[position])
+    own.length !== banner.length ||
+    own.some(({ line }, position) => line !== banner[position])
   ) {
     problems.push(
       "la cabecera de npm no aparece exactamente una vez y en orden",
+    );
+  }
+  if (nextLines.length > 1) {
+    problems.push(
+      `la línea informativa de Next.js aparece ${String(nextLines.length)} veces`,
+    );
+  } else if (nextLines.length === 1 && before.at(-1) !== nextLines[0]) {
+    problems.push(
+      `la línea informativa de Next.js no está entre la cabecera de npm y ${event}`,
     );
   }
   if ((index !== undefined && entries.length > index + 1) || partial !== "") {
@@ -359,7 +409,8 @@ function configInvalidProblems(record, mode) {
 }
 
 // Arranque satisfactorio, auditado antes de detener el proceso: cabecera de
-// npm, un único `startup.completed` y nada más después.
+// npm, como mucho la línea informativa de Next.js, un único
+// `startup.completed` y nada más después.
 function startupLogProblems(output, { script, environment }) {
   const lines = logLines(output);
   const { entries } = lines;
@@ -386,7 +437,9 @@ function startupLogProblems(output, { script, environment }) {
     }
   }
   problems.push(
-    ...framingProblems(lines, first, script, "startup.completed"),
+    ...framingProblems(lines, first, script, "startup.completed", {
+      nextStartup: true,
+    }),
     ...leakProblems(output),
   );
   return problems.map((problem) => `registros: ${problem}`);
