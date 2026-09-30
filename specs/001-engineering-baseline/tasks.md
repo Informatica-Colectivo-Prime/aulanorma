@@ -322,10 +322,10 @@ queda igual.
 
 - [X] T046 [P] [US2] Crear `scripts/tools/tools.lock.json` con Gitleaks 8.30.1 y zizmor 1.30.1. Para cada una de las plataformas darwin-arm64, darwin-x64, linux-x64 y linux-arm64, registrar URL de descarga oficial, SHA-256 del archivo, ruta exacta del binario dentro del archivo y SHA-256 del binario. El SHA-256 del archivo procede, en Gitleaks, del fichero de sumas de comprobación publicado en su release y, en zizmor, que no publica ese fichero, del `digest` SHA-256 que GitHub publica para el asset de la release oficial, corroborado por el sujeto de las dos atestaciones publicadas de la release, cuyas firmas Sigstore no se verifican criptográficamente. El SHA-256 del binario se calcula tras extraerlo del archivo ya verificado. El instalador comprueba la integridad contra estos valores, no firmas ni procedencia de la compilación (research.md, R11 y R13)
 - [X] T047 [US2] Crear `scripts/tools/install-tools.mjs` (Node sin dependencias): detecta la plataforma y descarga sin autenticación, sin usar ningún token. Verifica el SHA-256 contra `tools.lock.json` y falla cerrado ante cualquier discrepancia o si falta la herramienta. Instala en `.tools/bin` y es idempotente (depende de T046)
-- [ ] T048 [P] [US2] Crear `.gitleaksignore` vacío de huellas, con un comentario que remite a `docs/engineering/security-exceptions.md`
-- [ ] T049 [P] [US2] Crear `docs/engineering/security-exceptions.md` como registro estructurado y verificable automáticamente, inicialmente vacío. Por excepción: identificador del hallazgo (huella), responsable, justificación, fecha de aprobación y `reviewBy` en UTC, como máximo 90 días posterior. Correspondencia uno a uno con `.gitleaksignore` (FR-020)
-- [ ] T050 [P] [US2] Crear `security/audit-exceptions.json` vacío, con la estructura de campos `advisory` (GHSA), `package`, `justification`, `owner`, fecha de aprobación y `reviewBy` (ISO 8601, UTC, máximo 90 días) (data-model.md)
-- [ ] T051 [US2] Crear `scripts/check-secrets.mjs` (Node sin dependencias), que ejecuta tres análisis separados y falla si cualquiera encuentra un hallazgo no exceptuado, si falta la herramienta, si su SHA-256 no coincide o si el análisis no puede completarse:
+- [X] T048 [P] [US2] Crear `.gitleaksignore` vacío de huellas, con un comentario que remite a `docs/engineering/security-exceptions.md`
+- [X] T049 [P] [US2] Crear `docs/engineering/security-exceptions.md` como registro estructurado y verificable automáticamente, inicialmente vacío. Por excepción: identificador del hallazgo (huella), responsable, justificación, fecha de aprobación y `reviewBy` en UTC, como máximo 90 días posterior. Correspondencia uno a uno con `.gitleaksignore` (FR-020)
+- [X] T050 [P] [US2] Crear `security/audit-exceptions.json` vacío, con la estructura de campos `advisory` (GHSA), `package`, `justification`, `owner`, fecha de aprobación y `reviewBy` (ISO 8601, UTC, máximo 90 días) (data-model.md)
+- [X] T051 [US2] Crear `scripts/check-secrets.mjs` (Node sin dependencias), que ejecuta tres análisis separados y falla si cualquiera encuentra un hallazgo no exceptuado, si falta la herramienta, si su SHA-256 no coincide o si el análisis no puede completarse:
   - **(1) historial alcanzable**: `.tools/bin/gitleaks git --log-opts="--full-history HEAD" --redact --no-banner --verbose .`, nunca con `--all`;
   - **(2) índice de Git**: el contenido preparado, aunque difiera del árbol de trabajo;
   - **(3) árbol de trabajo**: copia a un directorio de `fs.mkdtemp` los ficheros regulares existentes versionados modificados y los nuevos no ignorados, conservando su ruta relativa y sin seguir enlaces simbólicos ni incluir ficheros borrados. Ejecuta `gitleaks dir --redact --no-banner --verbose .` en la copia y la elimina en `finally`;
@@ -333,7 +333,7 @@ queda igual.
   - **comprobación final**: `git status --porcelain` del repositorio real no ha cambiado (research.md, R11).
 
   Depende de T047, T048 y T049
-- [ ] T052 [P] [US2] Crear `scripts/check-dependencies.mjs` (Node sin dependencias):
+- [X] T052 [P] [US2] Crear `scripts/check-dependencies.mjs` (Node sin dependencias):
   - ejecuta `npm audit --json` sobre las dependencias directas, de desarrollo y transitivas del lockfile;
   - falla con vulnerabilidades altas o críticas sin excepción vigente, con excepciones caducadas o incompletas (`reviewBy` en UTC, máximo 90 días) y si no puede consultar la base de avisos o el registro;
   - muestra sin fallar las medias y bajas, en la salida y en `$GITHUB_STEP_SUMMARY` cuando existe, con paquete, aviso, gravedad y enlace;
