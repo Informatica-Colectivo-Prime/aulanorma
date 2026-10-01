@@ -451,9 +451,9 @@ esta fase.
 
 Orden estricto: T068 → T069 → T070 → T071.
 
-- [ ] T068 Verificar que la implementación terminada respeta cada decisión de `docs/adr/0001-architecture-runtime-and-modular-structure.md` y `docs/adr/0002-quality-ci-and-security-strategy.md`, que permanecen Propuesto. Si una decisión propuesta no es viable, se corrige el ADR, no se obliga a cambiar la implementación para conservarla. No se cambia el estado a Aceptado (FR-027)
-- [ ] T069 Revisar `README.md` contra los pasos 1 a 8 de `quickstart.md`: cada instrucción necesaria para SC-001 está en `README.md` o en documentos enlazados de `docs/engineering/`, sin depender de `specs/`. Los enlaces a los ADR reflejan el estado Propuesto. Corregir cualquier diferencia en `README.md` (FR-001, FR-025; depende de T068)
-- [ ] T070 Crear `specs/001-engineering-baseline/acceptance.md` con:
+- [X] T068 Verificar que la implementación terminada respeta cada decisión de `docs/adr/0001-architecture-runtime-and-modular-structure.md` y `docs/adr/0002-quality-ci-and-security-strategy.md`, que permanecen Propuesto. Si una decisión propuesta no es viable, se corrige el ADR, no se obliga a cambiar la implementación para conservarla. No se cambia el estado a Aceptado (FR-027)
+- [X] T069 Revisar `README.md` contra los pasos 1 a 8 de `quickstart.md`: cada instrucción necesaria para SC-001 está en `README.md` o en documentos enlazados de `docs/engineering/`, sin depender de `specs/`. Los enlaces a los ADR reflejan el estado Propuesto. Corregir cualquier diferencia en `README.md` (FR-001, FR-025; depende de T068)
+- [X] T070 Crear `specs/001-engineering-baseline/acceptance.md` con:
   - **Cabecera**: campo del SHA base de aceptación (se completa en T071), Node.js 24.21.0 y enlace a `docs/engineering/reference-environment.md`. Distinción entre SHA base y HEAD de evidencia.
   - **Reglas comunes de la matriz**: estados Superado, No superado y Pendiente. SC-001 y SC-008 DEBEN estar Superado antes de integrar; no existe cierre posterior. Nunca secretos, valores de tokens (tampoco sintéticos), nombres de personas, rutas locales ni salidas sin redactar. Personas externas identificadas con seudónimo no reidentificable.
   - **Una sección por criterio**, de SC-001 a SC-009, con estado inicial **Pendiente** y los campos de evidencia de la matriz de aceptación de plan.md.

@@ -55,8 +55,9 @@ export const LIMITS = Object.freeze({
 // - prefijos de nivel de `next/dist/build/output/log.js` (sin color, que
 //   está desactivado en los procesos del arnés);
 // - mensajes de la caché persistente de Turbopack. Firmas observadas en el
-//   binario nativo instalado (`@next/swc-darwin-arm64` 16.3.6); no
-//   contrastadas en el binario Linux.
+//   binario nativo instalado (`@next/swc-darwin-arm64` 16.3.6) y contrastadas
+//   en `@next/swc-linux-x64-gnu` 16.3.6. Su presencia en los binarios no
+//   demuestra que el mensaje se emita, su formato ni la causa de un fallo.
 // Una coincidencia identifica el mensaje; no confirma por sí sola su causa.
 const TURBOPACK_PERSISTENCE_SIGNATURES = [
   "Persisting failed during shutdown: ",

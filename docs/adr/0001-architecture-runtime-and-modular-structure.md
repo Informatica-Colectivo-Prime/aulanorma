@@ -124,8 +124,8 @@ decisión lo adopta pese a la complejidad que añade (plan.md, Complexity Tracki
    `src/platform/http-boundary/index.ts` son módulos portables: el preflight y `server.mjs` los
    cargan directamente con Node.js, que elimina los tipos de forma nativa. Solo importan
    paquetes npm y usan sintaxis TypeScript borrable (`erasableSyntaxOnly`), sin `enum` ni
-   `namespace`. Esta decisión describe el diseño propuesto; nada de ello está implementado
-   todavía.
+   `namespace`. Esta decisión describe el diseño propuesto; la implementación de esta
+   funcionalidad ya lo aplica.
 7. **Registros**: **Pino 10.3.1** en JSON por la salida estándar, con redacción de campos
    sensibles. Eventos: únicamente `startup.completed` y `startup.config_invalid`. La
    consulta a `/api/health` no emite ningún registro ni genera `requestId`. El

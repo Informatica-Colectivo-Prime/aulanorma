@@ -781,8 +781,8 @@ Se documenta en `docs/engineering/branch-protection.md` (FR-026):
    temporales registradas. Si la activación falla, la congelación continúa.
 5. **Activación inmediata**: el mantenedor añade esos nueve nombres como **controles de estado
    requeridos** en la regla existente de `main`. Si es una
-   regla clásica de protección de rama, en "Require status checks to pass" con "Require branches
-   to be up to date". Si es un ruleset, en "Require status checks to pass". El mecanismo concreto
+   regla clásica de protección de rama, en "Require status checks to pass before merging" con "Require branches
+   to be up to date before merging". Si es un ruleset, en "Require status checks to pass before merging". El mecanismo concreto
    se comprueba en la implementación con
    `gh api repos/Informatica-Colectivo-Prime/aulanorma/rulesets` y
    `…/branches/main/protection`.

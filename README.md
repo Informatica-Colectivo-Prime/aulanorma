@@ -20,7 +20,8 @@ aplicación no arranca.
 Node.js 24.21.0 es la versión de referencia, fijada en `.node-version`, y es obligatoria en la
 aceptación. Para desarrollar sirve cualquier versión del rango. Puedes instalarla con el
 instalador oficial de [nodejs.org](https://nodejs.org/) o con un gestor de versiones que lea
-`.node-version`. `npm ci` necesita acceso a Internet para descargar las dependencias.
+`.node-version`. `npm ci` y `npm run tools:install` necesitan acceso a Internet para descargar
+las dependencias y las herramientas de seguridad.
 
 ### Perfiles verificados
 
@@ -39,6 +40,10 @@ cd aulanorma
 node --version
 npm ci
 ```
+
+Si te indican un commit concreto, como en la aceptación, fíjalo con `git checkout <SHA>` justo
+después de `cd aulanorma` y no trabajes sobre una rama que pueda cambiar. En la aceptación,
+`node --version` debe mostrar `v24.21.0`.
 
 `npm ci` instala exactamente las versiones de `package-lock.json` y no ejecuta scripts de
 instalación. Con una versión de Node.js o npm fuera de rango termina antes de instalar, con un
@@ -74,6 +79,7 @@ curl -i http://127.0.0.1:3000/api/health
 Resultado esperado:
 
 - `HTTP/1.1 200 OK`, con `content-type: application/json` y `cache-control: no-store`;
+- `vary: Accept-Encoding` puede aparecer: es la única `vary` admitida;
 - el cuerpo exacto `{"status":"ok","version":"0.1.0"}`, con la versión de `package.json`;
 - ninguna cabecera `x-powered-by`, `server`, `etag` ni `x-nextjs-*`.
 
@@ -134,6 +140,82 @@ Resultado esperado en los tres casos:
 
 `npm start` no carga `.env.development.local`: en producción, la configuración llega solo del
 entorno del proceso.
+
+## Controles y verificación
+
+### 5. Ejecutar todos los controles
+
+```bash
+npm run tools:install
+npm run check
+```
+
+`npm run tools:install` descarga Gitleaks y zizmor en sus versiones fijadas, verifica su SHA-256
+y los instala en `.tools/bin`, que Git ignora. Necesita acceso a Internet y `tar`, incluido en
+macOS y Linux. `npm run check` ejecuta las ocho categorías: formato, lint, tipos, pruebas,
+construcción con prueba de humo, secretos, dependencias y workflows.
+
+Resultado esperado: cada control informa de su éxito y el comando termina con código 0. En el
+[entorno de referencia](docs/engineering/reference-environment.md) tarda menos de 10 minutos.
+Para cronometrarlo:
+
+```bash
+time npm run check
+```
+
+Cada categoría también puede ejecutarse por separado: `npm run check:format`, `check:lint`,
+`check:types`, `check:test`, `check:build`, `check:secrets`, `check:deps` y `check:workflows`.
+Qué comprueba cada una, qué comandos necesitan red y cómo informan de un fallo se describe en
+[Controles de calidad y seguridad](docs/engineering/quality-controls.md#ocho-categorías).
+
+### 6. Comprobar que cada control detecta su fallo
+
+Este paso forma parte de la aceptación. `npm run verify:negative` no es un control requerido y
+no se ejecuta en los pull requests.
+
+```bash
+git status --porcelain
+npm run verify:negative
+git status --porcelain
+```
+
+Resultado esperado: para cada una de las ocho categorías se informa de que el control falló
+como se esperaba, por la causa y en la ubicación esperadas. En secretos se informa además de que
+un token sintético en un fichero nuevo sin seguimiento se detecta y de que uno en un fichero
+ignorado no se examina. El procedimiento termina con código 0 y las dos salidas de
+`git status --porcelain` son iguales: el repositorio no cambia. La categoría de dependencias
+necesita acceso al registro de npm. Las alteraciones, causas y ubicaciones se describen en
+[Pruebas negativas locales](docs/engineering/quality-controls.md#pruebas-negativas-locales-verifynegative).
+
+### 7. Comprobar el determinismo de las pruebas
+
+Ejecuta las pruebas cinco veces con red:
+
+```bash
+for i in 1 2 3 4 5; do npm run check:test > "${TMPDIR:-/tmp}/sc005-online-$i.log" 2>&1; echo "online run $i exit=$?"; done
+```
+
+Desactiva la red (Wi-Fi apagado o cable desconectado), comprueba que no hay acceso y repite el
+bucle:
+
+```bash
+curl -sS --max-time 5 https://registry.npmjs.org/ -o /dev/null ; echo "network exit=$?"
+for i in 1 2 3 4 5; do npm run check:test > "${TMPDIR:-/tmp}/sc005-offline-$i.log" 2>&1; echo "offline run $i exit=$?"; done
+```
+
+Resultado esperado: `network exit` es distinto de 0, las diez ejecuciones terminan con `exit=0`
+y el resumen de Vitest de cada fichero de registro muestra los mismos recuentos de ficheros y de
+pruebas.
+
+### 8. Verificación en Linux
+
+En una máquina o máquina virtual Linux x64, con los mismos requisitos previos y Node.js 24.21.0,
+crea un clon limpio y completo propio, fijado al mismo commit, y repite los pasos 1 a 6. Comprueba
+la instalación de dependencias y herramientas, la configuración sin secretos, el arranque, la
+respuesta exacta de `/api/health`, los controles de las ocho categorías y
+`npm run verify:negative`.
+
+Resultado esperado: los mismos resultados que en macOS.
 
 ## Puntos de entrada
 
