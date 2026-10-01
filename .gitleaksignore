@@ -1,0 +1,6 @@
+# Huellas de hallazgos de Gitleaks exceptuados, una por línea.
+#
+# Cada huella debe tener exactamente una entrada en el registro de
+# docs/engineering/security-exceptions.md, y viceversa (FR-020). Una huella sin
+# entrada, o una entrada caducada, hace fallar `npm run check:secrets`.
+# Las líneas vacías y las que empiezan por `#` se ignoran.
