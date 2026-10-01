@@ -65,6 +65,10 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import {
+  createOutputCapture,
+  diagnosticLines,
+} from "./tools/smoke-output-diagnostics.mjs";
 
 const ROOT = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const HOST = "127.0.0.1";
@@ -150,25 +154,35 @@ const ABSOLUTE_PATH =
   /(?:^|[\s"'(=:])(?:\/(?:Users|home|private|var|tmp|opt|usr|root|Volumes)\/|[A-Za-z]:\\)/m;
 const STACK_TRACE = /^\s+at\s/m;
 const ENV_FILE_NAME = /\.env\b/;
+const LEAKS = {
+  sentinel: "la salida contiene el valor centinela",
+  absolutePath: "la salida contiene una ruta absoluta",
+  envFile: "la salida nombra un fichero .env",
+  stackTrace: "la salida contiene una traza",
+};
+
+function hasAbsolutePath(text) {
+  return (
+    text.includes(ROOT) ||
+    text.includes(os.homedir()) ||
+    privatePaths.some((value) => text.includes(value)) ||
+    ABSOLUTE_PATH.test(text)
+  );
+}
 
 function leakProblems(output) {
   const problems = [];
   if (output.includes(SENTINEL)) {
-    problems.push("la salida contiene el valor centinela");
+    problems.push(LEAKS.sentinel);
   }
-  if (
-    output.includes(ROOT) ||
-    output.includes(os.homedir()) ||
-    privatePaths.some((value) => output.includes(value)) ||
-    ABSOLUTE_PATH.test(output)
-  ) {
-    problems.push("la salida contiene una ruta absoluta");
+  if (hasAbsolutePath(output)) {
+    problems.push(LEAKS.absolutePath);
   }
   if (ENV_FILE_NAME.test(output)) {
-    problems.push("la salida nombra un fichero .env");
+    problems.push(LEAKS.envFile);
   }
   if (STACK_TRACE.test(output)) {
-    problems.push("la salida contiene una traza");
+    problems.push(LEAKS.stackTrace);
   }
   return problems;
 }
@@ -583,13 +597,24 @@ function launch(command, args, environment, cwd = ROOT) {
   launched.add(child);
   let output = "";
   let running = true;
+  // En paralelo a la mezcla que usan las aserciones, la procedencia de cada
+  // línea para el diagnóstico de un fallo de auditoría; no decide nada.
+  const script =
+    command === NPM ? (args[0] === "run" ? args[1] : args[0]) : undefined;
+  const capture = createOutputCapture({
+    bannerLines: npmBanner(script),
+    nextStartupLine: NEXT_STARTUP_LINE,
+    hasAbsolutePath,
+  });
   child.stdout.setEncoding("utf8");
   child.stderr.setEncoding("utf8");
   child.stdout.on("data", (chunk) => {
     output += chunk;
+    capture.receive("stdout", chunk);
   });
   child.stderr.on("data", (chunk) => {
     output += chunk;
+    capture.receive("stderr", chunk);
   });
   const exited = new Promise((resolve) => {
     child.once("error", () => {
@@ -606,7 +631,34 @@ function launch(command, args, environment, cwd = ROOT) {
     exited,
     output: () => output,
     running: () => running,
+    capture,
   };
+}
+
+// Diagnóstico de un fallo de auditoría de la salida: se añade al fallo, nunca
+// lo sustituye ni lo convierte en éxito. `currentCase` es el ordinal del caso
+// en curso, desde 1.
+let currentCase = 0;
+const AUDIT_PROBLEMS = new Set([
+  ...Object.values(LEAKS),
+  "se registró algo por las consultas",
+]);
+const EXPECT_STARTUP = {
+  expectedEvent: "startup.completed",
+  nextStartupAllowed: true,
+};
+const EXPECT_CONFIG_INVALID = {
+  expectedEvent: "startup.config_invalid",
+  nextStartupAllowed: false,
+};
+const EXPECT_SILENCE = { expectedEvent: undefined, nextStartupAllowed: false };
+
+function withDiagnostics(proc, problems, expectation) {
+  const audited = problems.some(
+    (problem) =>
+      problem.startsWith("registros: ") || AUDIT_PROBLEMS.has(problem),
+  );
+  return audited ? diagnosticLines(proc.capture, expectation, currentCase) : [];
 }
 
 function groupAlive(pid) {
@@ -1932,6 +1984,7 @@ async function invalidStart(
       mode: script === "dev" ? "development" : "production",
     }),
   );
+  problems.push(...withDiagnostics(proc, problems, EXPECT_CONFIG_INVALID));
   return problems;
 }
 
@@ -1975,6 +2028,7 @@ async function preflightMismatch(
       mode: mode === "dev" ? "development" : "production",
     }),
   );
+  problems.push(...withDiagnostics(proc, problems, EXPECT_CONFIG_INVALID));
   return problems;
 }
 
@@ -2020,6 +2074,7 @@ async function preflightValid({
     problems.push("registros: el preflight válido escribió en la salida");
   }
   problems.push(...leakProblems(output));
+  problems.push(...withDiagnostics(proc, problems, EXPECT_SILENCE));
   return problems;
 }
 
@@ -2074,6 +2129,7 @@ async function serverDefense() {
   }
   problems.push(...leakProblems(output));
   problems.push(...configInvalidLogProblems(output, { mode: "production" }));
+  problems.push(...withDiagnostics(proc, problems, EXPECT_CONFIG_INVALID));
   return problems;
 }
 
@@ -2109,6 +2165,7 @@ async function validStart(variables, full) {
   if (!(await waitUntil(async () => !(await portAccepts()), STOP_LIMIT_MS))) {
     problems.push("el puerto sigue abierto tras detener el servidor");
   }
+  problems.push(...withDiagnostics(proc, problems, EXPECT_STARTUP));
   return problems;
 }
 
@@ -2137,6 +2194,7 @@ async function wireStart() {
   if (!(await waitUntil(async () => !(await portAccepts()), STOP_LIMIT_MS))) {
     problems.push("el puerto sigue abierto tras detener el servidor");
   }
+  problems.push(...withDiagnostics(proc, problems, EXPECT_STARTUP));
   return problems;
 }
 
@@ -2435,6 +2493,7 @@ async function developmentStart(variables, full) {
   if (!(await waitUntil(async () => !(await portAccepts()), STOP_LIMIT_MS))) {
     problems.push("el puerto sigue abierto tras detener el servidor");
   }
+  problems.push(...withDiagnostics(proc, problems, EXPECT_STARTUP));
   return problems;
 }
 
@@ -2519,6 +2578,7 @@ async function developmentEquivalence() {
   if (!(await waitUntil(async () => !(await portAccepts()), STOP_LIMIT_MS))) {
     problems.push("el puerto sigue abierto tras detener el servidor");
   }
+  problems.push(...withDiagnostics(proc, problems, EXPECT_STARTUP));
   return problems;
 }
 
@@ -2720,8 +2780,9 @@ async function runDevelopment() {
     const { ready, problems } = await prepareDevelopmentCopy();
     throwIfStopping();
     report("copia de desarrollo: creación, npm ci y manifiestos", problems);
-    for (const [name, run] of DEVELOPMENT_CASES) {
+    for (const [index, [name, run]] of DEVELOPMENT_CASES.entries()) {
       throwIfStopping();
+      currentCase = CASES.length + index + 1;
       const caseProblems = ready
         ? await run()
         : ["la copia de desarrollo no está disponible"];
@@ -2771,8 +2832,9 @@ async function main() {
   try {
     throwIfStopping();
     createSandbox();
-    for (const [name, run] of CASES) {
+    for (const [index, [name, run]] of CASES.entries()) {
       throwIfStopping();
+      currentCase = index + 1;
       const problems = await run();
       throwIfStopping();
       report(name, problems);
