@@ -35,6 +35,16 @@ export const CATEGORY = Object.freeze({
 
 /** @typedef {(typeof CATEGORY)[keyof typeof CATEGORY]} Category */
 
+// Firmas de mensajes concretos, en un conjunto cerrado e independiente de la
+// categoría.
+export const SIGNATURE = Object.freeze({
+  SLOW_FILESYSTEM: "slow-filesystem",
+  SLOW_FILESYSTEM_SEE_MORE: "slow-filesystem-ver-mas",
+  NONE: "ninguna",
+});
+
+/** @typedef {(typeof SIGNATURE)[keyof typeof SIGNATURE]} Signature */
+
 export const LIMITS = Object.freeze({
   // Caracteres conservados de una línea abierta; el resto solo se cuenta.
   maxLineLength: 65_536,
@@ -70,6 +80,17 @@ const TURBOPACK_PERSISTENCE_SIGNATURES = [
 ];
 const NEXT_WARNING_PREFIX = "⚠";
 const NEXT_ERROR_PREFIX = "⨯";
+// Aviso de sistema de archivos lento de Turbopack en desarrollo, verificado en
+// Next.js 16.3.6: `SlowFilesystemEvent` de
+// `crates/next-napi-bindings/src/next_api/project.rs`, que
+// `dist/shared/lib/turbopack/compilation-events.js` publica con `Log.warn` como
+// dos líneas en una sola escritura. La primera firma reconoce solo el prefijo
+// del mensaje tras el prefijo de aviso de Next.js: no valida el resto del
+// mensaje ni identifica la causa de la lentitud. La segunda es la línea exacta
+// que lo sigue.
+const SLOW_FILESYSTEM_PREFIX = `${NEXT_WARNING_PREFIX} Slow filesystem detected. The benchmark took `;
+const SLOW_FILESYSTEM_SEE_MORE =
+  "See more: https://nextjs.org/docs/app/guides/local-development";
 const NEXT_OTHER_PREFIXES = ["✓", "○", "▲", "»"];
 // Cabecera de nivel de npm 11 (`lib/utils/display.js`: `heading` y nivel).
 const NPM_WARNING = /^npm (?:warn|WARN)\b/;
@@ -158,6 +179,23 @@ function categoryOf(line, plain, options) {
 }
 
 /**
+ * Firma de una línea completa, sobre el texto sin secuencias ANSI, como la
+ * categoría. No conserva ni devuelve su texto.
+ * @param {string} line
+ * @returns {Signature}
+ */
+export function signatureOf(line) {
+  const plain = ANSI.test(line) ? line.replace(ANSI_ALL, "") : line;
+  if (plain.trimStart().startsWith(SLOW_FILESYSTEM_PREFIX)) {
+    return SIGNATURE.SLOW_FILESYSTEM;
+  }
+  if (plain === SLOW_FILESYSTEM_SEE_MORE) {
+    return SIGNATURE.SLOW_FILESYSTEM_SEE_MORE;
+  }
+  return SIGNATURE.NONE;
+}
+
+/**
  * @param {string} text
  * @returns {Category}
  */
@@ -190,6 +228,7 @@ function jsonCategory(text) {
  * @property {Category} category
  * @property {boolean} ansi
  * @property {boolean} absolutePath
+ * @property {Signature} signature
  * @property {boolean} unterminated Fragmento final sin salto de línea.
  * @property {boolean} truncated Superó `maxLineLength`.
  * @property {boolean} spliced Recibió datos del otro flujo mientras estaba
@@ -281,6 +320,7 @@ export function createOutputCapture(options, limits = LIMITS) {
     line: state.lines + 1,
     received,
     ...classifyLine(state.partial, options),
+    signature: signatureOf(state.partial),
     unterminated,
     truncated: state.truncated,
     spliced: state.spliced,
@@ -499,7 +539,7 @@ export function formatDiagnosis(caseId, diagnosis) {
   ];
   for (const { record, relation, emissionOrder } of details) {
     lines.push(
-      `${prefix} flujo=${record.stream} línea=${count(record.line)} recepción=${count(record.received)} respecto-a-startup.completed=${relation} orden-de-emisión=${emissionOrder} categoría=${record.category} ruta-absoluta=${yesNo(record.absolutePath)} ansi=${yesNo(record.ansi)} sin-salto=${yesNo(record.unterminated)} truncada=${yesNo(record.truncated)} empalmada-en-mezcla=${yesNo(record.spliced)}`,
+      `${prefix} flujo=${record.stream} línea=${count(record.line)} recepción=${count(record.received)} respecto-a-startup.completed=${relation} orden-de-emisión=${emissionOrder} categoría=${record.category} ruta-absoluta=${yesNo(record.absolutePath)} ansi=${yesNo(record.ansi)} sin-salto=${yesNo(record.unterminated)} truncada=${yesNo(record.truncated)} empalmada-en-mezcla=${yesNo(record.spliced)} firma=${record.signature}`,
     );
   }
   return lines;
