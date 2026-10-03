@@ -47,11 +47,16 @@ async function main() {
   });
 
   const { default: next } = await import("next");
+  // En desarrollo se selecciona Webpack de forma explícita: sin la opción,
+  // `next()` elige Turbopack. En producción las opciones no cambian, porque el
+  // servidor solo sirve lo que generó `next build`.
+  const dev = mode === "development";
   const app = next({
-    dev: mode === "development",
+    dev,
     dir: import.meta.dirname,
     hostname: HOSTNAME,
     port: PORT,
+    ...(dev ? { webpack: true } : {}),
   });
   const handle = app.getRequestHandler();
   await app.prepare();

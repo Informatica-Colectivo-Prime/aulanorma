@@ -114,9 +114,18 @@ const NEXT_SUBCOMMANDS: ReadonlySet<string> = new Set(["build", "typegen"]);
 const PREFLIGHT = "scripts/preflight.mjs";
 const SERVER = "server.mjs";
 
+// Selectores externos del compilador de Next.js. `dev` los fija vacíos en sus
+// dos procesos, para que ni el entorno heredado ni los ficheros `.env*`
+// cambien el compilador que pide `server.mjs`; `start` no los asigna.
+const NEUTRALIZED_SELECTORS = {
+  TURBOPACK: "",
+  IS_TURBOPACK_TEST: "",
+  NEXT_RSPACK: "",
+} as const;
+
 const ENTRY_POINTS = [
-  { script: "dev", mode: "development" },
-  { script: "start", mode: "production" },
+  { script: "dev", mode: "development", selectors: NEUTRALIZED_SELECTORS },
+  { script: "start", mode: "production", selectors: {} },
 ] as const;
 
 describe("scripts de package.json", () => {
@@ -127,7 +136,7 @@ describe("scripts de package.json", () => {
     expect(unsupported, "scripts con sintaxis no admitida").toEqual([]);
   });
 
-  describe.each(ENTRY_POINTS)("$script", ({ script, mode }) => {
+  describe.each(ENTRY_POINTS)("$script", ({ script, mode, selectors }) => {
     test("es el preflight seguido de server.mjs", () => {
       const commands = commandsOf(script);
       expect(commands, "dos comandos unidos por &&").toHaveLength(2);
@@ -150,8 +159,8 @@ describe("scripts de package.json", () => {
 
     test("no añade otras variables de entorno", () => {
       expect(commandsOf(script).map(({ env }) => env)).toEqual([
-        { NODE_ENV: mode },
-        { NEXT_TELEMETRY_DISABLED: "1", NODE_ENV: mode },
+        { NODE_ENV: mode, ...selectors },
+        { NEXT_TELEMETRY_DISABLED: "1", NODE_ENV: mode, ...selectors },
       ]);
     });
   });
@@ -555,6 +564,193 @@ const DIAGNOSTIC_MODULES: ReadonlySet<string> = new Set([
   "v8",
 ]);
 
+// Opciones de `next()` por modo. Se evalúan sobre el AST, sin ejecutar nada,
+// con el `NODE_ENV` que fija cada punto de entrada: solo se resuelven
+// literales, constantes del fichero, `process.env.NODE_ENV`, comparaciones
+// estrictas, condicionales y objetos literales. Lo demás queda sin resolver.
+
+const UNRESOLVED = Symbol("sin resolver");
+// Opciones con las que `next()` selecciona el compilador.
+const COMPILER_OPTIONS = ["webpack", "turbo", "turbopack"] as const;
+
+// Inicializador de la única constante del fichero con ese nombre.
+function constantInitializer(
+  source: ts.SourceFile,
+  name: string,
+): ts.Expression | undefined {
+  const declarations: ts.VariableDeclaration[] = [];
+  visit(source, (node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === name
+    ) {
+      declarations.push(node);
+    }
+  });
+  const [declaration] = declarations;
+  return declarations.length === 1 &&
+    declaration !== undefined &&
+    ts.isVariableDeclarationList(declaration.parent) &&
+    (declaration.parent.flags & ts.NodeFlags.Const) !== 0
+    ? declaration.initializer
+    : undefined;
+}
+
+function evaluate(
+  source: ts.SourceFile,
+  expression: ts.Expression,
+  nodeEnv: string,
+): unknown {
+  const value = unwrap(expression);
+  if (ts.isStringLiteralLike(value)) {
+    return value.text;
+  }
+  if (value.kind === ts.SyntaxKind.TrueKeyword) {
+    return true;
+  }
+  if (value.kind === ts.SyntaxKind.FalseKeyword) {
+    return false;
+  }
+  if (ts.isIdentifier(value)) {
+    const initializer = constantInitializer(source, value.text);
+    return initializer === undefined
+      ? UNRESOLVED
+      : evaluate(source, initializer, nodeEnv);
+  }
+  if (ts.isPropertyAccessExpression(value)) {
+    return isProcessEnv(value.expression) && value.name.text === "NODE_ENV"
+      ? nodeEnv
+      : UNRESOLVED;
+  }
+  if (ts.isBinaryExpression(value)) {
+    const operator = value.operatorToken.kind;
+    const left = evaluate(source, value.left, nodeEnv);
+    const right = evaluate(source, value.right, nodeEnv);
+    if (left === UNRESOLVED || right === UNRESOLVED) {
+      return UNRESOLVED;
+    }
+    if (operator === ts.SyntaxKind.EqualsEqualsEqualsToken) {
+      return left === right;
+    }
+    if (operator === ts.SyntaxKind.ExclamationEqualsEqualsToken) {
+      return left !== right;
+    }
+    return UNRESOLVED;
+  }
+  if (ts.isConditionalExpression(value)) {
+    const condition = evaluate(source, value.condition, nodeEnv);
+    if (typeof condition !== "boolean") {
+      return UNRESOLVED;
+    }
+    return evaluate(
+      source,
+      condition ? value.whenTrue : value.whenFalse,
+      nodeEnv,
+    );
+  }
+  if (ts.isObjectLiteralExpression(value)) {
+    const object = new Map<string, unknown>();
+    for (const member of value.properties) {
+      if (ts.isSpreadAssignment(member)) {
+        const spread = evaluate(source, member.expression, nodeEnv);
+        if (!(spread instanceof Map)) {
+          return UNRESOLVED;
+        }
+        for (const [key, entry] of spread as Map<string, unknown>) {
+          object.set(key, entry);
+        }
+      } else if (ts.isPropertyAssignment(member)) {
+        const name = propertyName(member.name);
+        if (name === undefined) {
+          return UNRESOLVED;
+        }
+        object.set(name, evaluate(source, member.initializer, nodeEnv));
+      } else if (ts.isShorthandPropertyAssignment(member)) {
+        object.set(member.name.text, evaluate(source, member.name, nodeEnv));
+      } else {
+        return UNRESOLVED;
+      }
+    }
+    return object;
+  }
+  return UNRESOLVED;
+}
+
+// Nombres locales de la exportación por defecto de `next` cargada con
+// `import("next")`.
+function nextFactoryNames(source: ts.SourceFile): Set<string> {
+  const names = new Set<string>();
+  visit(source, (node) => {
+    if (
+      !ts.isVariableDeclaration(node) ||
+      !ts.isObjectBindingPattern(node.name) ||
+      node.initializer === undefined
+    ) {
+      return;
+    }
+    const initializer = unwrap(node.initializer);
+    const loaded = ts.isAwaitExpression(initializer)
+      ? initializer.expression
+      : initializer;
+    const [specifier] = ts.isCallExpression(loaded) ? loaded.arguments : [];
+    if (
+      !ts.isCallExpression(loaded) ||
+      loaded.expression.kind !== ts.SyntaxKind.ImportKeyword ||
+      specifier === undefined ||
+      !ts.isStringLiteralLike(specifier) ||
+      specifier.text !== "next"
+    ) {
+      return;
+    }
+    for (const element of node.name.elements) {
+      if (
+        element.propertyName !== undefined &&
+        propertyName(element.propertyName) === "default" &&
+        ts.isIdentifier(element.name)
+      ) {
+        names.add(element.name.text);
+      }
+    }
+  });
+  return names;
+}
+
+// Opciones de la única llamada a `next()`, evaluadas con ese `NODE_ENV`.
+function nextOptions(
+  source: ts.SourceFile,
+  nodeEnv: string,
+): Map<string, unknown> {
+  const factories = nextFactoryNames(source);
+  const calls: ts.CallExpression[] = [];
+  visit(source, (node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      factories.has(node.expression.text)
+    ) {
+      calls.push(node);
+    }
+  });
+  expect(calls, "llamadas a next()").toHaveLength(1);
+  const [options, ...rest] = calls[0]?.arguments ?? [];
+  expect(rest, "argumentos adicionales de next()").toEqual([]);
+  const evaluated =
+    options === undefined ? UNRESOLVED : evaluate(source, options, nodeEnv);
+  if (!(evaluated instanceof Map)) {
+    return expect.fail("las opciones de next() no se pueden resolver");
+  }
+  return evaluated as Map<string, unknown>;
+}
+
+function compilerOptions(
+  options: ReadonlyMap<string, unknown>,
+): (readonly [string, unknown])[] {
+  return COMPILER_OPTIONS.filter((name) => options.has(name)).map(
+    (name) => [name, options.get(name)] as const,
+  );
+}
+
 describe("server.mjs", () => {
   test("no usa propiedades privadas de Node.js", () => {
     const found: string[] = [];
@@ -666,5 +862,17 @@ describe("server.mjs", () => {
       }
     });
     expect(found).toEqual([]);
+  });
+
+  test("en desarrollo next() recibe dev: true y webpack: true, sin otra opción de compilador", () => {
+    const options = nextOptions(requireFile(SERVER, "T041"), "development");
+    expect(options.get("dev"), "dev").toBe(true);
+    expect(compilerOptions(options)).toEqual([["webpack", true]]);
+  });
+
+  test("en producción next() recibe dev: false y ninguna opción de compilador", () => {
+    const options = nextOptions(requireFile(SERVER, "T041"), "production");
+    expect(options.get("dev"), "dev").toBe(false);
+    expect(compilerOptions(options)).toEqual([]);
   });
 });

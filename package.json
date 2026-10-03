@@ -20,7 +20,7 @@
     "npm": ">=11.19.0 <12"
   },
   "scripts": {
-    "dev": "NODE_ENV=development node scripts/preflight.mjs dev && NEXT_TELEMETRY_DISABLED=1 NODE_ENV=development node server.mjs",
+    "dev": "NODE_ENV=development TURBOPACK= IS_TURBOPACK_TEST= NEXT_RSPACK= node scripts/preflight.mjs dev && NEXT_TELEMETRY_DISABLED=1 NODE_ENV=development TURBOPACK= IS_TURBOPACK_TEST= NEXT_RSPACK= node server.mjs",
     "build": "NEXT_TELEMETRY_DISABLED=1 next build",
     "start": "NODE_ENV=production node scripts/preflight.mjs start && NEXT_TELEMETRY_DISABLED=1 NODE_ENV=production node server.mjs",
     "format": "prettier --write .",
