@@ -17,3 +17,5 @@ export function getVersion(): string {
   }
   return version;
 }
+
+const  sample={a:1}
