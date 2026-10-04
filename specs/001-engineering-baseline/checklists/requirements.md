@@ -111,6 +111,21 @@
   seguridad-gobernanza y de CI-aceptación: la quinta revisión admitía integrar con SC-001 o
   SC-008 Pendiente. Esa posibilidad se elimina; la trazabilidad de FR-026, SC-001 y SC-008
   queda en Superado obligatorio antes de integrar, sin tarea de cierre posterior.
+- **Nota de alcance (2026-10-04)**, posterior a las revisiones quinta y sexta. No es una
+  revisión nueva de esta lista: ningún elemento se ha vuelto a evaluar ni se ha marcado.
+  - La aclaración del 2026-10-04 de [spec.md](../spec.md) convierte SC-001 y SC-008 en
+    **validaciones empíricas aplazadas**, fuera de la aceptación obligatoria de esta entrega,
+    porque no hay ninguna persona externa disponible.
+  - La prohibición de integrar con SC-001 o SC-008 Pendiente, recogida en el último punto de
+    la quinta revisión y en la sexta, correspondía al alcance anterior y **deja de aplicarse**.
+  - Alcance vigente: la integración exige Superado en SC-002, SC-003, la parte de pull request
+    de SC-004, SC-005, SC-006 y la parte local de SC-007, con los nueve controles en verde.
+    SC-001 y SC-008 quedan Pendiente, no se dan por superados y no los sustituyen el
+    mantenedor ni un agente.
+  - No existe evidencia externa de incorporación ni de comprensión de la documentación por
+    terceros. Esa ausencia debe constar en `acceptance.md` y en la descripción del pull
+    request.
+  - El resto de conclusiones de las revisiones quinta y sexta sigue vigente.
 - Séptima revisión (2026-09-28), convergencia documental de la condición C6 del principio V,
   revalidada con todos los puntos superados:
   - FR-006 distingue la operación de estado, que no consume datos de la petición, de la

@@ -60,10 +60,11 @@ Renombrar, añadir o retirar un control requerido exige un ADR y una transición
 1. **Antes de integrar**: la protección básica de `main` se mantiene. El pull request de la
    funcionalidad registra en su descripción las comprobaciones manuales reproducibles y debe
    superar los nueve controles, que ya se ejecutan en él.
-2. **Integración inicial**: el pull request solo se integra si SC-001, SC-002, SC-003, la parte
-   de pull request de SC-004, SC-005, SC-006, la parte local de SC-007 y SC-008 están
-   **Superado**, y los nueve controles están en verde. Si SC-001 o SC-008 están Pendiente, el
-   pull request permanece abierto y no se integra. La integración **no** inicia la congelación.
+2. **Integración inicial**: el pull request solo se integra si SC-002, SC-003, la parte de pull
+   request de SC-004, SC-005, SC-006 y la parte local de SC-007 están **Superado**, y los nueve
+   controles están en verde. SC-001 y SC-008 son validaciones empíricas aplazadas: pueden
+   quedar Pendiente, sin evidencia y sin bloquear la integración, pero no se dan por superados.
+   La integración **no** inicia la congelación.
 3. **Ejecuciones en `main` hasta el primer éxito**: se comprueba el par de workflows (`quality`
    y `security`) disparado por la actualización de `main` sobre el **mismo SHA**. Si algún
    control falla, la corrección se prepara y se integra mediante un pull request normal. Pueden

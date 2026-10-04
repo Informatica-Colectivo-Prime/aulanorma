@@ -21,7 +21,8 @@ separados por fases:
 - **Aceptación manual** (fase 8): procedimientos de la
   [matriz de aceptación](./plan.md#matriz-de-aceptación) que se ejecutan una vez sobre el SHA
   base de aceptación y guardan su evidencia en `specs/001-engineering-baseline/acceptance.md`.
-  **No son controles**. SC-001 y SC-008 DEBEN estar Superado antes de integrar.
+  **No son controles**. SC-001 y SC-008 son validaciones empíricas aplazadas, fuera de la
+  aceptación obligatoria (spec.md, aclaración del 2026-10-04): no bloquean la integración.
 - **Posteriores a la primera ejecución satisfactoria en `main`** (fase 9): la integración no
   inicia la congelación; la congelación comienza al terminar el primer par de workflows
   satisfactorios sobre el mismo SHA de `main` y termina al activar los nueve controles. El
@@ -426,6 +427,7 @@ Es la base de SC-008.
 - [X] T065 [P] [US4] Crear `docs/engineering/branch-protection.md` con:
   - la lista exacta de los nueve controles requeridos y su fuente esperada (aplicación GitHub Actions de este repositorio);
   - la secuencia de plan.md ("Protección de `main`"): mantener la protección básica; integrar solo si SC-001 a SC-008 previos a `main` están Superado; la integración no inicia la congelación; admitir PR correctivos hasta el primer par satisfactorio sobre el mismo SHA; congelación desde ese momento hasta la activación; añadir los nueve inmediatamente (misma sesión administrativa, sin commits intermedios, ambas marcas temporales); si la activación falla, la congelación continúa;
+  - **Nota de alcance (2026-10-04)**: la redacción anterior de esta tarea, ya completada, recoge la regla vigente cuando se ejecutó. Desde la aclaración del 2026-10-04 de spec.md, SC-001 y SC-008 son validaciones empíricas aplazadas y no forman parte de la condición de integración, que es la de FR-026 y T082
   - los pasos para una regla clásica y para un ruleset;
   - la verificación con `gh api`;
   - las reglas: sin pushes directos ni forzados, sin actores con elusión (tampoco administradores), sin aprobación de otra persona mientras haya un único mantenedor y sin desactivación de emergencia;
@@ -456,6 +458,7 @@ Orden estricto: T068 → T069 → T070 → T071.
 - [X] T070 Crear `specs/001-engineering-baseline/acceptance.md` con:
   - **Cabecera**: campo del SHA base de aceptación (se completa en T071), Node.js 24.21.0 y enlace a `docs/engineering/reference-environment.md`. Distinción entre SHA base y HEAD de evidencia.
   - **Reglas comunes de la matriz**: estados Superado, No superado y Pendiente. SC-001 y SC-008 DEBEN estar Superado antes de integrar; no existe cierre posterior. Nunca secretos, valores de tokens (tampoco sintéticos), nombres de personas, rutas locales ni salidas sin redactar. Personas externas identificadas con seudónimo no reidentificable.
+  - **Nota de alcance (2026-10-04)**: la redacción anterior de esta tarea, ya completada, recoge la regla vigente cuando se ejecutó. Desde la aclaración del 2026-10-04 de spec.md, SC-001 y SC-008 son validaciones empíricas aplazadas y no forman parte de la condición de integración, que es la de FR-026 y T082
   - **Una sección por criterio**, de SC-001 a SC-009, con estado inicial **Pendiente** y los campos de evidencia de la matriz de aceptación de plan.md.
   - **Una sección de evidencia de FR-006 C6 y FR-009**, con estado inicial **Pendiente**, para la matriz negativa, la equivalencia entre modos y la auditoría de registros sobre la implementación real (plan.md, "Matriz de aceptación"). No es un criterio SC adicional.
 
@@ -476,9 +479,12 @@ documentación de procedimiento, se crea una nueva base y se repiten las verific
 afectadas.
 
 **⚠️** Estas tareas escriben en el mismo fichero y no se marcan `[P]`. SC-001 y SC-008
-necesitan una persona externa: si no está disponible, quedan **Pendiente**, el pull request
-permanece abierto y **no se integra**. No las sustituye el mantenedor. No existe tarea de
-cierre posterior.
+necesitan una persona externa y son validaciones empíricas aplazadas (spec.md, aclaración del
+2026-10-04): si no está disponible, T078 y T080 quedan sin marcar y los criterios, **Pendiente**
+y sin evidencia. No las sustituyen el mantenedor ni un agente. No bloquean la integración.
+No tienen plazo obligatorio: se ejecutan cuando exista un participante que cumpla sus
+condiciones. Un resultado No superado se registra y se corrige mediante pull requests normales
+(spec.md, FR-026).
 
 - [ ] T072 Aceptación manual SC-006 en `specs/001-engineering-baseline/acceptance.md`, en un clon limpio y completo propio del SHA base:
   - `diff .env.example .env.development.local` no muestra diferencias;
@@ -496,17 +502,17 @@ cierre posterior.
   - **Evidencia por categoría**: esperar a que el control objetivo falle por la causa y en la ubicación esperadas (y `macos-quality` en las categorías 1 a 5); registrar fallos colaterales; los controles no afectados DEBEN pasar. Cerrar el pull request sin integrar y eliminar la rama.
   - **Secretos**: nunca usar un secreto real y revisar que el token procede del generador sintético. Si la protección de push bloquea, autorizar solo con "It's used in tests" (autorización puntual, no excepción a FR-020) y registrar la autorización sin el valor del token. Cerrar cualquier alerta como dato sintético usado en una prueba. Si no puede autorizarse, SC-003 queda sin superar.
   - **Cierre**: `git ls-remote --heads origin 'negative-test/*'` no devuelve nada y ningún commit de esas ramas es alcanzable desde `main`. Si cambia el SHA base, solo se repiten los pull requests negativos afectados.
-- [ ] T078 Aceptación manual SC-001 en `specs/001-engineering-baseline/acceptance.md`: una persona que, al comenzar el primer recorrido, carece de conocimiento previo, sin ayuda externa y siguiendo solo `README.md` y la documentación enlazada, cronometra el recorrido en el macOS arm64 de referencia desde un clon limpio fijado al SHA base hasta que `/api/health` devuelve 200, y lo repite en Linux x64 sin límite de 30 minutos. El mantenedor puede preparar los requisitos previos, observar y registrar; cualquier explicación o corrección invalida el intento. Registrar los campos de la matriz con seudónimo no reidentificable. Superado solo si macOS tarda menos de 30 minutos, Linux x64 termina con éxito, sin desviaciones y con evidencia registrada. Si no hay persona disponible: **Pendiente**; el pull request permanece abierto y no se integra
+- [ ] T078 Aceptación manual SC-001 en `specs/001-engineering-baseline/acceptance.md`: una persona que, al comenzar el primer recorrido, carece de conocimiento previo, sin ayuda externa y siguiendo solo `README.md` y la documentación enlazada, cronometra el recorrido en el macOS arm64 de referencia desde un clon limpio fijado al SHA base hasta que `/api/health` devuelve 200, y lo repite en Linux x64 sin límite de 30 minutos. El mantenedor puede preparar los requisitos previos, observar y registrar; cualquier explicación o corrección invalida el intento. Registrar los campos de la matriz con seudónimo no reidentificable. Superado solo si macOS tarda menos de 30 minutos, Linux x64 termina con éxito, sin desviaciones y con evidencia registrada. Validación empírica aplazada: si no hay persona disponible, queda **Pendiente** y sin evidencia, esta tarea no se marca y no bloquea la integración
 - [ ] T079 Aceptación manual SC-004 (pull request) en `specs/001-engineering-baseline/acceptance.md`: sobre el SHA base del pull request de la funcionalidad, usar la ejecución inicial de `quality` y de `security` (mismo SHA) y dos reejecuciones completas (`gh run rerun <id>` sin `--failed`). Esperar a que termine cada intento y no añadir commits entre intentos. Cada uno de los nueve jobs debe concluir con éxito y durar menos de 15 minutos. Un timeout o un fallo no excluido reinicia la serie de tres. Una ejecución cancelada por `concurrency` no cuenta. Una indisponibilidad excluida requiere enlace a la incidencia pública del proveedor. Registrar por workflow el identificador, el número de intento y el SHA, y por cada uno de los nueve jobs `started_at`, `completed_at`, duración y conclusión. Incorporar los enlaces a estas ejecuciones en `acceptance.md`, en la evidencia de SC-004 y en la de SC-006, que así completa la evidencia registrada en T072, y, cuando corresponda, en la descripción del pull request
-- [ ] T080 Aceptación manual SC-008 en `specs/001-engineering-baseline/acceptance.md`: una persona que no ha participado en la implementación, y que si también ejecutó SC-001 lo hace después, lee solo `README.md` y `docs/engineering/`, sin explicaciones del mantenedor. Identifica trece resultados: cuatro elementos compuestos de capa (ubicación y responsabilidad correctas) y los nueve nombres exactos de los controles. Registrar un seudónimo no reidentificable, el SHA leído, las respuestas literales y el resultado de los trece elementos. Superado solo con los trece correctos y sin ayuda. Si no hay persona disponible: **Pendiente**; el pull request permanece abierto y no se integra
+- [ ] T080 Aceptación manual SC-008 en `specs/001-engineering-baseline/acceptance.md`: una persona que no ha participado en la implementación, y que si también ejecutó SC-001 lo hace después, lee solo `README.md` y `docs/engineering/`, sin explicaciones del mantenedor. Identifica trece resultados: cuatro elementos compuestos de capa (ubicación y responsabilidad correctas) y los nueve nombres exactos de los controles. Registrar un seudónimo no reidentificable, el SHA leído, las respuestas literales y el resultado de los trece elementos. Superado solo con los trece correctos y sin ayuda. Validación empírica aplazada: si no hay persona disponible, queda **Pendiente** y sin evidencia, esta tarea no se marca y no bloquea la integración
 - [ ] T081 Preparar la integración en `specs/001-engineering-baseline/acceptance.md` y en la descripción del pull request de la funcionalidad:
   - hacer commit de la evidencia recogida (HEAD de evidencia: solo `acceptance.md`);
   - comprobar que los nueve controles están en verde en el último commit;
   - completar en la descripción la lista de comprobación constitucional, las comprobaciones manuales realizadas y el estado de SC-001 a SC-009, con SC-004 y SC-007 de `main` y SC-009 como posteriores a la integración.
 
-  **No integrar** si SC-001 o SC-008 están Pendiente. El pull request permanece abierto. No existe tarea de cierre posterior. No comienza la primera funcionalidad de producto
+  SC-001 y SC-008 pueden quedar Pendiente como validaciones empíricas aplazadas: no bloquean la integración, pero la descripción y `acceptance.md` DEBEN declarar que no hay evidencia. **No integrar** si falta cualquier criterio de la aceptación obligatoria, incluida la parte local de SC-003 en Linux x64
 
-**Checkpoint**: evidencia previa a la integración registrada, SC-001 y SC-008 Superado, y nueve controles en verde.
+**Checkpoint**: evidencia previa a la integración registrada, criterios de la aceptación obligatoria Superado, SC-001 y SC-008 declarados como validaciones aplazadas sin evidencia, y nueve controles en verde.
 
 ---
 
@@ -517,7 +523,7 @@ La congelación comienza al terminar la primera ejecución satisfactoria del par
 sobre el mismo SHA de `main` y termina al configurar los nueve controles como requeridos. El
 primer pull request posterior acepta los ADR y registra la activación.
 
-- [ ] T082 Integrar el pull request de la funcionalidad en `main` solo si SC-001, SC-002, SC-003, la parte de pull request de SC-004, SC-005, SC-006, la parte local de SC-007 y SC-008 están Superado y los nueve controles están en verde, sin eludir la protección básica. Actúa sobre GitHub, sin modificar ficheros. Esta integración **no** inicia la congelación
+- [ ] T082 Integrar el pull request de la funcionalidad en `main` solo si SC-002, SC-003, la parte de pull request de SC-004, SC-005, SC-006 y la parte local de SC-007 están Superado, SC-001 y SC-008 constan como validaciones empíricas aplazadas sin evidencia, y los nueve controles están en verde, sin eludir la protección básica. Actúa sobre GitHub, sin modificar ficheros. Esta integración **no** inicia la congelación
 - [ ] T083 Confirmar el par de workflows disparados por la actualización de `main` sobre el **mismo SHA**: los nueve jobs terminan con éxito. Actúa sobre GitHub, sin modificar ficheros. Si alguno falla, no se activa nada ni se elude: la corrección llega por un pull request normal y esta tarea se repite. Cuando los nueve pasan por primera vez en el mismo SHA, **comienza la congelación**. La ejecución semanal de seguridad no cuenta
 - [ ] T084 Activar en la misma sesión administrativa, sin commits intermedios, los nueve nombres como controles requeridos en la regla existente de `main`, con ramas al día, sin actores con elusión, con los administradores sujetos y sin pushes directos ni forzados. Registrar la hora de fin de la primera ejecución satisfactoria y la hora de activación. Si la activación falla, la congelación continúa. Verificarlo con `gh api repos/Informatica-Colectivo-Prime/aulanorma/branches/main/protection` o `gh api repos/Informatica-Colectivo-Prime/aulanorma/rules/branches/main` y con `git log --first-parent --format='%H %cI %s' origin/main`. Durante la congelación no se integra nada, tampoco Dependabot
 - [ ] T085 Crear desde `main` actualizado una rama para el primer pull request posterior a la activación, ya sujeto a los controles requeridos (depende de T084)
@@ -542,8 +548,8 @@ primera funcionalidad de producto aún no iniciada hasta integrar ese PR (SC-009
 - **US3 (fase 5)**: depende de US1 y US2, porque los workflows ejecutan sus comandos.
 - **US4 (fase 6)**: los documentos pueden empezar tras la fase 2. T067 depende de T044, T045, T054, T055 y T064 a T066.
 - **Polish (fase 7)**: depende de US1 a US4. Orden estricto T068 → T069 → T070 → T071. Los ADR permanecen Propuesto.
-- **Aceptación manual (fase 8)**: depende del SHA base fijado en T071, con los workflows ya activos en el pull request (T059). T081 no permite integrar si SC-001 o SC-008 están Pendiente.
-- **Integración y posteriores (fase 9)**: orden estricto T082 → T083 → T084 → T085 → (T086, T087 y T088) → T089. No hay tarea de cierre posterior de SC-001 ni SC-008.
+- **Aceptación manual (fase 8)**: depende del SHA base fijado en T071, con los workflows ya activos en el pull request (T059). T081 no permite integrar si falta algún criterio de la aceptación obligatoria; SC-001 y SC-008, aplazados, no bloquean.
+- **Integración y posteriores (fase 9)**: orden estricto T082 → T083 → T084 → T085 → (T086, T087 y T088) → T089. SC-001 y SC-008 quedan aplazados: T078 y T080 se ejecutan cuando exista una persona externa.
 
 ### User Story Dependencies
 
@@ -561,7 +567,7 @@ primera funcionalidad de producto aún no iniciada hasta integrar ese PR (SC-009
 ### Camino crítico
 
 T001 → T004 → T005 → T006 → T019 → T033 → T037, T038 y T040 → T041 y T042 → T025, T026 y T029 a T032 en verde → T047 → T051 → T053
-→ T056 → T059 → T067 → T068 → T071 (SHA base; ADR Propuesto) → T078 y T080 Superado → T081 →
+→ T056 → T059 → T067 → T068 → T071 (SHA base; ADR Propuesto) → T072 a T077 y T079 → T081 →
 T082 → T083 (inicio de congelación) → T084 → T085 → T086, T087 y T088 → T089.
 
 ---
@@ -619,7 +625,7 @@ Task: "Crear .env.example"
 4. US3: nueve controles en la integración continua y pull request de la funcionalidad.
 5. US4: documentación de estructura, controles y protección.
 6. Verificación contra los ADR Propuesto, revisión documental, esqueleto de `acceptance.md` y SHA base (fase 7).
-7. Aceptación manual sobre el SHA base; SC-001 y SC-008 Superado obligatorios (fase 8).
+7. Aceptación manual sobre el SHA base; SC-001 y SC-008 aplazados y sin evidencia (fase 8).
 8. Integración, primera ejecución satisfactoria (inicio de congelación), activación y primer PR posterior que acepta los ADR (fase 9).
 
 ---

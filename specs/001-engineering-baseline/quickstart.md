@@ -282,22 +282,28 @@ ejecuta y no se repiten en cada pull request. Toda la evidencia se guarda en
 personas, rutas locales ni salidas sin redactar. Las personas externas se identifican con un
 seudónimo no reidentificable. Cada procedimiento local usa su propio clon completo, limpio y
 fijado al SHA evaluado; no se clona una rama mutable. Ninguno depende del clon ni del estado
-de SC-001. SC-001 y SC-008 DEBEN estar Superado antes de integrar.
+de SC-001. SC-001 y SC-008 son validaciones empíricas aplazadas, fuera de la aceptación
+obligatoria de esta entrega (spec.md, aclaración del 2026-10-04).
 
 | Criterio | Cómo se recoge la evidencia | Cuándo |
 |----------|-----------------------------|--------|
-| SC-001 | Pasos 1 a 3 cronometrados desde un clon limpio fijado al SHA base en el macOS arm64 de referencia, por una persona sin conocimiento previo al comenzar el primer recorrido y sin ayuda (menos de 30 minutos), y el mismo recorrido propio repetido en Linux x64, sin límite de 30 minutos. No reutiliza el clon ni la evidencia del paso 8. El mantenedor puede preparar requisitos previos, observar y registrar; cualquier explicación o corrección invalida el intento. Superado solo con ambos recorridos y evidencia registrada. Sin esa persona, queda **Pendiente**, el pull request permanece abierto y no se integra | Antes de integrar |
+| SC-001 | Pasos 1 a 3 cronometrados desde un clon limpio fijado al SHA base en el macOS arm64 de referencia, por una persona sin conocimiento previo al comenzar el primer recorrido y sin ayuda (menos de 30 minutos), y el mismo recorrido propio repetido en Linux x64, sin límite de 30 minutos. No reutiliza el clon ni la evidencia del paso 8. El mantenedor puede preparar requisitos previos, observar y registrar; cualquier explicación o corrección invalida el intento. Superado solo con ambos recorridos y evidencia registrada. Sin esa persona, queda **Pendiente** y sin evidencia, y no bloquea la integración | Validación empírica aplazada: cuando exista una persona externa |
 | SC-002 | En un clon limpio y completo propio del SHA base, independiente de SC-001: preparación, cada comando de categoría (incluidos `check:secrets`, `check:deps` y `check:workflows`) y `time npm run check` (paso 5) en el macOS de referencia; todos con código 0 y el agregado en menos de 10 minutos | Antes de integrar, aunque SC-001 esté Pendiente |
 | SC-003 | En clones limpios y completos propios fijados al SHA: `verify:negative` con causa y ubicación esperadas (paso 6) en macOS; en Linux x64, evidencia explícita de instalación, configuración, arranque, estado, controles positivos y negativos (paso 8). Enlaces a los ocho pull requests negativos; fallos colaterales registrados; controles no afectados en verde; ningún commit de esas ramas alcanzable desde `main` | Antes de integrar |
 | SC-004 | En el pull request, la ejecución inicial y dos reejecuciones completas sobre el mismo SHA, con los dos workflows del mismo SHA; cada uno de los nueve jobs concluye con éxito en menos de 15 minutos. Un timeout o un fallo no excluido reinicia la serie. Una cancelación por `concurrency` no cuenta. En `main`, la primera ejecución satisfactoria del par sobre el mismo SHA. Una indisponibilidad excluida requiere enlace a la incidencia pública del proveedor | Pull request antes de integrar; `main` antes de activar los controles requeridos |
 | SC-005 | Diez ejecuciones de `check:test` en una misma máquina y clon propio: cinco con red y cinco con conectividad externa desactivada y comprobada (paso 7). Equivalencia de código de salida y recuentos de Vitest | Antes de integrar |
 | SC-006 | En un clon limpio y completo propio del SHA base, independiente de SC-001: `diff` sin diferencias, `.env.example` sin secretos, ningún token pasado en los workflows y revisión visual de otras formas de pasar el contexto | Antes de integrar, aunque SC-001 esté Pendiente |
 | SC-007 | En un clon limpio y completo propio del SHA base: `check:secrets` con los tres análisis sobre el historial alcanzable desde el commit evaluado, sin hallazgos no justificados; enlaces a los jobs `secrets` del pull request y de la primera ejecución satisfactoria de `main` | Antes de integrar, aunque SC-001 esté Pendiente, y confirmación en `main` |
-| SC-008 | Una persona que no ha participado en la implementación, y que si también ejecuta SC-001 lo hace después, identifica trece resultados: cuatro elementos compuestos de capa (ubicación y responsabilidad) y los nueve nombres exactos. Seudónimo no reidentificable. Sin esa persona, queda **Pendiente** y no se integra | Cuando la documentación está completa y, si aplica, después de SC-001 |
+| SC-008 | Una persona que no ha participado en la implementación, y que si también ejecuta SC-001 lo hace después, identifica trece resultados: cuatro elementos compuestos de capa (ubicación y responsabilidad) y los nueve nombres exactos. Seudónimo no reidentificable. Sin esa persona, queda **Pendiente** y sin evidencia, y no bloquea la integración | Validación empírica aplazada: cuando exista una persona externa y, si aplica, después de SC-001 |
 | SC-009 | Desde la primera ejecución satisfactoria de los nueve controles en `main`: SHA y hora final, respuesta de la API con los nueve controles requeridos, hora de activación y lista de commits que demuestra que no se integró nada durante ese intervalo. Evidencia y aceptación de los ADR en el primer pull request posterior | Activación inmediatamente después de la primera ejecución satisfactoria; evidencia en el primer pull request posterior |
 
-Si SC-001 o SC-008 están **Pendiente**, el pull request permanece abierto, no se integra y no
-comienza la primera funcionalidad de producto. No existe cierre posterior.
+SC-001 y SC-008 pueden quedar **Pendiente** sin bloquear la integración ni el comienzo de la
+primera funcionalidad de producto, pero no se dan por superados: `acceptance.md` y la
+descripción del pull request declaran que no existe evidencia de incorporación ni de
+comprensión por terceros. No los sustituyen el mantenedor ni un agente. No tienen plazo
+obligatorio: se ejecutan cuando exista un participante que cumpla sus condiciones, y un
+resultado No superado se registra y se corrige mediante pull requests normales (spec.md,
+FR-026).
 
 ## Resolución de problemas
 

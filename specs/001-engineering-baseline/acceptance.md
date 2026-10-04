@@ -9,24 +9,43 @@ repiten en cada pull request.
 
 ## Cabecera
 
-- **SHA base de aceptación**: `1fd6da9b8e6b02405987025507443d468192bada`. Incluye
-  conjuntamente la corrección del compilador de desarrollo, la documentación alineada con ella
-  y la transición de este documento.
-
-  **Validación de T071**: los nueve controles concluyeron en success en la primera ejecución del
-  evento `pull_request` (intento 1) sobre este commit:
-  - commit de origen: el SHA base, `1fd6da9b8e6b02405987025507443d468192bada`;
+- **SHA base de aceptación**: Pendiente. Se fija de nuevo en T071, sobre el commit que
+  incorpore el cambio de alcance del 2026-10-04 (SC-001 y SC-008 como validaciones empíricas
+  aplazadas). Hasta entonces no hay base vigente.
+- **Base de las mediciones conservadas**: `1fd6da9b8e6b02405987025507443d468192bada`. Fue el SHA
+  base hasta el cambio de alcance y es el commit sobre el que se obtuvo toda la evidencia
+  técnica de este documento. Su validación de T071:
+  - los nueve controles concluyeron en success en la primera ejecución del evento
+    `pull_request` (intento 1) sobre ese commit;
   - merge provisional analizado por la integración continua:
-    `98649f0771e3b6b996f4965b9d8ae3b5a7087e38`, que no es el SHA base;
+    `98649f0771e3b6b996f4965b9d8ae3b5a7087e38`, que no es ese SHA;
   - `main` utilizado: `c2ad0e7de2de5434cd1be7a1d4af4c5e51ce1544`;
   - ejecuciones: [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387)
     y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381).
 
-  Esta ejecución constituye el primer intento de la serie de SC-004, registrada en T079. La
-  parte de pull request está completada; SC-004 sigue Pendiente hasta la primera ejecución
-  satisfactoria de `main`. La casilla de T071 en `tasks.md` no se marca ahora, porque cambiar
-  ese fichero crearía una nueva base.
-- **Base anterior**: `3101bd5fc4bfbbb07e6465c125e2730f2dbdd216`, sustituida. Su evidencia se
+  Esa ejecución fue el primer intento de la serie de SC-004 registrada en T079 sobre
+  `1fd6da9`. La casilla de T071 en `tasks.md` sigue sin marcar.
+- **Reutilización de la evidencia de `1fd6da9`**. El cambio de alcance modifica solo
+  documentación normativa y de procedimiento. Las únicas rutas que cambian son, todas bajo
+  `specs/001-engineering-baseline/` salvo la última: `spec.md`, `plan.md`, `tasks.md`,
+  `quickstart.md`, `checklists/requirements.md`, `checklists/ci-acceptance.md`, este fichero
+  y `docs/engineering/branch-protection.md`. No cambia código, pruebas, scripts, dependencias,
+  workflows, configuración, `README.md` ni el resto de `docs/engineering/`. Es verificable con
+  `git diff --name-only 1fd6da9 <nueva base>`, que debe listar únicamente esas ocho rutas.
+  Según la regla de la base ("cualquier otro cambio crea una nueva base y obliga a repetir lo
+  afectado"):
+  - **se conserva**, con su SHA original, la evidencia de SC-002, SC-005, FR-006 C6 y FR-009,
+    la evidencia local de SC-006, y la de SC-003 en macOS y en la integración continua. Ninguno
+    de los ficheros que esas mediciones ejecutan o revisan cambia. Para los pull requests
+    negativos, el plan solo exige repetir aquellos cuyas alteraciones o controles resulten
+    afectados, y no hay ninguno;
+  - **se repite sobre la nueva base**: T071 (primera ejecución de los nueve controles), la
+    serie de tres intentos de SC-004, de la que dependen los enlaces de SC-006 (Pendiente
+    hasta entonces), y la parte local de SC-007, porque el historial alcanzable cambia;
+  - **se ejecuta por primera vez sobre la nueva base**: la parte local de SC-003 en Linux x64
+    nativo.
+- **Base histórica**: `3101bd5fc4bfbbb07e6465c125e2730f2dbdd216`, sustituida por un cambio de
+  código. Su evidencia se
   conserva en [Evidencia histórica](#evidencia-histórica-sobre-3101bd5-base-sustituida) y no
   acredita la nueva base.
 - **HEAD de evidencia**: todavía no existe. Será un commit posterior al SHA base que solo
@@ -48,8 +67,19 @@ repiten en cada pull request.
 ## Reglas comunes
 
 - **Estados**: **Superado**, **No superado** o **Pendiente**.
-- **SC-001 y SC-008** DEBEN estar Superado antes de integrar. Si alguno queda Pendiente, el pull
-  request permanece abierto y no se integra. No existe cierre posterior.
+- **SC-001 y SC-008** son validaciones empíricas aplazadas, fuera de la aceptación obligatoria
+  de esta entrega (spec.md, aclaración del 2026-10-04). Quedan Pendiente y sin evidencia, no se
+  dan por superadas y no bloquean la integración. No las sustituyen el mantenedor ni un agente.
+- **Política de las validaciones aplazadas** (spec.md, FR-026): no tienen plazo obligatorio en
+  esta entrega y se ejecutan cuando exista un participante que cumpla sus condiciones. Hasta
+  obtener un resultado satisfactorio no puede afirmarse que la incorporación o la comprensión
+  por terceros estén validadas. Un resultado No superado se registra tal cual y da lugar a
+  correcciones mediante pull requests normales. No borra ni invalida por sí solo las
+  comprobaciones técnicas anteriores; si revela un defecto que afecta a otro criterio
+  obligatorio, ese criterio se revisa y su corrección se valida. No restablece automáticamente
+  el bloqueo de integración.
+- **Aceptación obligatoria antes de integrar**: SC-002, SC-003, la parte de pull request de
+  SC-004, SC-005, SC-006 y la parte local de SC-007.
 - **Evidencia**: fechas, commits, enlaces y cifras. Los enlaces a GitHub son admisibles.
 - **Nunca** se registran secretos, valores de tokens (tampoco sintéticos), nombres de personas,
   rutas locales ni salidas sin redactar.
@@ -66,11 +96,23 @@ repiten en cada pull request.
 **Estado**: Pendiente
 
 **Entorno**: macOS arm64 de referencia y Linux x64, ambas con Node.js 24.21.0.
-**Momento**: antes de integrar, sobre el SHA base de aceptación. Si falta la persona externa,
-SC-001 queda Pendiente, el pull request permanece abierto y no se integra.
+**Alcance**: validación empírica aplazada, fuera de la aceptación obligatoria de esta entrega.
+**Momento**: cuando exista una persona externa, sobre el SHA base vigente. Hasta entonces
+SC-001 queda Pendiente y sin evidencia, y no bloquea la integración.
 
 **Superado** solo cuando esa persona completa el recorrido en macOS en menos de 30 minutos,
 Linux x64 termina con éxito, ambos sin desviaciones, y la evidencia queda registrada.
+
+**Comprobación no realizada** (decisión del mantenedor, 2026-10-04):
+
+- No hay participante externo disponible para T078. El recorrido no se ha realizado, ni en
+  macOS ni en Linux x64.
+- El mantenedor ha decidido continuar la entrega sin esta comprobación y aplazarla. Esa
+  decisión no equivale a que el criterio esté superado: SC-001 sigue Pendiente.
+- **No existe evidencia empírica** de que una persona sin conocimiento previo consiga poner en
+  marcha el proyecto siguiendo la documentación, ni del tiempo que tardaría.
+- Ni el autor ni un agente se han usado como sustitutos del participante. Los campos siguientes
+  quedan vacíos: no se registran resultados, tiempos ni salidas que no se han obtenido.
 
 ### macOS arm64
 
@@ -206,7 +248,8 @@ negativa. En la integración continua, los controles no afectados deben pasar.
   - Al terminar no quedaron procesos y el puerto 3000 estaba libre.
 
 Parte local en macOS completada. SC-003 sigue Pendiente: falta la parte local en Linux x64
-nativo, que no se ha ejecutado.
+nativo, que no se ha ejecutado. Es un requisito de la aceptación obligatoria, independiente
+del aplazamiento de SC-001 y SC-008, y se ejecutará sobre la nueva base.
 
 ### Local en Linux x64
 
@@ -346,8 +389,13 @@ resulten necesarias y antes de activar los controles requeridos.
 dura menos de 15 minutos. Una indisponibilidad general del proveedor solo se excluye con enlace
 a su incidencia pública.
 
-**Parte de pull request: completada** (T079, 2026-10-04). Tres intentos consecutivos sobre el
-SHA base, `1fd6da9b8e6b02405987025507443d468192bada`, en el pull request de la funcionalidad:
+**Parte de pull request: completada sobre `1fd6da9`; pendiente de repetir sobre la nueva
+base**. El cambio de alcance crea una base nueva y SC-004 exige tres intentos sobre el SHA
+base, así que la serie debe repetirse. La que sigue se conserva como evidencia de la base
+anterior de las mediciones.
+
+Serie registrada en T079 (2026-10-04): tres intentos consecutivos sobre
+`1fd6da9b8e6b02405987025507443d468192bada`, en el pull request de la funcionalidad:
 
 - **Mismo SHA**: los dos workflows de cada intento corresponden al SHA base como commit de
   origen. Los 27 jobs analizaron el mismo merge provisional,
@@ -516,7 +564,7 @@ cada una.
 
 ## SC-006 Cero secretos reales
 
-**Estado**: Superado
+**Estado**: Pendiente
 
 **Entorno**: macOS arm64 de referencia y workflows del SHA base.
 **Momento**: antes de integrar, sobre el SHA base, aunque SC-001 esté Pendiente.
@@ -551,8 +599,9 @@ del repositorio.
     hizo de nuevo sobre esta base.
 - Contenido de las claves de `.env.example`: solo `AULANORMA_LOG_LEVEL` y
   `AULANORMA_ENVIRONMENT`, con valores de ejemplo ficticios, válidos y que no son secretos.
-- Enlaces a las ejecuciones de SC-004: los tres intentos del pull request sobre el SHA base,
-  con los nueve jobs en success en cada uno (T079):
+- Enlaces a las ejecuciones de SC-004: pendientes para la nueva base; se incorporan cuando se
+  repita la serie. Se conservan los de la serie anterior, sobre
+  `1fd6da9b8e6b02405987025507443d468192bada`, con los nueve jobs en success en cada uno (T079):
   - intento 1, [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/attempts/1) y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/attempts/1);
   - intento 2, [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/attempts/2) y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/attempts/2);
   - intento 3, [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/attempts/3) y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/attempts/3).
@@ -561,7 +610,12 @@ del repositorio.
   pertenece a SC-004 y sigue pendiente; no es un requisito de este criterio, que se evalúa
   antes de integrar.
 
-Ninguna comprobación muestra un secreto real ni una credencial pasada a código del repositorio.
+Ninguna comprobación realizada muestra un secreto real ni una credencial pasada a código del
+repositorio.
+
+SC-006 queda Pendiente hasta incorporar los enlaces de la serie de SC-004 sobre la nueva base.
+La evidencia local anterior se obtuvo sobre `1fd6da9b8e6b02405987025507443d468192bada` y se
+conserva íntegra: los workflows y `.env.example` no cambian con la nueva base.
 
 ---
 
@@ -619,7 +673,9 @@ con la primera ejecución satisfactoria de `main`.
 - Enlace al job `secrets` de la primera ejecución satisfactoria de `main`: pendiente; se obtiene
   en T083 y se registra en T087.
 
-Parte local completada. SC-007 sigue Pendiente hasta la confirmación en `main`.
+Parte local completada sobre `1fd6da9`. La nueva base añade commits al historial alcanzable,
+así que la medición local debe repetirse sobre ella. SC-007 sigue Pendiente hasta esa
+repetición y la confirmación en `main`.
 
 ---
 
@@ -628,11 +684,22 @@ Parte local completada. SC-007 sigue Pendiente hasta la confirmación en `main`.
 **Estado**: Pendiente
 
 **Entorno**: cualquier equipo; no hace falta ejecutar nada.
-**Momento**: cuando la documentación del SHA base está completa y, si la misma persona ejecuta
-ambos, después de SC-001. Si falta la persona, SC-008 queda Pendiente, el pull request
-permanece abierto y no se integra.
+**Alcance**: validación empírica aplazada, fuera de la aceptación obligatoria de esta entrega.
+**Momento**: cuando exista una persona externa y, si la misma persona ejecuta ambos, después de
+SC-001. Hasta entonces SC-008 queda Pendiente y sin evidencia, y no bloquea la integración.
 
 **Superado** solo con los trece correctos y sin ayuda.
+
+**Comprobación no realizada** (decisión del mantenedor, 2026-10-04):
+
+- No hay participante externo disponible para T080. Nadie ajeno a la implementación ha
+  respondido el cuestionario.
+- El mantenedor ha decidido continuar la entrega sin esta comprobación y aplazarla. Esa
+  decisión no equivale a que el criterio esté superado: SC-008 sigue Pendiente.
+- **No existe evidencia empírica** de que un tercero identifique las cuatro capas y los nueve
+  controles leyendo solo la documentación.
+- Ni el autor ni un agente se han usado como sustitutos del participante. Los campos y la tabla
+  siguientes quedan vacíos: no se registran respuestas ni valoraciones que no se han obtenido.
 
 - Seudónimo no reidentificable:
 - Declaración de que no participó en la implementación:

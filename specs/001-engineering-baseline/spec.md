@@ -18,6 +18,11 @@
 - Q: ¿Cuándo y con qué reglas debe activarse la protección de `main`, teniendo en cuenta que ahora hay un único mantenedor? → A: La protección básica de `main` ya está activa y se mantiene. Tras integrar esta funcionalidad y pasar los controles obligatorios una vez en `main`, se añaden inmediatamente como requeridos, antes de cualquier otro cambio. Sin pushes directos ni forzados y sin elusión para nadie, incluidos los administradores. Sin aprobación de otra persona mientras haya un único mantenedor (revisión documentada con la lista de comprobación constitucional). No se permite desactivar ni eludir la protección por emergencia: ante una incidencia se espera a resolverla o se modifica formalmente la gobernanza antes de continuar.
 - Q: ¿Cómo deben ejecutarse y dejar evidencia las pruebas negativas para que sean reproducibles sin llegar nunca a `main`? → A: En local, un procedimiento automatizado aplica cada alteración sobre una copia temporal, comprueba el fallo y restaura el estado sin modificar ficheros versionados. En integración continua, una rama y un pull request en borrador por categoría, identificados como pruebas negativas, se cierran sin integrar y sus ramas se eliminan tras registrar los enlaces a las ejecuciones. Solo datos sintéticos; nunca secretos reales ni dependencias maliciosas no controladas.
 
+### Session 2026-10-04
+
+- Q: No hay ninguna persona externa disponible para ejecutar SC-001 y SC-008. ¿Se mantiene la integración bloqueada hasta que exista? → A: No. Por decisión del mantenedor, SC-001 y SC-008 pasan a ser **validaciones empíricas aplazadas**, fuera de la aceptación obligatoria de esta entrega. Conservan su identificador, su procedimiento y su condición de Superado, y quedan **Pendiente** y sin evidencia: no se dan por superadas y no las sustituyen el mantenedor ni un agente. Dejan de bloquear la integración y el comienzo de la primera funcionalidad de producto. Esta aclaración sustituye a la regla anterior, que no admitía integrar con SC-001 o SC-008 Pendiente. La constitución, los controles de ingeniería y el resto de criterios no cambian; en particular, la parte local de SC-003 en Linux x64 sigue siendo obligatoria.
+- Q: ¿Qué plazo, disparador y consecuencias tienen las validaciones aplazadas SC-001 y SC-008? → A: No tienen plazo obligatorio en esta entrega. Se ejecutan cuando exista un participante que cumpla sus condiciones; hasta entonces permanecen Pendiente y sin evidencia, y no puede afirmarse que la incorporación o la comprensión por terceros estén validadas. Si una evaluación termina en No superado, se registra el resultado real y se abren correcciones concretas mediante el procedimiento habitual de pull request. Ese resultado no borra ni invalida por sí solo las comprobaciones técnicas anteriores; si revela un defecto que afecta a otro criterio obligatorio, se revisa ese criterio y se valida su corrección. No se restablece automáticamente el bloqueo de integración eliminado por la aclaración anterior.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Preparar y ejecutar el proyecto desde cero (Priority: P1)
@@ -209,9 +214,10 @@ código de cada capa y enumerar los controles que deben ser obligatorios en `mai
   Linux x64, en la integración continua y en la aceptación. Otras arquitecturas de esos sistemas
   pueden funcionar, pero la documentación NO DEBE declararlas verificadas mientras no se
   ejecuten. Windows solo se admite mediante un subsistema Linux, sin verificación oficial, y la
-  documentación DEBE indicarlo así. La verificación de Linux en la aceptación consiste en el
-  recorrido de SC-001 en Linux x64 y en el procedimiento local de SC-003 en Linux x64, además de
-  los controles de integración continua; cada uno conserva su propia evidencia.
+  documentación DEBE indicarlo así. La verificación de Linux en la aceptación obligatoria
+  consiste en el procedimiento local de SC-003 en Linux x64 y en los controles de integración
+  continua; cada uno conserva su propia evidencia. El recorrido de SC-001 en Linux x64 forma
+  parte de una validación empírica aplazada (aclaración del 2026-10-04) y no la sustituye.
 - **FR-001a**: La documentación DEBE describir el entorno de desarrollo de referencia: el macOS
   arm64 del mantenedor, con su versión del sistema, arquitectura, recursos (procesador y
   memoria) y versiones de los requisitos previos. Es el entorno en el que se miden SC-001 y
@@ -587,11 +593,21 @@ código de cada capa y enumerar los controles que deben ser obligatorios en `mai
 - **FR-026**: El repositorio DEBE documentar qué controles deben configurarse como requeridos
   en la protección de `main`, los pasos para añadirlos y las reglas de la protección:
   - la protección básica de `main`, ya activa, DEBE mantenerse durante toda la funcionalidad;
-  - la funcionalidad solo se integra cuando todos los criterios verificables antes de integrar
-    están Superado: SC-001, SC-002, SC-003, la parte de pull request de SC-004, SC-005,
-    SC-006, la parte local de SC-007 y SC-008. SC-001 y SC-008 no admiten cierre posterior:
-    si falta la persona externa, el pull request permanece abierto, el criterio queda
-    Pendiente, no se integra y no comienza la primera funcionalidad de producto;
+  - la funcionalidad solo se integra cuando todos los criterios de la aceptación obligatoria
+    verificables antes de integrar están Superado: SC-002, SC-003, la parte de pull request de
+    SC-004, SC-005, SC-006 y la parte local de SC-007. SC-001 y SC-008 son validaciones
+    empíricas aplazadas (aclaración del 2026-10-04): quedan Pendiente y sin evidencia, no se
+    consideran superadas y no bloquean la integración ni el comienzo de la primera
+    funcionalidad de producto. Su ausencia DEBE constar como limitación en `acceptance.md` y
+    en la descripción del pull request;
+  - las validaciones aplazadas no tienen plazo obligatorio en esta entrega: se ejecutan cuando
+    exista un participante que cumpla sus condiciones. Hasta obtener un resultado satisfactorio
+    NO DEBE afirmarse que la incorporación o la comprensión por terceros están validadas. Un
+    resultado No superado se registra tal cual y da lugar a correcciones concretas mediante
+    pull requests normales; no invalida por sí solo las comprobaciones técnicas anteriores,
+    salvo que revele un defecto que afecte a otro criterio obligatorio, en cuyo caso ese
+    criterio se revisa y su corrección se valida. No restablece automáticamente el bloqueo de
+    integración;
   - la integración **no** inicia la congelación. Hasta obtener la **primera ejecución
     satisfactoria en `main`** se admiten PR correctivos normales. Esa ejecución es el primer
     par formado por los dos workflows de controles, disparados por una actualización de `main`
@@ -695,9 +711,10 @@ reidentificable.
   observar y registrar; cualquier explicación o corrección del recorrido invalida el intento.
   Realiza primero el recorrido cronometrado en macOS y después verifica el mismo procedimiento
   en Linux x64, sin límite de 30 minutos. El requisito de conocimiento previo nulo se evalúa
-  al comenzar el primer recorrido, no de nuevo en Linux. Este criterio DEBE estar Superado
-  antes de integrar. Si falta la persona externa, el criterio queda Pendiente, el pull request
-  permanece abierto y no se integra.
+  al comenzar el primer recorrido, no de nuevo en Linux. Es una **validación empírica
+  aplazada**, fuera de la aceptación obligatoria de esta entrega (aclaración del 2026-10-04):
+  mientras no la ejecute una persona externa queda Pendiente y sin evidencia, no se considera
+  superada y no bloquea la integración. No la sustituyen el mantenedor ni un agente.
 - **SC-002**: En un repositorio válido, el 100 % de los comandos de calidad locales finalizan
   con éxito, y el comando agregado lo hace en menos de 10 minutos en el entorno de desarrollo
   de referencia descrito en FR-001a.
@@ -732,9 +749,11 @@ reidentificable.
   documentación, identifica sin errores trece resultados: cuatro elementos compuestos de capa
   —cada uno exige ubicación y responsabilidad correctas— y los nueve nombres exactos de los
   controles requeridos. La misma persona puede ejecutar SC-001 y SC-008 únicamente en este
-  orden: primero SC-001 y después SC-008. Este criterio DEBE estar Superado antes de
-  integrar. No se exige conocimiento previo nulo: basta con no haber participado en la
-  implementación.
+  orden: primero SC-001 y después SC-008. No se exige conocimiento previo nulo: basta con no
+  haber participado en la implementación. Es una **validación empírica aplazada**, fuera de la
+  aceptación obligatoria de esta entrega (aclaración del 2026-10-04): mientras no la ejecute
+  una persona externa queda Pendiente y sin evidencia, no se considera superada y no bloquea
+  la integración. No la sustituyen el mantenedor ni un agente.
 - **SC-009**: Tras la primera ejecución satisfactoria de los controles obligatorios en `main`
   después de integrar esta funcionalidad, el 100 % de ellos queda configurado como requerido en
   la protección de `main` antes de integrar cualquier otro cambio y, en todo caso, antes de

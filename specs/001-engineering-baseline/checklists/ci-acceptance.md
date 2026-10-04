@@ -26,6 +26,36 @@ implementación y aceptación: la evidencia externa de C6 demuestra viabilidad, 
 añade CHK075 sobre la reproducción de esa evidencia en la aceptación, y se actualizan las
 referencias de tareas tras la renumeración de `tasks.md` (antiguas T027 a T083 → T033 a T089;
 nuevas T027 a T032).
+**Nota de alcance (2026-10-04)**: esta lista evaluó los requisitos con el alcance anterior, en
+el que SC-001 y SC-008 debían estar Superado antes de integrar. La aclaración del 2026-10-04 de
+[spec.md](../spec.md) los convierte en validaciones empíricas aplazadas, fuera de la aceptación
+obligatoria de esta entrega: quedan Pendiente, sin evidencia externa de incorporación ni de
+comprensión por terceros, no se dan por superados y no bloquean la integración. Ningún elemento
+se ha vuelto a evaluar ni se ha marcado con esta nota; las marcas reflejan las revisiones del
+2026-09-27 y del 2026-09-28. Dejan de aplicarse las conclusiones que dependían de la regla
+anterior:
+
+- **CHK017**: la verificación de Linux de FR-001 en la aceptación obligatoria ya no incluye el
+  recorrido de SC-001; consiste en SC-003 local en Linux x64 y en la integración continua.
+- **CHK042**: su evidencia terminaba en "la integración sigue bloqueada"; ya no lo está por
+  SC-001.
+- **CHK058**: su evidencia era "no se integra y no comienza"; SC-001 y SC-008 Pendiente ya no
+  impiden integrar ni comenzar la primera funcionalidad de producto.
+- **CHK059**: su evidencia era "no integrar si Pendiente". La coherencia con la Definition of
+  Done descansa ahora en que SC-001 y SC-008 quedan fuera de la aceptación obligatoria; esa
+  conclusión no se ha vuelto a revisar con esta lista.
+- **CHK060, CHK061 y CHK062**: se declararon no aplicables porque no existía cierre posterior.
+  Ahora existe una ejecución posterior aplazada. La decisión del mantenedor recogida en
+  spec.md (segunda aclaración del 2026-10-04 y FR-026) resuelve los huecos de plazo, disparador
+  y consecuencia que esos elementos señalaban: no hay plazo obligatorio; el disparador es la
+  disponibilidad de un participante que cumpla las condiciones; y un resultado No superado se
+  registra y se corrige mediante pull requests normales, sin invalidar por sí solo la
+  evidencia técnica anterior ni restablecer el bloqueo de integración. Esta nota registra la
+  decisión; los tres elementos no se han vuelto a evaluar con la lista y conservan su marca y
+  su conclusión históricas.
+
+Siguen siendo válidas, porque no dependen de esa regla, las conclusiones sobre cómo se ejecutan
+SC-001 y SC-008 cuando exista la persona externa (CHK054 a CHK057 y CHK070).
 
 ## Ocho categorías y nueve controles requeridos
 
