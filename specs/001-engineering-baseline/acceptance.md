@@ -9,9 +9,23 @@ repiten en cada pull request.
 
 ## Cabecera
 
-- **SHA base de aceptación**: Pendiente. Se fija en T071; hasta entonces no hay commit evaluado.
-  La base deberá incluir conjuntamente la corrección del compilador de desarrollo, la
-  documentación alineada con ella y la transición de este documento.
+- **SHA base de aceptación**: `1fd6da9b8e6b02405987025507443d468192bada`. Incluye
+  conjuntamente la corrección del compilador de desarrollo, la documentación alineada con ella
+  y la transición de este documento.
+
+  **Validación de T071**: los nueve controles concluyeron en success en la primera ejecución del
+  evento `pull_request` (intento 1) sobre este commit:
+  - commit de origen: el SHA base, `1fd6da9b8e6b02405987025507443d468192bada`;
+  - merge provisional analizado por la integración continua:
+    `98649f0771e3b6b996f4965b9d8ae3b5a7087e38`, que no es el SHA base;
+  - `main` utilizado: `c2ad0e7de2de5434cd1be7a1d4af4c5e51ce1544`;
+  - ejecuciones: [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387)
+    y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381).
+
+  Esta ejecución constituye el primer intento de la serie de SC-004, registrada en T079. La
+  parte de pull request está completada; SC-004 sigue Pendiente hasta la primera ejecución
+  satisfactoria de `main`. La casilla de T071 en `tasks.md` no se marca ahora, porque cambiar
+  ese fichero crearía una nueva base.
 - **Base anterior**: `3101bd5fc4bfbbb07e6465c125e2730f2dbdd216`, sustituida. Su evidencia se
   conserva en [Evidencia histórica](#evidencia-histórica-sobre-3101bd5-base-sustituida) y no
   acredita la nueva base.
@@ -92,32 +106,50 @@ Linux x64 termina con éxito, ambos sin desviaciones, y la evidencia queda regis
 
 ## SC-002 Comandos de calidad locales
 
-**Estado**: Pendiente
+**Estado**: Superado
 
 **Entorno**: macOS arm64 de referencia con Node.js 24.21.0.
 **Momento**: antes de integrar, sobre el SHA base, aunque SC-001 esté Pendiente.
 
 **Superado** si todos terminan con código 0 y el agregado tarda menos de 10 minutos.
 
-- SHA:
-- Confirmación de clon completo:
-- `node --version`:
-- Código de salida de la preparación (`npm ci` y `npm run tools:install`):
+- SHA: `1fd6da9b8e6b02405987025507443d468192bada` (SHA base). Ejecución del 2026-10-04 en el
+  macOS arm64 de referencia (Apple M3, 8 núcleos, 16 GB, nativo), con macOS 27.0.1 (26A434).
+  `reference-environment.md` describe macOS 27.0 (26A428); el equipo y el resto de versiones
+  coinciden.
+- Confirmación de clon completo: clon nuevo del repositorio, sin `--depth`, filtros parciales ni
+  alternates, fijado al SHA base, con `--is-shallow-repository` en `false` y
+  `git status --porcelain` vacío antes y después. Sin `node_modules`, `.next` ni `.tools`
+  previos; caché, registros de npm y `TMPDIR` aislados fuera del clon.
+- `node --version`: `v24.21.0` (npm 11.19.0).
+- Código de salida de la preparación (`npm ci` y `npm run tools:install`): 0 y 0 (Gitleaks 8.30.1
+  y zizmor 1.30.1 instalados y verificados). Configuración de ejemplo copiada a
+  `.env.development.local` (quickstart, paso 2).
+
+Cada comando se ejecutó una sola vez, con la salida y el código capturados sin tuberías.
 
 | Comando | Código de salida |
 |---------|------------------|
-| `npm run check:format` | |
-| `npm run check:lint` | |
-| `npm run check:types` | |
-| `npm run check:test` | |
-| `npm run check:build` | |
-| `npm run check:secrets` | |
-| `npm run check:deps` | |
-| `npm run check:workflows` | |
-| `npm run check` (agregado) | |
+| `npm run check:format` | 0 |
+| `npm run check:lint` | 0 |
+| `npm run check:types` | 0 |
+| `npm run check:test` | 0 |
+| `npm run check:build` | 0 |
+| `npm run check:secrets` | 0 |
+| `npm run check:deps` | 0 |
+| `npm run check:workflows` | 0 |
+| `npm run check` (agregado) | 0 |
 
-- Tiempo real (`real`) de `time npm run check`:
-- Resumen de su salida:
+- Tiempo real (`real`) de `time npm run check`: 38,768 s. La medición es la de `time` de zsh,
+  que lo informa como `total` (42,26 s de usuario y 13,95 s de sistema).
+- Resumen de su salida: formato correcto; lint sin errores ni avisos; tipos generados y `tsc`
+  sin errores; Vitest con 18 de 18 ficheros y 840 de 840 pruebas superadas; compilación correcta
+  y "Prueba de humo superada: 21 casos."; secretos sin hallazgos en historial, índice y árbol de
+  trabajo, con 0 excepciones vigentes; 221 dependencias auditadas, 0 vulnerabilidades altas o
+  críticas sin excepción, ninguna media ni baja, firmas y atestaciones verificadas; 2 workflows
+  analizados sin hallazgos. Sin líneas `npm warn`, `npm error`, `⚠` ni `⨯` en ninguna de las
+  salidas capturadas. La compilación de `check:build` partió sin `.next` (compilación inicial
+  de 1034 ms) y el agregado reutilizó esa compilación (70 ms), como establece el procedimiento.
 
 ---
 
@@ -136,11 +168,45 @@ negativa. En la integración continua, los controles no afectados deben pasar.
 
 ### Local en macOS
 
-- SHA:
+- SHA: `1fd6da9b8e6b02405987025507443d468192bada` (SHA base). Ejecución del 2026-10-04 en el
+  macOS arm64 de referencia (macOS 27.0.1, 26A434, arm64 nativo), con Node.js `v24.21.0` y
+  npm 11.19.0.
+  - Clon nuevo, completo (`--is-shallow-repository` en `false`) y limpio, sin `--depth`,
+    filtros parciales ni alternates.
+  - Caché, registros de npm y `TMPDIR` aislados fuera del clon.
+  - Preparación: `npm ci` con código 0 y `npm run tools:install` con código 0 (Gitleaks 8.30.1
+    y zizmor 1.30.1 verificados); configuración de ejemplo copiada a `.env.development.local`.
+  - `npm run verify:negative` se ejecutó una sola vez.
 - Salida de `npm run verify:negative` con las ocho categorías, causa y ubicación de cada fallo:
-- Subcaso de exclusión positiva:
-- Código de salida:
-- Estado de Git idéntico antes y después (`git status --porcelain` y `git rev-parse HEAD`):
+
+| Categoría | Resultado | Causa | Ubicación | Fallos colaterales |
+|-----------|-----------|-------|-----------|--------------------|
+| `format` | Falla por la causa esperada | Prettier: `Code style issues found` | `src/platform/version/index.ts` | Ninguno |
+| `lint` | Falla por la causa esperada | ESLint: `no-restricted-imports` (`normative-source` importa `@/modules/moodle-publication`) | `src/modules/normative-source/violation.ts:1:1` | Ninguno |
+| `types` | Falla por la causa esperada | TypeScript: `TS2322` | `src/platform/version/index.ts:21:14` | Ninguno |
+| `test` | Falla por la causa esperada | Vitest: `AssertionError: expected 1 to be 2` | `tests/unit/negative.test.ts > prueba negativa sintética` | Ninguno |
+| `build` | Falla por la causa esperada | `next build`: `Error occurred prerendering page "/negative-build"`, con la excepción de su `getStaticProps` | `src/pages/negative-build.tsx` (ruta `/negative-build`) | Ninguno |
+| `secrets` (a), historial | Falla por la causa esperada | Gitleaks: regla `github-pat` en el historial alcanzable | `negative-secret.txt:1` (commit de la copia) | Ninguno |
+| `secrets` (b), fichero nuevo sin seguimiento | Falla por la causa esperada | Gitleaks: regla `github-pat` en el árbol de trabajo | `negative-secret.txt:1` (sin seguimiento) | Ninguno |
+| `secrets` (c), fichero ignorado | Termina con éxito, como se esperaba | Exclusión positiva: el fichero ignorado no se examina | `.env.development.local` (ignorado por `.gitignore`) | Ninguno |
+| `dependencies` | Falla por la causa esperada | `npm audit`: gravedad alta sin excepción (GHSA-35jh-r3h4-6jhm y GHSA-r5fr-rjxr-66jc) | Paquete `lodash` 4.17.20, solo en el lockfile de la copia | Ninguno |
+| `workflows` | Falla por la causa esperada | zizmor: `template-injection`, gravedad High | `.github/workflows/negative-test.yml:12` | Ninguno |
+
+  Las alteraciones se aplicaron solo en las copias temporales del procedimiento y los tokens
+  fueron sintéticos; su valor no aparece en la salida.
+- Subcaso de exclusión positiva: (c) `check:secrets` termina con éxito porque
+  `.env.development.local` está ignorado y no se examina. No es una novena prueba negativa.
+- Código de salida: 0, con el mensaje "verify:negative: todas las categorías se comportan como
+  se esperaba." (66 s).
+- Estado de Git idéntico antes y después (`git status --porcelain` y `git rev-parse HEAD`): sí.
+  - `git rev-parse HEAD` devolvió `1fd6da9b8e6b02405987025507443d468192bada` antes y después.
+  - `git status --porcelain` estaba vacío antes y después.
+  - El propio procedimiento informó "Repositorio original sin cambios: HEAD, git status y rutas
+    ignoradas".
+  - Al terminar no quedaron procesos y el puerto 3000 estaba libre.
+
+Parte local en macOS completada. SC-003 sigue Pendiente: falta la parte local en Linux x64
+nativo, que no se ha ejecutado.
 
 ### Local en Linux x64
 
@@ -159,19 +225,111 @@ negativa. En la integración continua, los controles no afectados deben pasar.
 
 | Categoría | Pull request cerrado sin integrar | Ejecución | Causa y ubicación | Controles colaterales | Controles no afectados en verde | `macos-quality` (categorías 1 a 5) |
 |-----------|-----------------------------------|-----------|-------------------|-----------------------|---------------------------------|------------------------------------|
-| `format` | | | | | | |
-| `lint` | | | | | | |
-| `types` | | | | | | |
-| `test` | | | | | | |
-| `build` | | | | | | |
-| `secrets` | | | | | | No aplica |
-| `dependencies` | | | | | | No aplica |
-| `workflows` | | | | | | No aplica |
+| `format` | [#7](https://github.com/Informatica-Colectivo-Prime/aulanorma/pull/7), cerrado sin integrar el 2026-10-04 | [`quality` 37182212271](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182212271) y [`security` 37182212272](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182212272), intento 1 | [`format`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182212271/job/111376885118): Prettier `Code style issues found`, `[warn] src/platform/version/index.ts` | Previsto: [`lint`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182212271/job/111376885103), `@typescript-eslint/no-unused-vars` sobre `sample` en `src/platform/version/index.ts:21:8`. Ninguno no previsto | `types`, `test`, `build`, `secrets`, `dependencies` y `workflows` en success | [Falla](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182212271/job/111376884975) en `check:format`, con la misma causa y ubicación |
+| `lint` | [#8](https://github.com/Informatica-Colectivo-Prime/aulanorma/pull/8), cerrado sin integrar el 2026-10-04 | [`quality` 37182306789](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182306789) y [`security` 37182306794](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182306794), intento 1 | [`lint`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182306789/job/111377159926): ESLint `no-restricted-imports` (`normative-source` importa `@/modules/moodle-publication`), `src/modules/normative-source/violation.ts:1:1` | Ninguno | `format`, `types`, `test`, `build`, `secrets`, `dependencies` y `workflows` en success | [Falla](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182306789/job/111377159885) en `check:lint`, tras superar `check:format`, con la misma causa y ubicación |
+| `types` | [#9](https://github.com/Informatica-Colectivo-Prime/aulanorma/pull/9), cerrado sin integrar el 2026-10-04 | [`quality` 37182401360](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182401360) y [`security` 37182401343](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182401343), intento 1 | [`types`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182401360/job/111377434926): TypeScript `TS2322`, `src/platform/version/index.ts(21,14)` | Previsto: [`build`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182401360/job/111377434936), misma `TS2322` en la comprobación de tipos de `next build` ("Failed to type check"). **No previsto**: [`test`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182401360/job/111377434940) (ver abajo) | `format`, `lint`, `secrets`, `dependencies` y `workflows` en success; `test` falló | [Falla](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182401360/job/111377434832) en `check:types`, tras superar `check:format` y `check:lint`, con la misma causa y ubicación |
+| `test` | [#10](https://github.com/Informatica-Colectivo-Prime/aulanorma/pull/10), cerrado sin integrar el 2026-10-04 | [`quality` 37182710841](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182710841) y [`security` 37182710823](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182710823), intento 1 | [`test`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182710841/job/111378326093): Vitest `AssertionError: expected 1 to be 2`, `tests/unit/negative.test.ts > prueba negativa sintética` (1 prueba fallida y 840 superadas, de 841) | Ninguno | `format`, `lint`, `types`, `build`, `secrets`, `dependencies` y `workflows` en success | [Falla](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182710841/job/111378326123) en `check:test`, tras superar formato, lint y tipos, con la misma causa y ubicación |
+| `build` | [#11](https://github.com/Informatica-Colectivo-Prime/aulanorma/pull/11), cerrado sin integrar el 2026-10-04 | [`quality` 37182803901](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182803901) y [`security` 37182803898](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182803898), intento 1 | [`build`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182803901/job/111378584904): `next build`, `Error occurred prerendering page "/negative-build"`, con la excepción de su `getStaticProps` en `src/pages/negative-build.tsx:4:9` | Previstos: [`lint`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182803901/job/111378584771), `Parsing error: Unexpected token {` en `src/pages/negative-build.tsx:1:13`; [`test`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182803901/job/111378584940), dos pruebas de arquitectura sobre las rutas públicas (ver abajo). Ninguno no previsto | `format`, `types`, `secrets`, `dependencies` y `workflows` en success | [Falla](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182803901/job/111378584918) en `check:lint`, con el mismo error de análisis; no llega a su etapa de compilación y no la acredita |
+| `secrets` | [#12](https://github.com/Informatica-Colectivo-Prime/aulanorma/pull/12), cerrado sin integrar el 2026-10-04 | [`quality` 37182878707](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182878707) y [`security` 37182878761](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182878761), intento 1 | [`secrets`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182878761/job/111378799138): Gitleaks, regla `github-pat` en el historial alcanzable, `negative-secret.txt:1` | Ninguno | `format`, `lint`, `types`, `test`, `build`, `macos-quality`, `dependencies` y `workflows` en success | No aplica |
+| `dependencies` | [#13](https://github.com/Informatica-Colectivo-Prime/aulanorma/pull/13), cerrado sin integrar el 2026-10-04 | [`quality` 37182989264](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182989264) y [`security` 37182989226](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182989226), intento 1 | [`dependencies`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37182989226/job/111379120261): `npm audit`, 2 vulnerabilidades de gravedad alta sin excepción (GHSA-35jh-r3h4-6jhm y GHSA-r5fr-rjxr-66jc), paquete `lodash` | Ninguno | `format`, `lint`, `types`, `test`, `build`, `macos-quality`, `secrets` y `workflows` en success | No aplica |
+| `workflows` | [#14](https://github.com/Informatica-Colectivo-Prime/aulanorma/pull/14), cerrado sin integrar el 2026-10-04 | [`quality` 37183137627](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37183137627) y [`security` 37183137672](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37183137672), intento 1; además [`negative-test` 37183137682](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37183137682) | [`workflows`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37183137672/job/111379545039): zizmor `template-injection`, gravedad High, `.github/workflows/negative-test.yml:12` | Ninguno | `format`, `lint`, `types`, `test`, `build`, `macos-quality`, `secrets` y `dependencies` en success | No aplica |
 
-- Secretos: autorización de la protección de push, si la hubo, sin el valor del token:
-- Secretos: cierre de cualquier alerta como dato sintético:
-- Salida vacía de `git ls-remote --heads origin 'negative-test/*'`:
-- Comprobación de que esos commits no son alcanzables desde `main`:
+**Datos comunes de las tres ejecuciones**:
+
+- Cada rama `negative-test/<categoría>` tiene un único commit, `test: negative-test <categoría>`,
+  con padre único el SHA base y la alteración de `scripts/negative-checks.mjs` de esta base.
+- Evento `pull_request`, intento 1, sin relanzamientos. En cada commit constan exactamente nueve
+  check runs, todos de la aplicación GitHub Actions.
+- `main` utilizado en los tres merges provisionales: `c2ad0e7de2de5434cd1be7a1d4af4c5e51ce1544`.
+
+| Categoría | Commit de origen | Merge provisional analizado |
+|-----------|------------------|-----------------------------|
+| `format` | `b499de5aae5bcc268653009824652f5a1337d90e` | `66b48ae84f92cc9a593559ce46f7240d905e86d4` |
+| `lint` | `833fca75df02c4af8c68d1bed259c0f455810ddd` | `e42b99af0f60a67ed3b6e5651855ccd83e977eae` |
+| `types` | `a9d4d1cd2d900199777113f341b5013bfd46a9c7` | `1a8b450af7ab0c5203bde2a9282ff3ee293afd3e` |
+
+En `format` y `lint`, el job `build` terminó en success con "Prueba de humo superada: 21
+casos." y sin líneas de diagnóstico.
+
+**`types`, fallo no previsto del job `test`**:
+
+- **Causa**: Vitest, `AssertionError: expected [ 'getVersion', 'sample' ] to deeply equal
+  [ 'getVersion' ]`, en `tests/unit/platform/health.test.ts:239`, prueba "src/platform/version >
+  exporta únicamente getVersion, síncrona". Resultado: 1 fichero fallido y 17 superados; 1
+  prueba fallida y 839 superadas, de 840.
+- **Relación con la alteración**: la alteración documentada de `types` añade la exportación
+  `sample` a `src/platform/version/index.ts`, y esa prueba exige que el módulo exporte solo
+  `getVersion`. Es un colateral de la propia alteración, no un fallo ajeno a ella ni una
+  recurrencia de la incidencia de la prueba de humo.
+- **Por qué no estaba previsto**: `npm run verify:negative` ejecuta en local solo `check:types`
+  para esta categoría, así que no observa `check:test`, y la matriz de colaterales esperados
+  solo preveía `build`.
+- **`macos-quality`** se detuvo en `check:types` y no llegó a `check:test`.
+
+Como el resultado no estaba previsto, el lote de T077 se detuvo después de cerrar el pull
+request de `types`; las otras cinco categorías no se ejecutaron entonces. No se corrigió ni se
+repitió nada.
+
+**Decisión posterior sobre el pull request #9** (2026-10-04):
+
+- El fallo de `test` no estaba previsto en la matriz inicial de colaterales. Se identificó
+  después de la ejecución, por lectura, como consecuencia directa de la alteración documentada.
+- Comprobado por lectura sobre el SHA base, sin repetir pruebas: la alteración de `types` es
+  `export const sample: number = "text";` al final del módulo de versión; la prueba citada exige
+  que ese módulo exporte solo `getVersion`; el commit del pull request #9 contiene únicamente
+  esa alteración (un fichero, dos líneas añadidas, padre único el SHA base); `types` falló por
+  `TS2322` en la ubicación prevista; `test` falló solo por la exportación adicional; y los
+  controles ajenos a la alteración (`format`, `lint`, `secrets`, `dependencies` y `workflows`)
+  terminaron en success.
+- Se acepta el resultado del pull request #9 para T077, sin repetirlo.
+- Matriz corregida de `types`: fallos esperados en `types`, `macos-quality`, `build` y `test`.
+- No cambian el arnés, la documentación, las tareas ni el SHA base. El lote se reanudó desde
+  `test`.
+
+**Reanudación desde `test`** (2026-10-04). Las cinco categorías restantes se ejecutaron con las
+mismas condiciones que las tres primeras: un único commit por rama, con padre único el SHA
+base y solo la alteración documentada; evento `pull_request`, intento 1, sin relanzamientos;
+`main` en `c2ad0e7de2de5434cd1be7a1d4af4c5e51ce1544`. Las cinco coincidieron con la matriz
+prevista, sin colaterales no previstos.
+
+| Categoría | Commit de origen | Merge provisional analizado |
+|-----------|------------------|-----------------------------|
+| `test` | `299dced008dfa8dc9ed57be7934c389165bba7d8` | `72dac5ec27823fbb4df3912009aacd0979912e86` |
+| `build` | `f424efe99d601bdd06d5a11ef8ff2d5583b9a551` | `48dd0c5f6c8ee158859f914dd8588c0a399a8acf` |
+| `secrets` | `bc5afdf0c6a1ba9a0191abf9d1a3982246158361` | `5ed25b17209329865837a34e8ab051b53d8517ce` |
+| `dependencies` | `459196fa51e5dcc4bf85a32abd601681a08b20d7` | `15067659e98421d2d689afd9e51ba13030bfb372` |
+| `workflows` | `6b51e3267c1485dec1618418e074031b5e93280f` | `928f881d8bb73560debe7a81e1c8b6c9f96ec11e` |
+
+- **Check runs**: nueve en cada commit, todos de la aplicación GitHub Actions. En `workflows`
+  constan diez: los nueve controles y el job del workflow negativo.
+- **`build`, colateral de `test`**: 2 pruebas fallidas y 838 superadas, de 840.
+  `tests/architecture/entry-points.test.ts`, "src/pages no contiene otra ruta que la API Route
+  de estado", y `tests/architecture/public-routes.test.ts`, "src/pages contiene exactamente
+  src/pages/api/health.ts". Las dos fallan por la presencia de `src/pages/negative-build.tsx`.
+- **`workflows`, job adicional**: el workflow añadido ejecutó su propio job,
+  [`negative-test`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37183137682/job/111379544777),
+  que terminó en success. No es uno de los nueve controles. Su único paso imprimió el título
+  del pull request, un texto constante sin caracteres con significado para el shell. zizmor
+  analizó 3 workflows.
+- En `test`, `secrets`, `dependencies` y `workflows`, el job `build` terminó en success con
+  "Prueba de humo superada: 21 casos.".
+
+Las ocho categorías quedan ejecutadas. SC-003 sigue Pendiente hasta completar la parte local en
+Linux x64 nativo. Estos pull requests no forman parte de la serie de SC-004.
+
+- Secretos: autorización de la protección de push, si la hubo, sin el valor del token: no hizo
+  falta. El push de `negative-test/secrets` terminó con código 0 y sin bloqueo. El token se
+  generó en el momento con el formato del arnés y solo estuvo en el fichero de la alteración.
+- Secretos: cierre de cualquier alerta como dato sintético: no hubo alerta. La API de GitHub
+  indica que el análisis de secretos está desactivado en este repositorio; no se cambió
+  ningún ajuste. El valor no aparece en los registros de los jobs.
+- Salida vacía de `git ls-remote --heads origin 'negative-test/*'`: vacía tras eliminar la
+  octava rama (2026-10-04). Además se comprobó con la API de referencias después de cada
+  cierre.
+- Comprobación de que esos commits no son alcanzables desde `main`: ninguno de los ocho
+  (`b499de5`, `833fca7`, `a9d4d1c`, `299dced`, `f424efe`, `bc5afdf`, `459196f` y `6b51e32`) es
+  antecesor de `main` (`git merge-base --is-ancestor` devuelve 1). Tras actualizar y podar las
+  referencias, ninguna rama remota los contiene.
 
 ---
 
@@ -188,62 +346,99 @@ resulten necesarias y antes de activar los controles requeridos.
 dura menos de 15 minutos. Una indisponibilidad general del proveedor solo se excluye con enlace
 a su incidencia pública.
 
+**Parte de pull request: completada** (T079, 2026-10-04). Tres intentos consecutivos sobre el
+SHA base, `1fd6da9b8e6b02405987025507443d468192bada`, en el pull request de la funcionalidad:
+
+- **Mismo SHA**: los dos workflows de cada intento corresponden al SHA base como commit de
+  origen. Los 27 jobs analizaron el mismo merge provisional,
+  `98649f0771e3b6b996f4965b9d8ae3b5a7087e38` (el SHA base sobre `main` en
+  `c2ad0e7de2de5434cd1be7a1d4af4c5e51ce1544`), comprobado en el registro de cada job.
+- **Jobs realmente ejecutados**: en cada intento los nueve jobs tienen identificadores y horas
+  propios y su número de intento coincide con el de la ejecución. Ningún resultado se trasladó
+  de un intento anterior.
+- **Nombres y fuente**: `format`, `lint`, `types`, `test`, `build`, `macos-quality`, `secrets`,
+  `dependencies` y `workflows`, todos de la aplicación GitHub Actions.
+- **Resultado**: 27 de 27 jobs en success; la duración máxima fue de 100 s (`macos-quality`,
+  intento 1), muy por debajo de los 15 minutos. Las duraciones son la diferencia entre
+  `completed_at` y `started_at` de cada job.
+- **Sin cambios entre intentos**: no se añadieron commits, y el SHA del pull request y `main`
+  eran los mismos antes de cada lanzamiento, sin ejecuciones activas.
+- En los tres intentos, `test` terminó con 840 pruebas superadas y `build` y `macos-quality`
+  con "Prueba de humo superada: 21 casos.", sin líneas de diagnóstico.
+
+**Parte de `main`: pendiente**. La primera ejecución satisfactoria de `main` solo puede
+obtenerse después de integrar. Hasta entonces SC-004 sigue Pendiente.
+
 ### Pull request: intento 1 (ejecución inicial)
+
+Ejecución inicial del evento `pull_request` tras publicar el SHA base (la misma de T071).
 
 | Workflow | Identificador de la ejecución | Número de intento | SHA |
 |----------|-------------------------------|-------------------|-----|
-| `quality` | | | |
-| `security` | | | |
+| `quality` | [37180028387](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/attempts/1) | 1 | `1fd6da9b8e6b02405987025507443d468192bada` |
+| `security` | [37180028381](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/attempts/1) | 1 | `1fd6da9b8e6b02405987025507443d468192bada` |
 
 | Job | `started_at` | `completed_at` | Duración | Conclusión |
 |-----|--------------|----------------|----------|------------|
-| `format` | | | | |
-| `lint` | | | | |
-| `types` | | | | |
-| `test` | | | | |
-| `build` | | | | |
-| `macos-quality` | | | | |
-| `secrets` | | | | |
-| `dependencies` | | | | |
-| `workflows` | | | | |
+| [`format`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/job/111370545008) | 2026-10-04T05:29:20Z | 2026-10-04T05:29:36Z | 16 s | success |
+| [`lint`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/job/111370545135) | 2026-10-04T05:29:21Z | 2026-10-04T05:29:38Z | 17 s | success |
+| [`types`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/job/111370545161) | 2026-10-04T05:29:20Z | 2026-10-04T05:29:39Z | 19 s | success |
+| [`test`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/job/111370545106) | 2026-10-04T05:29:20Z | 2026-10-04T05:29:45Z | 25 s | success |
+| [`build`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/job/111370545159) | 2026-10-04T05:29:21Z | 2026-10-04T05:30:09Z | 48 s | success |
+| [`macos-quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/job/111370545157) | 2026-10-04T05:29:28Z | 2026-10-04T05:31:08Z | 100 s | success |
+| [`secrets`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/job/111370544887) | 2026-10-04T05:29:24Z | 2026-10-04T05:29:33Z | 9 s | success |
+| [`dependencies`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/job/111370544859) | 2026-10-04T05:29:20Z | 2026-10-04T05:29:42Z | 22 s | success |
+| [`workflows`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/job/111370544875) | 2026-10-04T05:29:20Z | 2026-10-04T05:29:30Z | 10 s | success |
+
+Job más largo: `macos-quality`, 100 s. Los nueve concluyen en success y duran menos de 15 minutos.
 
 ### Pull request: intento 2 (reejecución completa)
 
+Reejecución completa de los dos workflows (`gh run rerun <id>`, sin `--failed`), lanzada cuando
+el intento 1 había terminado.
+
 | Workflow | Identificador de la ejecución | Número de intento | SHA |
 |----------|-------------------------------|-------------------|-----|
-| `quality` | | | |
-| `security` | | | |
+| `quality` | [37180028387](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/attempts/2) | 2 | `1fd6da9b8e6b02405987025507443d468192bada` |
+| `security` | [37180028381](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/attempts/2) | 2 | `1fd6da9b8e6b02405987025507443d468192bada` |
 
 | Job | `started_at` | `completed_at` | Duración | Conclusión |
 |-----|--------------|----------------|----------|------------|
-| `format` | | | | |
-| `lint` | | | | |
-| `types` | | | | |
-| `test` | | | | |
-| `build` | | | | |
-| `macos-quality` | | | | |
-| `secrets` | | | | |
-| `dependencies` | | | | |
-| `workflows` | | | | |
+| [`format`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/job/111381168448) | 2026-10-04T06:44:45Z | 2026-10-04T06:45:02Z | 17 s | success |
+| [`lint`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/job/111381168408) | 2026-10-04T06:44:47Z | 2026-10-04T06:45:13Z | 26 s | success |
+| [`types`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/job/111381168367) | 2026-10-04T06:44:46Z | 2026-10-04T06:45:07Z | 21 s | success |
+| [`test`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/job/111381168406) | 2026-10-04T06:44:45Z | 2026-10-04T06:45:18Z | 33 s | success |
+| [`build`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/job/111381168252) | 2026-10-04T06:44:45Z | 2026-10-04T06:45:38Z | 53 s | success |
+| [`macos-quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/job/111381168388) | 2026-10-04T06:44:51Z | 2026-10-04T06:46:18Z | 87 s | success |
+| [`secrets`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/job/111381170373) | 2026-10-04T06:44:46Z | 2026-10-04T06:44:54Z | 8 s | success |
+| [`dependencies`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/job/111381170445) | 2026-10-04T06:44:46Z | 2026-10-04T06:45:06Z | 20 s | success |
+| [`workflows`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/job/111381170505) | 2026-10-04T06:44:46Z | 2026-10-04T06:44:52Z | 6 s | success |
+
+Job más largo: `macos-quality`, 87 s. Los nueve concluyen en success y duran menos de 15 minutos.
 
 ### Pull request: intento 3 (reejecución completa)
 
+Reejecución completa de los dos workflows (`gh run rerun <id>`, sin `--failed`), lanzada cuando
+el intento 2 había terminado y cumplía los requisitos.
+
 | Workflow | Identificador de la ejecución | Número de intento | SHA |
 |----------|-------------------------------|-------------------|-----|
-| `quality` | | | |
-| `security` | | | |
+| `quality` | [37180028387](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/attempts/3) | 3 | `1fd6da9b8e6b02405987025507443d468192bada` |
+| `security` | [37180028381](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/attempts/3) | 3 | `1fd6da9b8e6b02405987025507443d468192bada` |
 
 | Job | `started_at` | `completed_at` | Duración | Conclusión |
 |-----|--------------|----------------|----------|------------|
-| `format` | | | | |
-| `lint` | | | | |
-| `types` | | | | |
-| `test` | | | | |
-| `build` | | | | |
-| `macos-quality` | | | | |
-| `secrets` | | | | |
-| `dependencies` | | | | |
-| `workflows` | | | | |
+| [`format`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/job/111381580713) | 2026-10-04T06:47:38Z | 2026-10-04T06:47:59Z | 21 s | success |
+| [`lint`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/job/111381580781) | 2026-10-04T06:47:37Z | 2026-10-04T06:47:57Z | 20 s | success |
+| [`types`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/job/111381580798) | 2026-10-04T06:47:37Z | 2026-10-04T06:47:56Z | 19 s | success |
+| [`test`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/job/111381580754) | 2026-10-04T06:47:38Z | 2026-10-04T06:48:06Z | 28 s | success |
+| [`build`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/job/111381580765) | 2026-10-04T06:47:39Z | 2026-10-04T06:48:34Z | 55 s | success |
+| [`macos-quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/job/111381580774) | 2026-10-04T06:47:42Z | 2026-10-04T06:48:58Z | 76 s | success |
+| [`secrets`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/job/111381583178) | 2026-10-04T06:47:39Z | 2026-10-04T06:47:49Z | 10 s | success |
+| [`dependencies`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/job/111381583116) | 2026-10-04T06:47:38Z | 2026-10-04T06:47:55Z | 17 s | success |
+| [`workflows`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/job/111381583323) | 2026-10-04T06:47:38Z | 2026-10-04T06:47:47Z | 9 s | success |
+
+Job más largo: `macos-quality`, 76 s. Los nueve concluyen en success y duran menos de 15 minutos.
 
 ### `main`: primera ejecución satisfactoria
 
@@ -266,42 +461,62 @@ a su incidencia pública.
 
 ### Otras ejecuciones
 
-- Ejecuciones fallidas previas:
-- Ejecuciones canceladas por `concurrency`:
-- Pull requests correctivos:
+- Ejecuciones fallidas previas: ninguna sobre el SHA base en el pull request de la
+  funcionalidad. Los fallos del job `build` sobre commits anteriores constan en el registro de
+  la incidencia de la prueba de humo. Las ejecuciones de los ocho pull requests negativos de
+  SC-003 fallan por diseño, corresponden a otros commits y no son intentos de esta serie.
+- Ejecuciones canceladas por `concurrency`: ninguna en esta serie.
+- Pull requests correctivos: ninguno todavía; solo se aplican a `main`, después de integrar.
 
 ---
 
 ## SC-005 Determinismo con y sin red
 
-**Estado**: Pendiente
+**Estado**: Superado
 
 **Entorno**: macOS arm64 de referencia con Node.js 24.21.0, tras `npm ci`.
 **Momento**: antes de integrar, sobre el SHA base.
 
 **Superado** si las diez terminan con el mismo código de salida y los mismos recuentos.
 
-- SHA:
+- SHA: `1fd6da9b8e6b02405987025507443d468192bada` (SHA base). Clon nuevo, completo y limpio
+  (`--is-shallow-repository` en `false`, sin `--depth`, filtros parciales ni alternates), en el
+  macOS arm64 de referencia, con Node.js `v24.21.0`, npm 11.19.0 y `npm ci` terminado con
+  código 0. Caché, registros de npm y `TMPDIR` aislados fuera del clon. Las diez ejecuciones
+  son del 2026-10-04, en el mismo clon y con el mismo entorno; antes de las ejecuciones sin red
+  se comprobó de nuevo el SHA, el clon limpio y no superficial, las versiones y las
+  dependencias instaladas.
 - Resultado de la comprobación de red:
+  - con red: `curl -sS --max-time 5 https://registry.npmjs.org/ -o /dev/null` terminó con
+    código 0 antes de las ejecuciones 1 a 5;
+  - sin red: el mantenedor confirmó expresamente que había desactivado la conectividad externa
+    del equipo antes de las ejecuciones 6 a 10. Después, el mismo comando terminó con código 6
+    (curl no pudo resolver el nombre del servidor). Las dos evidencias son distintas: la
+    confirmación física acredita la desactivación, y el código de curl solo comprueba que no
+    había acceso al registro, sin demostrar por sí solo la desconexión.
 
 | Ejecución | Modo | Código de salida | Ficheros | Pruebas superadas | Pruebas fallidas |
 |-----------|------|------------------|----------|-------------------|------------------|
-| 1 | Con red | | | | |
-| 2 | Con red | | | | |
-| 3 | Con red | | | | |
-| 4 | Con red | | | | |
-| 5 | Con red | | | | |
-| 6 | Sin red | | | | |
-| 7 | Sin red | | | | |
-| 8 | Sin red | | | | |
-| 9 | Sin red | | | | |
-| 10 | Sin red | | | | |
+| 1 | Con red | 0 | 18 superados de 18 | 840 de 840 | 0 |
+| 2 | Con red | 0 | 18 superados de 18 | 840 de 840 | 0 |
+| 3 | Con red | 0 | 18 superados de 18 | 840 de 840 | 0 |
+| 4 | Con red | 0 | 18 superados de 18 | 840 de 840 | 0 |
+| 5 | Con red | 0 | 18 superados de 18 | 840 de 840 | 0 |
+| 6 | Sin red | 0 | 18 superados de 18 | 840 de 840 | 0 |
+| 7 | Sin red | 0 | 18 superados de 18 | 840 de 840 | 0 |
+| 8 | Sin red | 0 | 18 superados de 18 | 840 de 840 | 0 |
+| 9 | Sin red | 0 | 18 superados de 18 | 840 de 840 | 0 |
+| 10 | Sin red | 0 | 18 superados de 18 | 840 de 840 | 0 |
+
+Las diez ejecuciones coinciden en código de salida (0) y en los recuentos de Vitest: 18 ficheros
+y 840 pruebas superadas, 0 fallidas. El clon conservó el SHA base y siguió limpio después de
+cada una.
 
 ---
 
 ## SC-006 Cero secretos reales
 
-**Estado**: Pendiente
+**Estado**: Superado
 
 **Entorno**: macOS arm64 de referencia y workflows del SHA base.
 **Momento**: antes de integrar, sobre el SHA base, aunque SC-001 esté Pendiente.
@@ -309,13 +524,44 @@ a su incidencia pública.
 **Superado** si ninguna comprobación muestra un secreto real ni una credencial pasada a código
 del repositorio.
 
-- SHA:
-- Confirmación de clon completo:
-- Salida de `diff .env.example .env.development.local`:
-- Salida de `grep -rnE 'secrets\.|github\.token|GITHUB_TOKEN|GH_TOKEN' .github/workflows`:
-- Nota de la revisión visual:
-- Contenido de las claves de `.env.example`:
-- Enlaces a las ejecuciones de SC-004:
+- SHA: `1fd6da9b8e6b02405987025507443d468192bada` (SHA base). Comprobación local del
+  2026-10-04 en el macOS arm64 de referencia.
+- Confirmación de clon completo: clon nuevo del repositorio, distinto del de SC-002, sin
+  `--depth`, filtros parciales ni alternates, fijado al SHA base. `git rev-parse
+  --is-shallow-repository` devuelve `false` y `git status --porcelain` está vacío antes y
+  después de las comprobaciones (el fichero copiado está ignorado por Git).
+- Salida de `diff .env.example .env.development.local`: vacía, código de salida 0, tras
+  `cp .env.example .env.development.local` (código 0).
+- Salida de `grep -rnE 'secrets\.|github\.token|GITHUB_TOKEN|GH_TOKEN' .github/workflows`: vacía,
+  código de salida 1 (sin coincidencias; no es el código 2 de error).
+- Nota de la revisión visual: leídos completos `quality.yml` y `security.yml` del SHA base.
+  - **Expresiones**: las únicas `${{ }}` están en `concurrency` y usan `github.workflow`,
+    `github.event_name`, el número del pull request y `github.run_id`. Ningún `run`, `env` ni
+    `with` contiene expresiones. No hay `toJSON(github)` ni accesos indexados al contexto.
+  - **Credenciales**: no hay `secrets.*`, entradas `token` ni variables de token. Los nueve jobs
+    solo definen `NEXT_TELEMETRY_DISABLED`, `AULANORMA_LOG_LEVEL` y `AULANORMA_ENVIRONMENT`,
+    con valores sintéticos. Los pasos `run` son `npm ci`, `npm run tools:install` y los
+    `npm run check:*`; ninguno recibe una credencial.
+  - **Permisos**: `permissions: {}` global y solo `contents: read` en cada job.
+  - **`persist-credentials`**: `false` en los nueve `actions/checkout`. Las 18 referencias a
+    acciones están fijadas por SHA completo.
+  - Disparadores: `pull_request` y `push` hacia `main`, y `schedule` semanal en `security`; no
+    hay `pull_request_target` ni `workflow_run`.
+  - Los dos workflows y `.env.example` no cambian respecto a la base anterior; la revisión se
+    hizo de nuevo sobre esta base.
+- Contenido de las claves de `.env.example`: solo `AULANORMA_LOG_LEVEL` y
+  `AULANORMA_ENVIRONMENT`, con valores de ejemplo ficticios, válidos y que no son secretos.
+- Enlaces a las ejecuciones de SC-004: los tres intentos del pull request sobre el SHA base,
+  con los nueve jobs en success en cada uno (T079):
+  - intento 1, [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/attempts/1) y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/attempts/1);
+  - intento 2, [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/attempts/2) y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/attempts/2);
+  - intento 3, [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/attempts/3) y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/attempts/3).
+
+  Son las ejecuciones de los workflows revisados. La primera ejecución satisfactoria de `main`
+  pertenece a SC-004 y sigue pendiente; no es un requisito de este criterio, que se evalúa
+  antes de integrar.
+
+Ninguna comprobación muestra un secreto real ni una credencial pasada a código del repositorio.
 
 ---
 
@@ -329,14 +575,51 @@ con la primera ejecución satisfactoria de `main`.
 
 **Superado** si hay cero hallazgos no justificados.
 
-- SHA:
-- Confirmación de clon completo:
-- `git rev-list --count HEAD`:
-- Número de commits que Gitleaks informa haber examinado:
+- SHA: `1fd6da9b8e6b02405987025507443d468192bada` (SHA base). Ejecución local del 2026-10-04 en
+  el macOS arm64 de referencia (macOS 27.0.1, arm64 nativo), con Node.js `v24.21.0`; caché,
+  registros de npm y `TMPDIR` aislados fuera del clon.
+  - `npm run check:secrets` se ejecutó una vez y terminó con código 0.
+  - Preparación: solo `npm run tools:install` (código 0), que instaló y verificó Gitleaks 8.30.1
+    (instala también zizmor, que este control no usa).
+  - No se ejecutó `npm ci`: el envoltorio solo importa módulos de Node.js, igual que en el job
+    de CI.
+- Confirmación de clon completo: clon nuevo del repositorio, distinto de los demás
+  procedimientos, sin `--depth`, filtros parciales ni alternates. `git rev-parse
+  --is-shallow-repository` devuelve `false`, y `git status --porcelain` está vacío antes y
+  después de la ejecución, con HEAD sin cambios.
+- `git rev-list --count HEAD`: 33 commits alcanzables desde el SHA base.
+- Número de commits que Gitleaks informa haber examinado: 33, obtenido en una medición adicional,
+  no en la ejecución original.
+  - Ejecución original del envoltorio: no imprimió N. Solo lee de Gitleaks la línea "N commits
+    scanned." y falla si N no está entre 1 y el número de commits alcanzables; terminó con
+    código 0.
+  - Medición adicional del 2026-10-04, en el mismo clon:
+    - El mismo binario de Gitleaks 8.30.1 que instaló y verificó `npm run tools:install`.
+    - Una única ejecución directa del análisis de historial, con el alcance del envoltorio:
+      `git --log-opts="--full-history HEAD" .`, informe redactado y en JSON, nivel de registro
+      `info`, sin comentarios `gitleaks:allow`, con una copia del `.gitleaksignore` del SHA
+      base y sin `.gitleaks.toml`.
+    - Diferencias respecto al envoltorio: el código reservado para hallazgos fue 1 en lugar
+      de 10, y el entorno se redujo a `PATH`, `HOME` y `TMPDIR`, sin variables `GITLEAKS_*` ni
+      de ubicación de Git. Ninguna cambia el alcance del análisis.
+    - Resultado: código 0, la línea "33 commits scanned." y ningún hallazgo en el informe.
+    - No se repitieron el envoltorio ni los análisis del índice y del árbol de trabajo.
+  - Los 33 commits examinados que informa Gitleaks y los 33 commits alcanzables de
+    `git rev-list --count HEAD` se obtuvieron por separado. Coinciden en esta medición, pero no
+    se ha deducido una cifra de la otra.
 - Resultado sin hallazgos, o lista de hallazgos exceptuados con su entrada en el registro
-  estructurado:
-- Enlace al job `secrets` del pull request:
-- Enlace al job `secrets` de la primera ejecución satisfactoria de `main`:
+  estructurado: sin hallazgos. "Excepciones de secretos vigentes: 0." Los tres análisis:
+  - historial alcanzable desde HEAD: sin hallazgos;
+  - índice de Git: sin hallazgos (índice sin cambios preparados, en un clon limpio);
+  - árbol de trabajo: 0 ficheros modificados o nuevos, sin hallazgos.
+- Enlace al job `secrets` del pull request: evidencia de integración continua de T071, distinta
+  de la ejecución local:
+  [secrets 111370544887](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/job/111370544887),
+  ejecución `security` 37180028381, intento 1, sobre el SHA base, con conclusión success.
+- Enlace al job `secrets` de la primera ejecución satisfactoria de `main`: pendiente; se obtiene
+  en T083 y se registra en T087.
+
+Parte local completada. SC-007 sigue Pendiente hasta la confirmación en `main`.
 
 ---
 
@@ -398,32 +681,113 @@ primer pull request posterior.
 
 ## Evidencia de FR-006 C6 y FR-009 sobre la implementación real
 
-**Estado**: Pendiente
+**Estado**: Superado
 
 No es un criterio SC adicional, pero forma parte de la aceptación de la puerta 5. Se obtiene en
 el clon de SC-002, con Node.js 24.21.0, las dependencias aprobadas, el preflight y la
 configuración real: `npm run check:build` ejecuta la matriz negativa por TCP crudo, la
 equivalencia entre desarrollo y producción y la auditoría de registros sobre el SHA base.
 
-- SHA:
-- `node --version`:
+- SHA: `1fd6da9b8e6b02405987025507443d468192bada` (SHA base), en el clon de SC-002, ejecución del
+  2026-10-04. `npm run check:build` terminó con código 0 dos veces: una como categoría y otra
+  dentro del agregado. Son ejecuciones nuevas sobre esta base; no se reutiliza ninguna anterior.
+- `node --version`: `v24.21.0`.
+
+**Fundamento de Superado**. Se distinguen tres tipos de evidencia:
+
+- **Resultados observados en las ejecuciones nuevas**: `check:build` terminó con código 0 en
+  sus dos ejecuciones. Cada salida mostró "Prueba de humo superada: 21 casos." y `ok` en los 21
+  casos, entre ellos "npm start: matriz negativa por TCP crudo", "npm run dev válido:
+  calentamiento, contrato, destinos y Upgrade" y "npm run dev: matriz y equivalencia contractual
+  con npm start". No apareció ninguna línea de diagnóstico de la salida capturada.
+- **Recuentos estáticos revisados**: la salida no imprime recuentos. Proceden de la revisión
+  del arnés, `scripts/smoke-test.mjs`, contrastada con esta base:
+  - el fichero es idéntico al de la base anterior (mismo blob de Git,
+    `591a1776d54a36201bd80cb9b4decc9f9aec306f`), así que la matriz no cambió;
+  - sobre esta base se volvió a comprobar, analizando el fichero, que `WIRE_CASES` ocupa las
+    líneas 1404–1864 y tiene 55 entradas literales, 11 destinos generados y las 21 entradas de
+    `FRAMEWORK_CASES` (líneas 1345–1367): 87 casos;
+  - `runWireMatrix` (líneas 1923–1941) recorre toda la lista sin saltos condicionales y añade
+    un problema si se registra algo durante la matriz; `wireStart` (línea 2177) y
+    `developmentEquivalence` (línea 2534) informan de un problema si el servidor no arranca; una
+    interrupción o un error inesperado impiden el mensaje "superada" (`main`, línea 2815);
+  - los totales de peticiones, conexiones y respuestas evaluadas son los de la revisión
+    estática del mismo fichero; sobre esta base no se han vuelto a contar una a una.
+- **Ceros por aserción**: los cuatro ceros se establecen mediante las aserciones aplicadas a
+  las respuestas evaluadas, no mediante cifras impresas.
+
+En esta base `npm run dev` compila con Webpack y `next build` conserva su compilador por
+defecto; la salida de `check:build` identifica la compilación como "Next.js 16.3.6
+(Turbopack)". El compilador de desarrollo no aparece en la salida: lo fija el código de la base.
 
 ### Matriz negativa
 
-- Número de casos:
-- Número de peticiones:
-- Respuestas HTML servidas (debe ser 0):
-- Cabeceras del framework (debe ser 0):
-- Redirecciones (debe ser 0):
-- Errores 500 inesperados (debe ser 0):
+Recuento estático de `scripts/smoke-test.mjs` en el SHA base. Un caso es una entrada de
+`WIRE_CASES` (líneas 1404–1864). Una petición es cada petición HTTP enviada, incluidas las
+canalizadas y las mal formadas.
+
+| Grupo | Líneas | Casos | Peticiones | Respuestas evaluadas |
+|-------|--------|-------|------------|----------------------|
+| Versión | 1405–1476 | 11 | 11 | 11 |
+| `Host` | 1477–1550 | 10 | 10 | 10 |
+| Cuerpo y framing | 1551–1626 | 9 | 9 | 9 |
+| `Expect` | 1627–1670 | 5 | 5 | 5 |
+| `CONNECT` | 1671–1718 | 2 | 2 | 2 |
+| `Upgrade` | 1671–1718 | 4 | 4 | 4 |
+| Destino (11 generados y `OPTIONS *`) | 1719–1747 | 12 | 12 | 12 |
+| Método | 1748–1794 | 6 | 6 | 6 |
+| Cabeceras de control del framework (`FRAMEWORK_CASES`, líneas 1345–1367, y `frameworkCase`, línea 1369) | 1795–1796 | 21 | 21 | 21 |
+| Canalización (4, 3, 3, 2, 2 y 3 peticiones) | 1797–1856 | 6 | 17 | 14 |
+| Canalización: descarte con reinicio del cliente | 1857–1863 | 1 | 3 | 1 |
+| **Total por modo** | | **87** | **100** | **95** |
+
+- **Número de casos**: 87 por modo. Cada ejecución de `check:build` recorre la matriz en
+  producción (`npm start`) y en desarrollo (`npm run dev`): 174 casos. En T073, `check:build`
+  se ejecutó dos veces (como categoría y dentro del agregado): dos repeticiones de la misma
+  matriz, 348 casos en total.
+- **Número de peticiones**: 100 peticiones HTTP por modo, en 88 conexiones TCP, con 95
+  respuestas evaluadas. Son 200 peticiones por ejecución de `check:build` y 400 en las dos de
+  T073.
+  - **Peticiones sin respuesta esperada**: 5 de las 100. Son las que siguen a un rechazo en una
+    canalización, en las que el arnés exige que no haya respuesta, y las 2 de la conexión que
+    el cliente reinicia.
+  - **Caso de descarte** (línea 1867, `runWireCase`): envía una petición válida y bytes mal
+    formados, reinicia la conexión y comprueba el servicio con un `GET` en una conexión nueva.
+    La conexión reiniciada no se lee, por diseño, y solo se evalúa la respuesta del `GET`.
+- **Fuera de este recuento**:
+  - las otras 38 peticiones de la prueba de humo por ejecución de `check:build`: contrato,
+    métodos y destinos de `npm start`; destinos y `Upgrade` de desarrollo; los cuatro casos de
+    `NODE_ENV` heredado y los cuatro calentamientos de desarrollo;
+  - las sondas de puerto, que abren conexiones TCP sin enviar HTTP y cuyo número depende de la
+    temporización.
+- Respuestas HTML servidas (debe ser 0): 0 entre las 95 respuestas evaluadas por modo, por
+  aserción. Cada respuesta de la matriz se rechaza si contiene HTML (`wireResponseProblems`,
+  línea 1209), y la del `GET` del caso de descarte debe ser el JSON exacto del contrato
+  (`getProblems`, línea 980).
+- Cabeceras del framework (debe ser 0): 0 entre las 95 respuestas evaluadas por modo, por
+  aserción. Cada una se compara con un conjunto cerrado de cabeceras que excluye las del
+  framework, `ETag`, `Server`, `X-Powered-By` y cualquier `Vary` distinta de `Accept-Encoding`.
+- Redirecciones (debe ser 0): 0 entre las 95 respuestas evaluadas por modo, por aserción. Los
+  estados admitidos son 200, 204, 400, 404, 405 y 505, y `Location` y `Refresh` quedan fuera del
+  conjunto cerrado de cabeceras.
+- Errores 500 inesperados (debe ser 0): 0 entre las 95 respuestas evaluadas por modo, por
+  aserción: cualquier 500 es un fallo.
+- No se afirma nada sobre las respuestas que no se leen: las de la conexión reiniciada.
 
 ### Equivalencia entre modos
 
-- Resultado de la equivalencia entre desarrollo y producción:
+- Resultado de la equivalencia entre desarrollo y producción: superada en las dos ejecuciones.
+  El caso "npm run dev: matriz y equivalencia contractual con npm start" compara, caso a caso,
+  los estados, las cabeceras (salvo `Date`), los cuerpos y el cierre de cada respuesta con los
+  de producción, y terminó en `ok`. Los 87 casos tienen claves únicas, así que se comparan
+  todos; si a uno le faltara su resultado de producción, el caso fallaría.
 
 ### Auditoría de registros
 
-- Resultado de la auditoría:
+- Resultado de la auditoría: superada en las dos ejecuciones. Los casos de arranque válido y de
+  matriz terminaron en `ok`; fallan si se registra algo durante la matriz o por las consultas,
+  si los registros de arranque no son exactamente los esperados o si la salida contiene rutas o
+  valores filtrados. No apareció ninguna línea de diagnóstico de la salida capturada.
 
 ---
 
