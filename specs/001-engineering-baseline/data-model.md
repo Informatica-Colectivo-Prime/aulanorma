@@ -65,6 +65,9 @@ definida en el entorno del proceso prevalece siempre, aunque esté vacía.
 - `__NEXT_PROCESSED_ENV`, que `@next/env` puede fijar en `process.env`, es un marcador interno:
   no pertenece al esquema, no entra en la configuración validada, no se devuelve y no se
   registra.
+- `TURBOPACK`, `IS_TURBOPACK_TEST` y `NEXT_RSPACK`, que el script `dev` fija vacías en el
+  preflight y en el servidor, son selectores del compilador de Next.js (research.md, R8): no
+  pertenecen al esquema, no entran en la configuración validada y `loadConfig` no las lee.
 - Las variables desconocidas con el prefijo `AULANORMA_` se rechazan como `unknown_key` para
   detectar erratas.
 - Ninguna variable es un secreto. `.env.example` solo contiene valores de ejemplo válidos y

@@ -181,6 +181,10 @@ dependencias aprobadas, el preflight, la configuración real y el mismo SHA cand
 T031, `check:build` y `acceptance.md`). No se copian ni se referencian sus rutas, sus
 identificadores de compilación ni sus valores de ejecución.
 
+Esta prueba es anterior a la selección de Webpack en `npm run dev`, que se describe en R8, y no
+registró qué compilador usó en desarrollo. Esa selección no modifica esta evidencia ni la
+convierte en una observación hecha con Webpack.
+
 **Alternativas descartadas para la entrega HTTP** (todas con Next.js 16.3.6, en pruebas
 desechables del 2026-09-27):
 
@@ -472,12 +476,53 @@ preflight, `scripts/preflight.mjs`, que se ejecuta antes de `server.mjs` en los 
 (`next dev` y `next start` directos no están admitidos, R1):
 
 ```text
-dev:   NODE_ENV=development node scripts/preflight.mjs dev && NODE_ENV=development node server.mjs
+dev:   NODE_ENV=development TURBOPACK= IS_TURBOPACK_TEST= NEXT_RSPACK= node scripts/preflight.mjs dev && NODE_ENV=development TURBOPACK= IS_TURBOPACK_TEST= NEXT_RSPACK= node server.mjs
 start: NODE_ENV=production node scripts/preflight.mjs start && NODE_ENV=production node server.mjs
 ```
 
+Son plantillas abreviadas, no el texto literal de `package.json`: los scripts reales fijan
+además `NEXT_TELEMETRY_DISABLED=1` delante de `server.mjs` (R1).
+
 Cada lado de `&&` recibe `NODE_ENV` por separado: una asignación delante de un comando solo
-afecta a ese comando.
+afecta a ese comando. Por la misma razón, `dev` repite en los dos lados las tres asignaciones
+vacías que se describen a continuación.
+
+**Compilador de desarrollo** (corrección candidata del 2026-10-03): `npm run dev` usa Webpack.
+
+- **Mecanismo**, contrastado en Next.js 16.3.6 instalado: `server.mjs` pasa `webpack: true` a
+  `next()` solo en desarrollo, y el script `dev` fija vacías `TURBOPACK`, `IS_TURBOPACK_TEST` y
+  `NEXT_RSPACK` en el preflight y en el servidor. Con `webpack: true`, `next()` no asigna
+  `TURBOPACK`, y Next.js elige después el compilador según esas variables tengan o no un valor
+  no vacío. Una variable vacía ya está definida, así que tampoco la sustituye `@next/env` al
+  cargar los ficheros `.env*`: la neutralización vale tanto frente al entorno heredado como
+  frente a `.env.development.local`.
+- **No son configuración de la aplicación**: son selectores del framework, no claves del
+  esquema. `loadConfig` no las lee ni las valida, y `server.mjs` sigue leyendo únicamente
+  `process.env.NODE_ENV`.
+- **Alcance**: la garantía corresponde a `npm run dev`. `node server.mjs` directo sigue sin ser
+  un punto de entrada admitido y no queda cubierto. `npm start` y `next build` conservan su
+  comportamiento: `next build` sigue usando su compilador por defecto, así que desarrollo y
+  compilación usan compiladores distintos. La equivalencia contractual entre los dos modos es
+  la que comprueba la prueba de humo, que no cambia.
+- **Aviso identificado**: en el
+  [PR #5](https://github.com/Informatica-Colectivo-Prime/aulanorma/pull/5), de diagnóstico y cerrado
+  sin integrar, el job `build` falló en una de cinco ejecuciones sobre el mismo commit.
+  La prueba de humo rechazó dos líneas no admitidas en el arranque válido de desarrollo, y sus
+  firmas las identificaron como el aviso de sistema de archivos lento de Turbopack. Las firmas
+  identifican el mensaje; no demuestran la causa de la lentitud. Los fallos anteriores de
+  `build`, sin firma, no se atribuyen a ese mensaje.
+- **Corrección del mecanismo**: se actúa en el punto de entrada admitido, eligiendo un
+  compilador que no ejecuta esa medición. No se filtran mensajes, no se intercepta la salida
+  y no cambian las líneas admitidas ni las aserciones de la prueba de humo.
+- **Validación de la candidata**: en local, con los tres selectores vacíos y `webpack: true`,
+  se cargó el compilador de Webpack con los selectores ausentes, heredados con un valor
+  activador y definidos en `.env.development.local`; `npm run check` terminó con código 0,
+  840 pruebas y 21 casos de humo. En el
+  [PR #6](https://github.com/Informatica-Colectivo-Prime/aulanorma/pull/6), también de diagnóstico y
+  cerrado sin integrar, la ejecución inicial superó los nueve controles en Linux y en macOS.
+  Es una sola ejecución: no mide la frecuencia del fallo anterior.
+- **Aceptación pendiente**: esta validación no es la aceptación de la funcionalidad. La base
+  que incorpore la corrección DEBE repetir la aceptación sobre su propio SHA (`acceptance.md`).
 
 **Interfaz de configuración** (`src/platform/config/index.ts`):
 

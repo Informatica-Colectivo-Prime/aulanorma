@@ -60,6 +60,11 @@ cp .env.example .env.development.local
 cambiarlas. `.env.development.local` está excluido de Git y solo lo carga `npm run dev`. Una
 variable definida en la terminal prevalece sobre el fichero, aunque esté vacía.
 
+Hay una excepción deliberada: `npm run dev` fija vacías `TURBOPACK`, `IS_TURBOPACK_TEST` y
+`NEXT_RSPACK`, que en Next.js eligen el compilador. Lo que valgan en la terminal o en
+`.env.development.local` no tiene efecto: el desarrollo usa siempre Webpack. No son variables de
+configuración de AulaNorma.
+
 ### 3. Arrancar y consultar el estado
 
 ```bash
@@ -230,6 +235,10 @@ Next.js.
 
 La escucha es fija en `127.0.0.1:3000`, y cualquier cambio en los ficheros `.env*` exige
 reiniciar.
+
+`npm run dev` compila con Webpack. `npm run build` conserva el compilador por defecto de Next.js
+y `npm start` sirve lo que este genera. La prueba de humo comprueba el mismo contrato en los dos
+modos.
 
 ## Documentación
 

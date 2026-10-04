@@ -194,6 +194,14 @@ se registra:
 2. `server.mjs` vuelve a validarla antes de escuchar y registra `startup.completed` una sola vez,
    después de empezar a escuchar.
 
+`npm run dev` usa Webpack: `server.mjs` pasa `webpack: true` a `next()` solo en desarrollo, y el
+script fija vacías `TURBOPACK`, `IS_TURBOPACK_TEST` y `NEXT_RSPACK` en el preflight y en el
+servidor, para que ni el entorno heredado ni los ficheros `.env*` elijan otro compilador. Son
+selectores de Next.js, no claves del esquema de configuración, y `server.mjs` sigue leyendo solo
+`NODE_ENV`. `npm start` y `next build` no cambian: la compilación conserva su compilador por
+defecto, distinto del de desarrollo, y la prueba de humo comprueba el mismo contrato en los dos
+modos.
+
 `next dev`, `next start` y `node server.mjs` directos no están admitidos: los dos primeros eluden
 la frontera HTTP y el tercero, el preflight. Ningún registro se emite por petición, rechazo o
 respuesta, en ninguno de los dos modos.

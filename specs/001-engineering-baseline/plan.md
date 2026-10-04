@@ -40,7 +40,9 @@ tiene cuatro piezas:
 entrada**. Ambos ejecutan
 `NODE_ENV=<entorno> node scripts/preflight.mjs <modo> && NODE_ENV=<entorno> node server.mjs`:
 los dos procesos reciben `NODE_ENV` por separado, porque una asignación delante de un comando no
-alcanza al que sigue a `&&`. El **preflight común** llama a `loadConfig` de
+alcanza al que sigue a `&&`. `dev` fija además vacías, en los dos procesos, `TURBOPACK`,
+`IS_TURBOPACK_TEST` y `NEXT_RSPACK`, los selectores externos del compilador de Next.js, para que
+el desarrollo use Webpack (research.md, R8). El **preflight común** llama a `loadConfig` de
 `src/platform/config` con el modo explícito (`development` en `dev`, `production` en `start`).
 `loadConfig` no deduce el modo del `NODE_ENV` heredado: exige que coincida con el solicitado y, si
 no coincide, falla cerrado antes de cargar ningún fichero y sin mostrar el valor recibido, así que
@@ -366,6 +368,9 @@ directorios `frontend/` ni `backend/` separados (principio XII y ADR 0001).
     exactamente `development` y `production` en cualquier otro caso, y `loadConfig` comprueba la
     concordancia, así que un valor ausente o distinto falla cerrado antes de escuchar; no
     reconstruye la lista de problemas ni lee otras claves;
+  - pasa `webpack: true` a `next()` solo en desarrollo; en producción no pasa ninguna opción
+    de compilador. No lee los selectores externos del compilador: los neutraliza el script
+    `dev` (research.md, R8);
   - importa legítimamente `node:http`, `next` y la capa de configuración que encapsula
     `@next/env`; de `src/platform` solo importa módulos portables y sin efectos secundarios de
     infraestructura;
@@ -495,9 +500,19 @@ llaman a Next.js, directamente o mediante `server.mjs`, incluyen `NEXT_TELEMETRY
 `dev` y `start` son los únicos puntos de entrada admitidos; `next dev` y `next start` no se
 invocan en ningún script y no deben usarse directamente.
 
+La columna «Acción» abrevia los scripts y omite `NEXT_TELEMETRY_DISABLED=1`; el texto literal
+está en `package.json`.
+
+`dev` selecciona Webpack: fija vacías `TURBOPACK`, `IS_TURBOPACK_TEST` y `NEXT_RSPACK` en sus dos
+procesos, y `server.mjs` pasa `webpack: true` a `next()` solo en desarrollo. Son selectores del
+framework, no claves del esquema de configuración. `start` y `build` no cambian: `next build`
+conserva su compilador por defecto, así que desarrollo y compilación usan compiladores distintos,
+y la equivalencia contractual entre los dos modos la comprueba la prueba de humo (research.md,
+R8).
+
 | Script | Acción | Categoría |
 |--------|--------|-----------|
-| `dev` | `NODE_ENV=development node scripts/preflight.mjs dev && NODE_ENV=development node server.mjs` (carga `.env.development.local`; `NODE_ENV` fijado en los dos procesos) | Ejecución |
+| `dev` | `NODE_ENV=development TURBOPACK= IS_TURBOPACK_TEST= NEXT_RSPACK= node scripts/preflight.mjs dev && NODE_ENV=development TURBOPACK= IS_TURBOPACK_TEST= NEXT_RSPACK= node server.mjs` (carga `.env.development.local`; `NODE_ENV` y los tres selectores vacíos del compilador fijados en los dos procesos) | Ejecución |
 | `build` | `next build` | Construcción |
 | `start` | `NODE_ENV=production node scripts/preflight.mjs start && NODE_ENV=production node server.mjs` (configuración desde el entorno; `NODE_ENV` fijado en los dos procesos) | Ejecución |
 | `format` | `prettier --write .` | Utilidad (no es un control) |

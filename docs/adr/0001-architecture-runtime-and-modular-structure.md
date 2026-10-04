@@ -98,7 +98,9 @@ decisión lo adopta pese a la complejidad que añade (plan.md, Complexity Tracki
      ni trazas. Después lee `process.env` y delega en `validateConfig`.
      `npm run dev` y `npm start`, los únicos puntos de entrada, ejecutan
      `NODE_ENV=<entorno> node scripts/preflight.mjs <modo> && NODE_ENV=<entorno> node server.mjs`,
-     con `NODE_ENV` fijado por separado en los dos procesos. Si el preflight
+     con `NODE_ENV` fijado por separado en los dos procesos. `npm run dev` fija además vacías,
+     en los dos procesos, `TURBOPACK`, `IS_TURBOPACK_TEST` y `NEXT_RSPACK`: son selectores del
+     compilador de Next.js, no claves del esquema de configuración. Si el preflight
      recibe un fallo, registra la clave y el código del problema (nunca el valor) y termina con
      código 1: `server.mjs` no llega a arrancar y el puerto nunca se abre. `server.mjs` vuelve a
      llamar a `loadConfig` antes de escuchar para crear el logger; si recibe un fallo, termina
@@ -137,6 +139,13 @@ decisión lo adopta pese a la complejidad que añade (plan.md, Complexity Tracki
      `http.createServer({ requireHostHeader: false }, …)`, decide cada petición antes de
      Next.js con `src/platform/http-boundary` y hace una única llamada a `handle(req, res)`.
      No usa propiedades privadas de Node.js ni registra nada por petición;
+   - **compilador de desarrollo**: `npm run dev` usa Webpack. `server.mjs` pasa `webpack: true`
+     a `next()` solo en desarrollo y sigue leyendo únicamente `process.env.NODE_ENV`; los tres
+     selectores vacíos del script impiden que el entorno heredado o los ficheros `.env*`
+     elijan otro compilador. La garantía corresponde a `npm run dev`: `node server.mjs` directo
+     sigue sin estar admitido. `npm start` y `next build` no cambian, así que desarrollo y
+     compilación usan compiladores distintos; la equivalencia contractual entre los dos modos
+     la comprueba la prueba de humo (research.md, R8);
    - precedencia **versión → `Host` → destino → método → cuerpo**. Solo el destino crudo exacto
      `/api/health` con `GET`, `HEAD` u `OPTIONS` se delega. Versiones admitidas: HTTP/1.0 y
      HTTP/1.1 (505 para otra versión analizada). `Host`: en HTTP/1.1, exactamente uno, no vacío,
@@ -237,7 +246,17 @@ decisión lo adopta pese a la complejidad que añade (plan.md, Complexity Tracki
   desarrollo y producción y 0 diferencias inesperadas frente a la exploración con Node.js
   24.13.0. Es **evidencia de viabilidad, no aceptación**: la implementación DEBE reproducirla
   con Node.js 24.21.0, las dependencias aprobadas, el preflight, la configuración real y el
-  mismo SHA candidato.
+  mismo SHA candidato. Esa prueba es anterior a la selección de Webpack en `npm run dev` y no
+  registró qué compilador usó en desarrollo.
+- El desarrollo usa Webpack y la compilación conserva su compilador por defecto. El motivo es
+  un aviso de sistema de archivos lento de Turbopack, identificado por sus firmas en el
+  [PR #5](https://github.com/Informatica-Colectivo-Prime/aulanorma/pull/5), que la prueba de humo
+  rechaza en el arranque de desarrollo; las firmas no demuestran la causa de la lentitud, y
+  los fallos anteriores sin firma no se atribuyen a ese mensaje. La corrección se validó como
+  candidata en local y en el
+  [PR #6](https://github.com/Informatica-Colectivo-Prime/aulanorma/pull/6), con los nueve controles
+  superados en una ejecución. La aceptación de la base que la
+  incorpore sigue pendiente (research.md, R8).
 - Next.js se conserva para el código de la aplicación y la futura interfaz, y la excepción
   pública no se amplía.
 - Se evitan llamadas externas por telemetría y por el optimizador de imágenes, y la exposición
