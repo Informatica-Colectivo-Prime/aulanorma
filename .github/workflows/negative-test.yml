@@ -1,0 +1,12 @@
+name: negative-test
+on:
+  pull_request:
+    branches: [main]
+permissions: {}
+jobs:
+  negative-test:
+    runs-on: ubuntu-24.04
+    permissions: {}
+    timeout-minutes: 5
+    steps:
+      - run: echo "${{ github.event.pull_request.title }}"
