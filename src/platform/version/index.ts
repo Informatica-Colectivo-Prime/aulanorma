@@ -17,3 +17,5 @@ export function getVersion(): string {
   }
   return version;
 }
+
+export const sample: number = "text";
