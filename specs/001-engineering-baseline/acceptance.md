@@ -9,9 +9,20 @@ repiten en cada pull request.
 
 ## Cabecera
 
-- **SHA base de aceptación**: Pendiente. Se fija de nuevo en T071, sobre el commit que
-  incorpore el cambio de alcance del 2026-10-04 (SC-001 y SC-008 como validaciones empíricas
-  aplazadas). Hasta entonces no hay base vigente.
+- **SHA base de aceptación**: `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966`, fijado en T071 el
+  2026-10-05. Es el commit que incorpora el cambio de alcance del 2026-10-04 (SC-001 y SC-008
+  como validaciones empíricas aplazadas). Su validación de T071:
+  - los nueve controles (`format`, `lint`, `types`, `test`, `build`, `macos-quality`, `secrets`,
+    `dependencies` y `workflows`, todos de la aplicación GitHub Actions) concluyeron en success
+    en la primera ejecución del evento `pull_request` (intento 1) sobre ese commit;
+  - merge provisional analizado por la integración continua:
+    `199d312b49852a98f67bf4e2ad55968aee184d99`, que no es el SHA base;
+  - `main` utilizado: `c2ad0e7de2de5434cd1be7a1d4af4c5e51ce1544`;
+  - ejecuciones: [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/attempts/1)
+    y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/attempts/1).
+
+  Esa ejecución es el primer intento de la serie de SC-004 sobre la base vigente. La casilla
+  de T071 en `tasks.md` sigue sin marcar.
 - **Base de las mediciones conservadas**: `1fd6da9b8e6b02405987025507443d468192bada`. Fue el SHA
   base hasta el cambio de alcance y es el commit sobre el que se obtuvo toda la evidencia
   técnica de este documento. Su validación de T071:
@@ -31,7 +42,7 @@ repiten en cada pull request.
   `quickstart.md`, `checklists/requirements.md`, `checklists/ci-acceptance.md`, este fichero
   y `docs/engineering/branch-protection.md`. No cambia código, pruebas, scripts, dependencias,
   workflows, configuración, `README.md` ni el resto de `docs/engineering/`. Es verificable con
-  `git diff --name-only 1fd6da9 <nueva base>`, que debe listar únicamente esas ocho rutas.
+  `git diff --name-only 1fd6da9 28c58da`, que lista únicamente esas ocho rutas.
   Según la regla de la base ("cualquier otro cambio crea una nueva base y obliga a repetir lo
   afectado"):
   - **se conserva**, con su SHA original, la evidencia de SC-002, SC-005, FR-006 C6 y FR-009,
@@ -39,9 +50,10 @@ repiten en cada pull request.
     de los ficheros que esas mediciones ejecutan o revisan cambia. Para los pull requests
     negativos, el plan solo exige repetir aquellos cuyas alteraciones o controles resulten
     afectados, y no hay ninguno;
-  - **se repite sobre la nueva base**: T071 (primera ejecución de los nueve controles), la
-    serie de tres intentos de SC-004, de la que dependen los enlaces de SC-006 (Pendiente
-    hasta entonces), y la parte local de SC-007, porque el historial alcanzable cambia;
+  - **se repite sobre la nueva base**: T071 (primera ejecución de los nueve controles) y la
+    serie de tres intentos de SC-004, de la que dependen los enlaces de SC-006, ambas
+    repetidas el 2026-10-05 sobre `28c58da`; y la parte local de SC-007, repetida ese mismo
+    día sobre `28c58da` porque el historial alcanzable cambia;
   - **se ejecuta por primera vez sobre la nueva base**: la parte local de SC-003 en Linux x64
     nativo.
 - **Base histórica**: `3101bd5fc4bfbbb07e6465c125e2730f2dbdd216`, sustituida por un cambio de
@@ -253,6 +265,65 @@ del aplazamiento de SC-001 y SC-008, y se ejecutará sobre la nueva base.
 
 ### Local en Linux x64
 
+**Entorno y desviación aceptada** (decisión del mantenedor, 2026-10-05). Esta parte se ejecuta
+en un contenedor Linux x64, no en una máquina ni en una máquina virtual:
+
+- **Desviación**: el paso 8 de `quickstart.md` y de `README.md` pide «una máquina o máquina
+  virtual Linux x64». Un contenedor no es literalmente ninguna de las dos, y ningún artefacto
+  menciona los contenedores para admitirlos ni para excluirlos. El mantenedor acepta el
+  contenedor como entorno de T075 para esta entrega. Los requisitos no cambian: `spec.md`
+  (FR-001), `plan.md` y `tasks.md` exigen «Linux x64» y siguen igual.
+- **Servidor**: Linux x86_64, kernel 5.4.0-216-generic, con Docker Engine 28.1.1.
+- **Contenedor**: Ubuntu 24.04.5 LTS; `uname` devuelve x86_64. Límites configurados: 2 CPU y
+  6 GiB de memoria. Sin puertos publicados ni carpetas del servidor montadas. Las herramientas
+  se instalan solo dentro del contenedor.
+- **Arquitectura**: x86_64 en el servidor y en el contenedor, sin emulación de arquitectura.
+  Los binarios x64 se ejecutan sobre el kernel del servidor, que el contenedor comparte.
+- **Qué no es**: no es una máquina virtual, porque no tiene kernel propio, ni una ejecución
+  directa sobre el servidor, porque el sistema de usuario es el de la imagen del contenedor.
+  «Nativo» se refiere aquí solo a la arquitectura.
+- **Procedencia de los datos**: los facilitó el mantenedor antes de la ejecución. Los que el
+  procedimiento observe dentro del contenedor se registran abajo con el resto de la evidencia.
+- Un primer intento falló (ver abajo) y SC-003 sigue Pendiente.
+
+**Intento 1: fallido, sin completar** (comunicado por el mantenedor el 2026-10-05; datos
+facilitados por él, no observados de forma independiente). Sobre el SHA base
+`28c58da1bcbf11df33fae5e26b77e1a8f9ea3966`, en el contenedor descrito arriba, arrancado sin
+`--init` y con `sleep` como proceso inicial (PID 1).
+
+- `npm run check` terminó con código 1. `npm run verify:negative` no se ejecutó.
+- Dentro de `npm run check`: 840 pruebas superadas y compilación correcta. Todos los casos
+  funcionales de la prueba de humo terminaron en `ok`.
+- La limpieza final de la prueba de humo informó dos errores: "ERR quedaban 8 grupos de procesos
+  vivos" y "ERR siguen vivos 8 grupos de procesos". Son el único fallo comunicado.
+- Observaciones con `docker top`: durante la espera mostraba el arnés y sus procesos de npm,
+  sin servidores hijos visibles; al terminar, solo `sleep`, sin procesos zombi visibles.
+- **Causa: no determinada.** El arnés considera vivo un grupo mientras
+  `kill(-pid, 0)` no falle con un error distinto de `EPERM`, de modo que no distingue un
+  proceso activo de uno zombi ni de una falta de permisos. La hipótesis de procesos zombi
+  no recogidos por el PID 1 no está confirmada ni descartada.
+- El intento no acredita ninguna parte de SC-003 en Linux. No se ha repetido ni corregido
+  nada: ni código, ni requisitos, ni entorno.
+
+**Intento 2: fallido, sin completar** (comunicado por el mantenedor el 2026-10-06; datos
+facilitados por él, no observados de forma independiente). Sobre el mismo SHA base, en un
+segundo contenedor con las mismas características, arrancado esta vez con `--init`, de modo
+que el PID 1 es `docker-init`. Es un cambio de entorno respecto al intento 1.
+
+- `npm run check` terminó con código 1. `npm run verify:negative` no se ejecutó.
+- Dentro de `npm run check`: 840 pruebas superadas, compilación correcta y prueba de humo
+  superada con 21 casos, sin los errores de grupos de procesos del intento 1.
+- `check:secrets`: sin hallazgos.
+- `check:deps`: **falla**. `npm audit` informa una vulnerabilidad de gravedad alta sin
+  excepción en el paquete `source-map-js`, aviso GHSA-68fv-2mgg-jv7q.
+- Al terminar, el puerto 3000 del contenedor estaba libre.
+- El fallo no depende de Linux ni del contenedor: `check:deps` consulta los avisos publicados
+  para las versiones del lockfile, que es el mismo en todos los entornos. El aviso es
+  posterior a las ejecuciones en verde de este control sobre la base.
+- El intento no acredita ninguna parte de SC-003 en Linux. Que el humo terminara sin los
+  errores del intento 1 es compatible con la hipótesis de procesos no recogidos por el PID 1,
+  pero un solo intento no la confirma.
+
 - SHA:
 - Instalación:
 - Configuración aplicada:
@@ -389,10 +460,33 @@ resulten necesarias y antes de activar los controles requeridos.
 dura menos de 15 minutos. Una indisponibilidad general del proveedor solo se excluye con enlace
 a su incidencia pública.
 
-**Parte de pull request: completada sobre `1fd6da9`; pendiente de repetir sobre la nueva
-base**. El cambio de alcance crea una base nueva y SC-004 exige tres intentos sobre el SHA
-base, así que la serie debe repetirse. La que sigue se conserva como evidencia de la base
-anterior de las mediciones.
+**Parte de pull request: completada sobre el SHA base `28c58da`** (T079, 2026-10-05). Tres
+intentos consecutivos sobre `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966`, en el pull request de
+la funcionalidad:
+
+- **Mismo SHA**: los dos workflows de cada intento corresponden al SHA base como commit de
+  origen. Los 27 jobs analizaron el mismo merge provisional,
+  `199d312b49852a98f67bf4e2ad55968aee184d99` (el SHA base sobre `main` en
+  `c2ad0e7de2de5434cd1be7a1d4af4c5e51ce1544`), comprobado en el registro de cada job.
+- **Jobs realmente ejecutados**: en cada intento los nueve jobs tienen identificadores y horas
+  propios, su número de intento coincide con el de la ejecución y ninguno de sus pasos figura
+  como omitido. Ningún resultado se trasladó de un intento anterior.
+- **Nombres y fuente**: `format`, `lint`, `types`, `test`, `build`, `macos-quality`, `secrets`,
+  `dependencies` y `workflows`, todos de la aplicación GitHub Actions.
+- **Resultado**: 27 de 27 jobs en success; la duración máxima fue de 104 s (`macos-quality`,
+  intentos 1 y 3), muy por debajo de los 15 minutos. Las duraciones son la diferencia entre
+  `completed_at` y `started_at` de cada job.
+- **Reejecuciones**: los intentos 2 y 3 se lanzaron relanzando todos los jobs de los dos
+  workflows, sin `--failed` ni jobs individuales, cada uno después de terminar y verificar el
+  anterior. Cada intento terminó dentro del límite de observación de 30 minutos.
+- **Sin cambios entre intentos**: no se añadieron commits, y el SHA del pull request y `main`
+  eran los mismos antes de cada lanzamiento, sin ejecuciones activas.
+- En los tres intentos, `test` y `macos-quality` terminaron con 840 pruebas superadas de 840, y
+  `build` y `macos-quality` con "Prueba de humo superada: 21 casos.", sin el aviso de sistema
+  de ficheros lento.
+
+**Serie anterior, sobre `1fd6da9`** (base anterior de las mediciones). Se conserva como
+evidencia de esa base y no acredita la vigente.
 
 Serie registrada en T079 (2026-10-04): tres intentos consecutivos sobre
 `1fd6da9b8e6b02405987025507443d468192bada`, en el pull request de la funcionalidad:
@@ -417,9 +511,80 @@ Serie registrada en T079 (2026-10-04): tres intentos consecutivos sobre
 **Parte de `main`: pendiente**. La primera ejecución satisfactoria de `main` solo puede
 obtenerse después de integrar. Hasta entonces SC-004 sigue Pendiente.
 
-### Pull request: intento 1 (ejecución inicial)
+### Pull request sobre `28c58da`: intento 1 (ejecución inicial)
 
 Ejecución inicial del evento `pull_request` tras publicar el SHA base (la misma de T071).
+
+| Workflow | Identificador de la ejecución | Número de intento | SHA |
+|----------|-------------------------------|-------------------|-----|
+| `quality` | [37275255817](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/attempts/1) | 1 | `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966` |
+| `security` | [37275255796](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/attempts/1) | 1 | `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966` |
+
+| Job | `started_at` | `completed_at` | Duración | Conclusión |
+|-----|--------------|----------------|----------|------------|
+| [`format`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/job/111650756393) | 2026-10-05T06:59:37Z | 2026-10-05T06:59:58Z | 21 s | success |
+| [`lint`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/job/111650756404) | 2026-10-05T07:00:13Z | 2026-10-05T07:00:34Z | 21 s | success |
+| [`types`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/job/111650756484) | 2026-10-05T06:59:37Z | 2026-10-05T06:59:51Z | 14 s | success |
+| [`test`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/job/111650756500) | 2026-10-05T07:00:13Z | 2026-10-05T07:00:42Z | 29 s | success |
+| [`build`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/job/111650756442) | 2026-10-05T06:59:37Z | 2026-10-05T07:00:22Z | 45 s | success |
+| [`macos-quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/job/111650756273) | 2026-10-05T06:59:45Z | 2026-10-05T07:01:29Z | 104 s | success |
+| [`secrets`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/job/111650756073) | 2026-10-05T06:59:37Z | 2026-10-05T06:59:47Z | 10 s | success |
+| [`dependencies`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/job/111650756239) | 2026-10-05T06:59:37Z | 2026-10-05T06:59:56Z | 19 s | success |
+| [`workflows`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/job/111650756333) | 2026-10-05T06:59:37Z | 2026-10-05T06:59:45Z | 8 s | success |
+
+Job más largo: `macos-quality`, 104 s. Los nueve concluyen en success y duran menos de 15 minutos.
+
+### Pull request sobre `28c58da`: intento 2 (reejecución completa)
+
+Reejecución completa de los dos workflows (`gh run rerun <id>`, sin `--failed`), lanzada cuando
+el intento 1 había terminado y estaba verificado.
+
+| Workflow | Identificador de la ejecución | Número de intento | SHA |
+|----------|-------------------------------|-------------------|-----|
+| `quality` | [37275255817](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/attempts/2) | 2 | `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966` |
+| `security` | [37275255796](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/attempts/2) | 2 | `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966` |
+
+| Job | `started_at` | `completed_at` | Duración | Conclusión |
+|-----|--------------|----------------|----------|------------|
+| [`format`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/job/111651570873) | 2026-10-05T07:02:32Z | 2026-10-05T07:02:45Z | 13 s | success |
+| [`lint`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/job/111651570914) | 2026-10-05T07:02:32Z | 2026-10-05T07:02:53Z | 21 s | success |
+| [`types`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/job/111651570620) | 2026-10-05T07:02:32Z | 2026-10-05T07:02:44Z | 12 s | success |
+| [`test`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/job/111651570735) | 2026-10-05T07:02:32Z | 2026-10-05T07:02:56Z | 24 s | success |
+| [`build`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/job/111651570782) | 2026-10-05T07:02:33Z | 2026-10-05T07:03:18Z | 45 s | success |
+| [`macos-quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/job/111651570871) | 2026-10-05T07:02:38Z | 2026-10-05T07:04:19Z | 101 s | success |
+| [`secrets`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/job/111651576974) | 2026-10-05T07:02:33Z | 2026-10-05T07:02:42Z | 9 s | success |
+| [`dependencies`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/job/111651577125) | 2026-10-05T07:02:33Z | 2026-10-05T07:02:54Z | 21 s | success |
+| [`workflows`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/job/111651577175) | 2026-10-05T07:02:34Z | 2026-10-05T07:02:40Z | 6 s | success |
+
+Job más largo: `macos-quality`, 101 s. Los nueve concluyen en success y duran menos de 15 minutos.
+
+### Pull request sobre `28c58da`: intento 3 (reejecución completa)
+
+Reejecución completa de los dos workflows (`gh run rerun <id>`, sin `--failed`), lanzada cuando
+el intento 2 había terminado y estaba verificado.
+
+| Workflow | Identificador de la ejecución | Número de intento | SHA |
+|----------|-------------------------------|-------------------|-----|
+| `quality` | [37275255817](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/attempts/3) | 3 | `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966` |
+| `security` | [37275255796](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/attempts/3) | 3 | `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966` |
+
+| Job | `started_at` | `completed_at` | Duración | Conclusión |
+|-----|--------------|----------------|----------|------------|
+| [`format`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/job/111652261270) | 2026-10-05T07:05:05Z | 2026-10-05T07:05:18Z | 13 s | success |
+| [`lint`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/job/111652261098) | 2026-10-05T07:05:05Z | 2026-10-05T07:05:30Z | 25 s | success |
+| [`types`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/job/111652261003) | 2026-10-05T07:05:05Z | 2026-10-05T07:05:23Z | 18 s | success |
+| [`test`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/job/111652261189) | 2026-10-05T07:05:06Z | 2026-10-05T07:05:34Z | 28 s | success |
+| [`build`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/job/111652261093) | 2026-10-05T07:05:05Z | 2026-10-05T07:05:39Z | 34 s | success |
+| [`macos-quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/job/111652260874) | 2026-10-05T07:05:11Z | 2026-10-05T07:06:55Z | 104 s | success |
+| [`secrets`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/job/111652268901) | 2026-10-05T07:05:07Z | 2026-10-05T07:05:16Z | 9 s | success |
+| [`dependencies`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/job/111652269138) | 2026-10-05T07:05:07Z | 2026-10-05T07:05:29Z | 22 s | success |
+| [`workflows`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/job/111652268820) | 2026-10-05T07:05:08Z | 2026-10-05T07:05:19Z | 11 s | success |
+
+Job más largo: `macos-quality`, 104 s. Los nueve concluyen en success y duran menos de 15 minutos.
+
+### Serie anterior sobre `1fd6da9`: intento 1 (ejecución inicial)
+
+Ejecución inicial del evento `pull_request` tras publicar `1fd6da9`, entonces SHA base (la misma de su T071).
 
 | Workflow | Identificador de la ejecución | Número de intento | SHA |
 |----------|-------------------------------|-------------------|-----|
@@ -440,7 +605,7 @@ Ejecución inicial del evento `pull_request` tras publicar el SHA base (la misma
 
 Job más largo: `macos-quality`, 100 s. Los nueve concluyen en success y duran menos de 15 minutos.
 
-### Pull request: intento 2 (reejecución completa)
+### Serie anterior sobre `1fd6da9`: intento 2 (reejecución completa)
 
 Reejecución completa de los dos workflows (`gh run rerun <id>`, sin `--failed`), lanzada cuando
 el intento 1 había terminado.
@@ -464,7 +629,7 @@ el intento 1 había terminado.
 
 Job más largo: `macos-quality`, 87 s. Los nueve concluyen en success y duran menos de 15 minutos.
 
-### Pull request: intento 3 (reejecución completa)
+### Serie anterior sobre `1fd6da9`: intento 3 (reejecución completa)
 
 Reejecución completa de los dos workflows (`gh run rerun <id>`, sin `--failed`), lanzada cuando
 el intento 2 había terminado y cumplía los requisitos.
@@ -509,11 +674,11 @@ Job más largo: `macos-quality`, 76 s. Los nueve concluyen en success y duran me
 
 ### Otras ejecuciones
 
-- Ejecuciones fallidas previas: ninguna sobre el SHA base en el pull request de la
-  funcionalidad. Los fallos del job `build` sobre commits anteriores constan en el registro de
+- Ejecuciones fallidas previas: ninguna sobre el SHA base ni sobre `1fd6da9` en el pull request
+  de la funcionalidad. Los fallos del job `build` sobre commits anteriores constan en el registro de
   la incidencia de la prueba de humo. Las ejecuciones de los ocho pull requests negativos de
   SC-003 fallan por diseño, corresponden a otros commits y no son intentos de esta serie.
-- Ejecuciones canceladas por `concurrency`: ninguna en esta serie.
+- Ejecuciones canceladas por `concurrency`: ninguna en las dos series.
 - Pull requests correctivos: ninguno todavía; solo se aplican a `main`, después de integrar.
 
 ---
@@ -564,7 +729,7 @@ cada una.
 
 ## SC-006 Cero secretos reales
 
-**Estado**: Pendiente
+**Estado**: Superado
 
 **Entorno**: macOS arm64 de referencia y workflows del SHA base.
 **Momento**: antes de integrar, sobre el SHA base, aunque SC-001 esté Pendiente.
@@ -572,8 +737,11 @@ cada una.
 **Superado** si ninguna comprobación muestra un secreto real ni una credencial pasada a código
 del repositorio.
 
-- SHA: `1fd6da9b8e6b02405987025507443d468192bada` (SHA base). Comprobación local del
-  2026-10-04 en el macOS arm64 de referencia.
+- SHA de la comprobación local: `1fd6da9b8e6b02405987025507443d468192bada`, base de las
+  mediciones conservadas, el 2026-10-04 en el macOS arm64 de referencia. Se reutiliza para el
+  SHA base vigente, `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966`, según la regla de la cabecera:
+  entre ambos commits solo cambian ocho rutas documentales, y ninguno de los ficheros que esta
+  comprobación ejecuta o revisa.
 - Confirmación de clon completo: clon nuevo del repositorio, distinto del de SC-002, sin
   `--depth`, filtros parciales ni alternates, fijado al SHA base. `git rev-parse
   --is-shallow-repository` devuelve `false` y `git status --porcelain` está vacío antes y
@@ -599,23 +767,23 @@ del repositorio.
     hizo de nuevo sobre esta base.
 - Contenido de las claves de `.env.example`: solo `AULANORMA_LOG_LEVEL` y
   `AULANORMA_ENVIRONMENT`, con valores de ejemplo ficticios, válidos y que no son secretos.
-- Enlaces a las ejecuciones de SC-004: pendientes para la nueva base; se incorporan cuando se
-  repita la serie. Se conservan los de la serie anterior, sobre
-  `1fd6da9b8e6b02405987025507443d468192bada`, con los nueve jobs en success en cada uno (T079):
+- Enlaces a las ejecuciones de SC-004 sobre el SHA base vigente,
+  `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966`, con los nueve jobs en success en cada una (T079,
+  2026-10-05):
+  - intento 1, [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/attempts/1) y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/attempts/1);
+  - intento 2, [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/attempts/2) y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/attempts/2);
+  - intento 3, [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/attempts/3) y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/attempts/3).
+
+  Son ejecuciones de los workflows revisados: `quality.yml`, `security.yml` y `.env.example`
+  son idénticos en `1fd6da9` y en el SHA base vigente.
+- Enlaces de la serie anterior, sobre `1fd6da9b8e6b02405987025507443d468192bada`, con los nueve
+  jobs en success en cada uno (T079, 2026-10-04):
   - intento 1, [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/attempts/1) y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/attempts/1);
   - intento 2, [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/attempts/2) y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/attempts/2);
   - intento 3, [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/attempts/3) y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/attempts/3).
 
-  Son las ejecuciones de los workflows revisados. La primera ejecución satisfactoria de `main`
-  pertenece a SC-004 y sigue pendiente; no es un requisito de este criterio, que se evalúa
-  antes de integrar.
-
-Ninguna comprobación realizada muestra un secreto real ni una credencial pasada a código del
-repositorio.
-
-SC-006 queda Pendiente hasta incorporar los enlaces de la serie de SC-004 sobre la nueva base.
-La evidencia local anterior se obtuvo sobre `1fd6da9b8e6b02405987025507443d468192bada` y se
-conserva íntegra: los workflows y `.env.example` no cambian con la nueva base.
+  La primera ejecución satisfactoria de `main` pertenece a SC-004 y sigue pendiente; no es un
+  requisito de este criterio, que se evalúa antes de integrar.
 
 ---
 
@@ -629,8 +797,64 @@ con la primera ejecución satisfactoria de `main`.
 
 **Superado** si hay cero hallazgos no justificados.
 
-- SHA: `1fd6da9b8e6b02405987025507443d468192bada` (SHA base). Ejecución local del 2026-10-04 en
-  el macOS arm64 de referencia (macOS 27.0.1, arm64 nativo), con Node.js `v24.21.0`; caché,
+- SHA: `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966` (SHA base). Ejecución local del 2026-10-05 en
+  el macOS arm64 de referencia (macOS 27.0.1, arm64 nativo), con Node.js `v24.21.0` y npm
+  11.19.0; caché, registros de npm y `TMPDIR` aislados fuera del clon.
+  - `npm run check:secrets` se ejecutó una vez y terminó con código 0, en 1 s.
+  - Preparación: solo `npm run tools:install` (código 0, 2 s), que instaló y verificó Gitleaks
+    8.30.1 (instala también zizmor, que este control no usa). El SHA-256 del binario instalado
+    figura en `scripts/tools/tools.lock.json`.
+  - No se ejecutó `npm ci`: el envoltorio solo importa módulos de Node.js, igual que en el job
+    de CI. El clon no tuvo `node_modules` en ningún momento.
+- Confirmación de clon completo: clon nuevo del repositorio remoto, sin reutilizar ningún otro
+  clon, sin `--depth`, filtros parciales ni alternates. `git rev-parse
+  --is-shallow-repository` devuelve `false`, y `git status --porcelain` está vacío antes y
+  después de cada ejecución, con HEAD sin cambios.
+- Los tres resultados siguientes se obtuvieron por separado; ninguna cifra se ha deducido de
+  otra:
+  - **Envoltorio** (`npm run check:secrets`): código 0. No imprime N: solo lee de Gitleaks la
+    línea "N commits scanned." y falla si N no está entre 1 y el número de commits
+    alcanzables. Su salida: "Excepciones de secretos vigentes: 0." y los tres análisis:
+    - historial alcanzable desde HEAD: sin hallazgos;
+    - índice de Git: sin hallazgos (índice sin cambios preparados, en un clon limpio);
+    - árbol de trabajo: 0 ficheros modificados o nuevos, sin hallazgos.
+  - **Medición adicional de Gitleaks** (2026-10-05, mismo clon, una única ejecución): 35 commits
+    examinados.
+    - El mismo binario de Gitleaks 8.30.1 que instaló y verificó `npm run tools:install`,
+      ejecutado desde una copia externa al clon con el mismo SHA-256.
+    - Los argumentos del envoltorio para el análisis de historial:
+      `git --log-opts="--full-history HEAD" .`, informe redactado y en JSON en un temporal
+      externo, nivel de registro `info`, sin color ni cabecera, sin comentarios
+      `gitleaks:allow` y con el código 10 reservado para hallazgos.
+    - La configuración del envoltorio: una copia del `.gitleaksignore` del SHA base y ningún
+      `.gitleaks.toml` en el repositorio.
+    - El tratamiento del entorno del envoltorio: el entorno de la sesión sin variables
+      `GITLEAKS_*` ni de ubicación de Git.
+    - Resultado: código 0, en menos de 1 s, la línea "35 commits scanned.", ninguna línea de
+      error en el registro y ningún hallazgo en el informe.
+    - No se repitieron el envoltorio ni los análisis del índice y del árbol de trabajo.
+  - **Recuento de Git** (`git rev-list --count HEAD`): 35 commits alcanzables desde el SHA base.
+  - Las dos cifras coinciden en esta medición.
+- Resultado sin hallazgos, o lista de hallazgos exceptuados con su entrada en el registro
+  estructurado: sin hallazgos y sin excepciones vigentes.
+- Enlace al job `secrets` del pull request: evidencia de integración continua de T071, distinta
+  de la ejecución local:
+  [secrets 111650756073](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/job/111650756073),
+  ejecución `security` 37275255796, intento 1, sobre el SHA base, con conclusión success.
+- Enlace al job `secrets` de la primera ejecución satisfactoria de `main`: pendiente; se obtiene
+  en T083 y se registra en T087.
+
+Parte local completada sobre el SHA base `28c58da` (T076, 2026-10-05). SC-007 sigue Pendiente
+hasta la confirmación en `main`.
+
+### Medición anterior sobre `1fd6da9`
+
+Se conserva como evidencia de la base anterior de las mediciones; no acredita la vigente,
+cuyo historial alcanzable tiene dos commits más.
+
+- SHA: `1fd6da9b8e6b02405987025507443d468192bada` (entonces SHA base). Ejecución local del
+  2026-10-04 en el macOS arm64 de referencia (macOS 27.0.1, arm64 nativo), con Node.js
+  `v24.21.0`; caché,
   registros de npm y `TMPDIR` aislados fuera del clon.
   - `npm run check:secrets` se ejecutó una vez y terminó con código 0.
   - Preparación: solo `npm run tools:install` (código 0), que instaló y verificó Gitleaks 8.30.1
@@ -669,13 +893,7 @@ con la primera ejecución satisfactoria de `main`.
 - Enlace al job `secrets` del pull request: evidencia de integración continua de T071, distinta
   de la ejecución local:
   [secrets 111370544887](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/job/111370544887),
-  ejecución `security` 37180028381, intento 1, sobre el SHA base, con conclusión success.
-- Enlace al job `secrets` de la primera ejecución satisfactoria de `main`: pendiente; se obtiene
-  en T083 y se registra en T087.
-
-Parte local completada sobre `1fd6da9`. La nueva base añade commits al historial alcanzable,
-así que la medición local debe repetirse sobre ella. SC-007 sigue Pendiente hasta esa
-repetición y la confirmación en `main`.
+  ejecución `security` 37180028381, intento 1, sobre `1fd6da9`, con conclusión success.
 
 ---
 
