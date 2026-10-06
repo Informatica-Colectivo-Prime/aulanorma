@@ -9,9 +9,13 @@ repiten en cada pull request.
 
 ## Cabecera
 
-- **SHA base de aceptación**: `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966`, fijado en T071 el
-  2026-10-05. Es el commit que incorpora el cambio de alcance del 2026-10-04 (SC-001 y SC-008
-  como validaciones empíricas aplazadas). Su validación de T071:
+- **SHA base de aceptación**: Pendiente. Se fija de nuevo en T071, sobre el commit que
+  incorpore la actualización de `source-map-js` descrita en «Transición por el aviso de
+  `source-map-js`». Hasta entonces no hay base vigente.
+- **Base anterior**: `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966`, fijada en T071 el 2026-10-05
+  y sustituida por un cambio de dependencias. Es el commit que incorpora el cambio de alcance
+  del 2026-10-04 (SC-001 y SC-008 como validaciones empíricas aplazadas). Su validación de
+  T071:
   - los nueve controles (`format`, `lint`, `types`, `test`, `build`, `macos-quality`, `secrets`,
     `dependencies` y `workflows`, todos de la aplicación GitHub Actions) concluyeron en success
     en la primera ejecución del evento `pull_request` (intento 1) sobre ese commit;
@@ -21,11 +25,11 @@ repiten en cada pull request.
   - ejecuciones: [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/attempts/1)
     y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/attempts/1).
 
-  Esa ejecución es el primer intento de la serie de SC-004 sobre la base vigente. La casilla
+  Esa ejecución es el primer intento de la serie de SC-004 sobre `28c58da`. La casilla
   de T071 en `tasks.md` sigue sin marcar.
 - **Base de las mediciones conservadas**: `1fd6da9b8e6b02405987025507443d468192bada`. Fue el SHA
-  base hasta el cambio de alcance y es el commit sobre el que se obtuvo toda la evidencia
-  técnica de este documento. Su validación de T071:
+  base hasta el cambio de alcance y es el commit sobre el que se obtuvo la evidencia técnica
+  local anterior a ese cambio. Su validación de T071:
   - los nueve controles concluyeron en success en la primera ejecución del evento
     `pull_request` (intento 1) sobre ese commit;
   - merge provisional analizado por la integración continua:
@@ -36,7 +40,8 @@ repiten en cada pull request.
 
   Esa ejecución fue el primer intento de la serie de SC-004 registrada en T079 sobre
   `1fd6da9`. La casilla de T071 en `tasks.md` sigue sin marcar.
-- **Reutilización de la evidencia de `1fd6da9`**. El cambio de alcance modifica solo
+- **Reutilización de la evidencia de `1fd6da9` en `28c58da`** (transición del 2026-10-04,
+  sustituida por la del 2026-10-06 en lo que esta indica). El cambio de alcance modifica solo
   documentación normativa y de procedimiento. Las únicas rutas que cambian son, todas bajo
   `specs/001-engineering-baseline/` salvo la última: `spec.md`, `plan.md`, `tasks.md`,
   `quickstart.md`, `checklists/requirements.md`, `checklists/ci-acceptance.md`, este fichero
@@ -56,6 +61,70 @@ repiten en cada pull request.
     día sobre `28c58da` porque el historial alcanzable cambia;
   - **se ejecuta por primera vez sobre la nueva base**: la parte local de SC-003 en Linux x64
     nativo.
+- **Transición por el aviso de `source-map-js`** (2026-10-06).
+  - **Aviso**: GHSA-68fv-2mgg-jv7q (CVE-2026-93749), denegación de servicio en
+    `source-map-js`. Según la GitHub Advisory Database, consultada el 2026-10-06: aviso
+    revisado y no retirado, gravedad alta, con puntuaciones CVSS 3.1 de 7,5 y CVSS 4.0 de 8,7
+    publicadas por esa misma base de datos; versiones afectadas `>= 1.0.0, < 1.2.2`; primera
+    versión corregida, 1.2.2; publicado el 2026-09-18 y revisado por GitHub el
+    2026-10-05T23:31:22Z, después de las ejecuciones en verde del control `dependencies`
+    sobre `28c58da` (2026-10-05, entre las 06:59 y las 07:06 UTC).
+  - **Dónde se observó**: en el intento 2 de la parte local de SC-003 en Linux, donde
+    `check:deps` falló por este aviso (dato del mantenedor). Después del aviso no se ha
+    ejecutado `check:deps` sobre `28c58da` en macOS ni en la integración continua.
+  - **Alcance en el lockfile de `28c58da`**: una única copia, `source-map-js` 1.2.1, que
+    comparten dos cadenas: `next` 16.3.6 → `postcss` 8.5.23 y `vite` 8.3.1 → `postcss`
+    8.5.28. Las dos piden `^1.2.1`, que admite 1.2.2.
+  - **Cambio**: solo `package-lock.json`, y en él solo la entrada de `source-map-js`
+    (versión, URL e integridad), de 1.2.1 a 1.2.2. No cambian `package.json`, `next`, `vite`
+    ni `postcss`. Sin `npm audit fix`, excepciones ni supresiones.
+  - **Validación de la candidata** (2026-10-06, macOS arm64 de referencia, Node.js 24.21.0 y
+    npm 11.19.0, con caché, registros y `TMPDIR` aislados): en un clon nuevo de `28c58da` con
+    ese único cambio sin confirmar, `npm ci`, `npm run tools:install`, `npm run check:deps` y
+    `npm run check` terminaron con código 0, cada uno ejecutado una vez. `check:deps` informó
+    221 dependencias auditadas y ninguna vulnerabilidad alta o crítica; el agregado, 840
+    pruebas superadas y la prueba de humo con 21 casos. No se ejecutó
+    `npm run verify:negative`. Es la validación previa de una candidata, sobre un árbol sin
+    commit: **no es evidencia de aceptación** de ningún criterio.
+  - **Regla aplicada**: un cambio de dependencias crea una nueva base y obliga a repetir lo
+    afectado. Entre `28c58da` y la nueva base solo deben cambiar `package-lock.json` y este
+    fichero, verificable con `git diff --name-only 28c58da <nueva base>`.
+  - **En la evidencia conservada**, «SHA base» designa la base vigente cuando se obtuvo cada
+    resultado, identificada siempre por su hash. Ningún resultado anterior cambia de SHA ni
+    de fecha.
+  - **Se repite sobre la nueva base**:
+    - T071 y la serie de tres intentos completos de SC-004;
+    - SC-002, SC-005, y FR-006 C6 y FR-009, porque ejecutan las dependencias instaladas y
+      las dos cadenas afectadas pasan por `next` y por `vite`;
+    - la parte local de SC-003 en macOS y en Linux x64 (esta última no llegó a completarse
+      sobre `28c58da`);
+    - la parte local de SC-007, porque el historial alcanzable cambia;
+    - en la integración continua de SC-003, los pull requests negativos de `dependencies`,
+      `test`, `build` y `types`. El de `dependencies` altera el propio lockfile; los de
+      `test` y `build` tienen como control objetivo Vitest y `next build`, que cargan las
+      cadenas afectadas; el de `types` se repite por decisión del mantenedor (2026-10-06),
+      porque sus dos fallos colaterales registrados son `build` y `test`, aunque su
+      alteración y su control objetivo (TypeScript) no estén afectados.
+  - **Se reutiliza**:
+    - la comprobación local de SC-006, hecha sobre `1fd6da9`: revisa `quality.yml`,
+      `security.yml` y `.env.example`, que son idénticos en `1fd6da9`, en `28c58da` y en la
+      candidata, y no ejecuta dependencias. Sus enlaces a la serie de SC-004 sí son nuevos y
+      quedan pendientes;
+    - en la integración continua de SC-003, los pull requests negativos de `format`, `lint`,
+      `secrets` y `workflows` (#7, #8, #12 y #14), sobre `1fd6da9`. Sus alteraciones tocan
+      un fichero de código, un fichero de módulo, un fichero de texto y un workflow, ninguno
+      de los cuales cambia; y sus controles objetivo (Prettier, ESLint, Gitleaks y zizmor) no
+      cargan `source-map-js`, que en el lockfile solo llega por `next` y por `vite`. El
+      colateral previsto de `format` es `lint`, tampoco afectado. En `format` y `lint`,
+      `macos-quality` se detiene antes de las pruebas y de la compilación.
+  - **Límite de los pull requests reutilizados**: conservan su SHA original y acreditan lo
+    que midieron sobre `1fd6da9`. Su columna «controles no afectados en verde» incluye
+    `test`, `build` y `dependencies`, y en `secrets` y `workflows` también `macos-quality`,
+    ejecutados con el lockfile anterior; esa parte no se traslada a la nueva base. La serie
+    de SC-004 ejecuta los nueve controles sobre la nueva base sin ninguna alteración: no es
+    una ejecución de esos pull requests negativos ni sustituye su evidencia.
+  - **Sin cambios**: la decisión de alcance sobre SC-001 y SC-008, que siguen aplazadas y
+    sin evidencia, y la desviación aceptada del contenedor para SC-003 en Linux.
 - **Base histórica**: `3101bd5fc4bfbbb07e6465c125e2730f2dbdd216`, sustituida por un cambio de
   código. Su evidencia se
   conserva en [Evidencia histórica](#evidencia-histórica-sobre-3101bd5-base-sustituida) y no
@@ -160,7 +229,11 @@ Linux x64 termina con éxito, ambos sin desviaciones, y la evidencia queda regis
 
 ## SC-002 Comandos de calidad locales
 
-**Estado**: Superado
+**Estado**: Pendiente
+
+> **Transición del 2026-10-06** (ver la cabecera): la evidencia de este apartado se obtuvo sobre
+> una base anterior, identificada en cada entrada por su hash, y se conserva. No acredita la
+> nueva base, todavía sin fijar. Pendiente de repetir sobre ella.
 
 **Entorno**: macOS arm64 de referencia con Node.js 24.21.0.
 **Momento**: antes de integrar, sobre el SHA base, aunque SC-001 esté Pendiente.
@@ -211,6 +284,13 @@ Cada comando se ejecutó una sola vez, con la salida y el código capturados sin
 
 **Estado**: Pendiente
 
+> **Transición del 2026-10-06** (ver la cabecera): la evidencia de este apartado se obtuvo sobre
+> una base anterior, identificada en cada entrada por su hash, y se conserva. No acredita la
+> nueva base, todavía sin fijar. Sobre ella se repiten la parte local
+> en macOS y en Linux x64 y los pull requests negativos de `dependencies`, `test`, `build` y
+> `types`. Se reutilizan, con su SHA original, los de `format`, `lint`, `secrets` y
+> `workflows`.
+
 **Entorno**: local en el macOS arm64 de referencia y en Linux x64, ambos con Node.js 24.21.0.
 Integración continua: los runners de los workflows.
 **Momento**: antes de integrar, cuando los workflows ya se ejecutan en el pull request de la
@@ -259,9 +339,10 @@ negativa. En la integración continua, los controles no afectados deben pasar.
     ignoradas".
   - Al terminar no quedaron procesos y el puerto 3000 estaba libre.
 
-Parte local en macOS completada. SC-003 sigue Pendiente: falta la parte local en Linux x64
-nativo, que no se ha ejecutado. Es un requisito de la aceptación obligatoria, independiente
-del aplazamiento de SC-001 y SC-008, y se ejecutará sobre la nueva base.
+Parte local en macOS completada sobre `1fd6da9` y pendiente de repetir sobre la nueva base.
+SC-003 sigue Pendiente: falta además la parte local en Linux x64 nativo, que no se ha
+completado. Es un requisito de la aceptación obligatoria, independiente del aplazamiento de
+SC-001 y SC-008, y se ejecutará sobre la nueva base.
 
 ### Local en Linux x64
 
@@ -323,6 +404,10 @@ que el PID 1 es `docker-init`. Es un cambio de entorno respecto al intento 1.
 - El intento no acredita ninguna parte de SC-003 en Linux. Que el humo terminara sin los
   errores del intento 1 es compatible con la hipótesis de procesos no recogidos por el PID 1,
   pero un solo intento no la confirma.
+
+**Siguiente ejecución**: sobre la nueva base, cuando esté fijada, en un contenedor con las
+mismas características y arrancado con `--init`. Los dos intentos anteriores se conservan y
+no se reutilizan.
 
 - SHA:
 - Instalación:
@@ -428,7 +513,9 @@ prevista, sin colaterales no previstos.
 - En `test`, `secrets`, `dependencies` y `workflows`, el job `build` terminó en success con
   "Prueba de humo superada: 21 casos.".
 
-Las ocho categorías quedan ejecutadas. SC-003 sigue Pendiente hasta completar la parte local en
+Las ocho categorías quedan ejecutadas sobre `1fd6da9`. Sobre la nueva base deben repetirse
+`dependencies`, `test`, `build` y `types` (ver la cabecera); las otras cuatro se reutilizan.
+SC-003 sigue Pendiente hasta completar esas repeticiones y la parte local en macOS y en
 Linux x64 nativo. Estos pull requests no forman parte de la serie de SC-004.
 
 - Secretos: autorización de la protección de push, si la hubo, sin el valor del token: no hizo
@@ -460,7 +547,8 @@ resulten necesarias y antes de activar los controles requeridos.
 dura menos de 15 minutos. Una indisponibilidad general del proveedor solo se excluye con enlace
 a su incidencia pública.
 
-**Parte de pull request: completada sobre el SHA base `28c58da`** (T079, 2026-10-05). Tres
+**Parte de pull request: completada sobre `28c58da`; pendiente de repetir sobre la nueva
+base** (transición del 2026-10-06, ver la cabecera). Serie de T079 del 2026-10-05: tres
 intentos consecutivos sobre `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966`, en el pull request de
 la funcionalidad:
 
@@ -513,7 +601,8 @@ obtenerse después de integrar. Hasta entonces SC-004 sigue Pendiente.
 
 ### Pull request sobre `28c58da`: intento 1 (ejecución inicial)
 
-Ejecución inicial del evento `pull_request` tras publicar el SHA base (la misma de T071).
+Ejecución inicial del evento `pull_request` tras publicar `28c58da`, entonces SHA base (la
+misma de su T071).
 
 | Workflow | Identificador de la ejecución | Número de intento | SHA |
 |----------|-------------------------------|-------------------|-----|
@@ -674,7 +763,7 @@ Job más largo: `macos-quality`, 76 s. Los nueve concluyen en success y duran me
 
 ### Otras ejecuciones
 
-- Ejecuciones fallidas previas: ninguna sobre el SHA base ni sobre `1fd6da9` en el pull request
+- Ejecuciones fallidas previas: ninguna sobre `28c58da` ni sobre `1fd6da9` en el pull request
   de la funcionalidad. Los fallos del job `build` sobre commits anteriores constan en el registro de
   la incidencia de la prueba de humo. Las ejecuciones de los ocho pull requests negativos de
   SC-003 fallan por diseño, corresponden a otros commits y no son intentos de esta serie.
@@ -685,7 +774,11 @@ Job más largo: `macos-quality`, 76 s. Los nueve concluyen en success y duran me
 
 ## SC-005 Determinismo con y sin red
 
-**Estado**: Superado
+**Estado**: Pendiente
+
+> **Transición del 2026-10-06** (ver la cabecera): la evidencia de este apartado se obtuvo sobre
+> una base anterior, identificada en cada entrada por su hash, y se conserva. No acredita la
+> nueva base, todavía sin fijar. Pendiente de repetir sobre ella.
 
 **Entorno**: macOS arm64 de referencia con Node.js 24.21.0, tras `npm ci`.
 **Momento**: antes de integrar, sobre el SHA base.
@@ -729,7 +822,13 @@ cada una.
 
 ## SC-006 Cero secretos reales
 
-**Estado**: Superado
+**Estado**: Pendiente
+
+> **Transición del 2026-10-06** (ver la cabecera): la evidencia de este apartado se obtuvo sobre
+> una base anterior, identificada en cada entrada por su hash, y se conserva. No acredita la
+> nueva base, todavía sin fijar. La comprobación local se
+> reutiliza, porque los workflows y `.env.example` no cambian; faltan los enlaces a la nueva
+> serie de SC-004.
 
 **Entorno**: macOS arm64 de referencia y workflows del SHA base.
 **Momento**: antes de integrar, sobre el SHA base, aunque SC-001 esté Pendiente.
@@ -738,8 +837,8 @@ cada una.
 del repositorio.
 
 - SHA de la comprobación local: `1fd6da9b8e6b02405987025507443d468192bada`, base de las
-  mediciones conservadas, el 2026-10-04 en el macOS arm64 de referencia. Se reutiliza para el
-  SHA base vigente, `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966`, según la regla de la cabecera:
+  mediciones conservadas, el 2026-10-04 en el macOS arm64 de referencia. Se reutilizó para
+  `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966`, entonces SHA base, según la regla de la cabecera:
   entre ambos commits solo cambian ocho rutas documentales, y ninguno de los ficheros que esta
   comprobación ejecuta o revisa.
 - Confirmación de clon completo: clon nuevo del repositorio, distinto del de SC-002, sin
@@ -767,7 +866,9 @@ del repositorio.
     hizo de nuevo sobre esta base.
 - Contenido de las claves de `.env.example`: solo `AULANORMA_LOG_LEVEL` y
   `AULANORMA_ENVIRONMENT`, con valores de ejemplo ficticios, válidos y que no son secretos.
-- Enlaces a las ejecuciones de SC-004 sobre el SHA base vigente,
+- Enlaces a las ejecuciones de SC-004 sobre la nueva base: pendientes; se incorporan cuando
+  se repita la serie.
+- Enlaces a las ejecuciones de SC-004 sobre la base anterior,
   `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966`, con los nueve jobs en success en cada una (T079,
   2026-10-05):
   - intento 1, [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/attempts/1) y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/attempts/1);
@@ -775,7 +876,7 @@ del repositorio.
   - intento 3, [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255817/attempts/3) y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/attempts/3).
 
   Son ejecuciones de los workflows revisados: `quality.yml`, `security.yml` y `.env.example`
-  son idénticos en `1fd6da9` y en el SHA base vigente.
+  son idénticos en `1fd6da9` y en `28c58da`.
 - Enlaces de la serie anterior, sobre `1fd6da9b8e6b02405987025507443d468192bada`, con los nueve
   jobs en success en cada uno (T079, 2026-10-04):
   - intento 1, [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/attempts/1) y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/attempts/1);
@@ -797,7 +898,8 @@ con la primera ejecución satisfactoria de `main`.
 
 **Superado** si hay cero hallazgos no justificados.
 
-- SHA: `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966` (SHA base). Ejecución local del 2026-10-05 en
+- SHA: `28c58da1bcbf11df33fae5e26b77e1a8f9ea3966` (entonces SHA base). Ejecución local del
+  2026-10-05 en
   el macOS arm64 de referencia (macOS 27.0.1, arm64 nativo), con Node.js `v24.21.0` y npm
   11.19.0; caché, registros de npm y `TMPDIR` aislados fuera del clon.
   - `npm run check:secrets` se ejecutó una vez y terminó con código 0, en 1 s.
@@ -840,17 +942,18 @@ con la primera ejecución satisfactoria de `main`.
 - Enlace al job `secrets` del pull request: evidencia de integración continua de T071, distinta
   de la ejecución local:
   [secrets 111650756073](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/job/111650756073),
-  ejecución `security` 37275255796, intento 1, sobre el SHA base, con conclusión success.
+  ejecución `security` 37275255796, intento 1, sobre `28c58da`, con conclusión success.
 - Enlace al job `secrets` de la primera ejecución satisfactoria de `main`: pendiente; se obtiene
   en T083 y se registra en T087.
 
-Parte local completada sobre el SHA base `28c58da` (T076, 2026-10-05). SC-007 sigue Pendiente
-hasta la confirmación en `main`.
+Parte local completada sobre `28c58da` (T076, 2026-10-05) y pendiente de repetir sobre la
+nueva base, cuyo historial alcanzable cambia (transición del 2026-10-06, ver la cabecera).
+SC-007 sigue Pendiente hasta esa repetición y la confirmación en `main`.
 
 ### Medición anterior sobre `1fd6da9`
 
-Se conserva como evidencia de la base anterior de las mediciones; no acredita la vigente,
-cuyo historial alcanzable tiene dos commits más.
+Se conserva como evidencia de la base anterior de las mediciones; no acredita `28c58da`,
+cuyo historial alcanzable tiene dos commits más, ni la nueva base.
 
 - SHA: `1fd6da9b8e6b02405987025507443d468192bada` (entonces SHA base). Ejecución local del
   2026-10-04 en el macOS arm64 de referencia (macOS 27.0.1, arm64 nativo), con Node.js
@@ -966,7 +1069,11 @@ primer pull request posterior.
 
 ## Evidencia de FR-006 C6 y FR-009 sobre la implementación real
 
-**Estado**: Superado
+**Estado**: Pendiente
+
+> **Transición del 2026-10-06** (ver la cabecera): la evidencia de este apartado se obtuvo sobre
+> una base anterior, identificada en cada entrada por su hash, y se conserva. No acredita la
+> nueva base, todavía sin fijar. Pendiente de repetir sobre ella.
 
 No es un criterio SC adicional, pero forma parte de la aceptación de la puerta 5. Se obtiene en
 el clon de SC-002, con Node.js 24.21.0, las dependencias aprobadas, el preflight y la
