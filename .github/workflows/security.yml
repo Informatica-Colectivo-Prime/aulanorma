@@ -1,0 +1,90 @@
+# Controles de seguridad (T057; plan.md, "Diseño de la integración continua").
+# Cada job es un control requerido con su nombre estable (FR-022) y ejecuta el
+# mismo comando que en local (FR-016). Sin credenciales del proyecto: solo el
+# token efímero de lectura que usan checkout y setup-node, que nunca se pasa a
+# los comandos (FR-019 y FR-021). La ejecución semanal no cuenta como
+# actualización de main, primera ejecución satisfactoria ni intento de SC-004.
+name: security
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions: {}
+
+# Un pull request cancela sus ejecuciones anteriores. Cualquier otro evento
+# tiene un grupo propio por ejecución: una actualización de main nunca cancela
+# ni sustituye a otra.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Historial completo para analizar todos los commits alcanzables. No usa
+  # npm ci ni caché de npm: el control solo necesita Node.js y Gitleaks.
+  secrets:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      AULANORMA_LOG_LEVEL: info
+      AULANORMA_ENVIRONMENT: ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - run: npm run tools:install
+      - run: npm run check:secrets
+
+  # Publica en el resumen del job las vulnerabilidades medias y bajas.
+  dependencies:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      AULANORMA_LOG_LEVEL: info
+      AULANORMA_ENVIRONMENT: ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm run check:deps
+
+  # No usa npm ci ni caché de npm: el control solo necesita Node.js y zizmor.
+  workflows:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      AULANORMA_LOG_LEVEL: info
+      AULANORMA_ENVIRONMENT: ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - run: npm run tools:install
+      - run: npm run check:workflows

@@ -1,0 +1,403 @@
+openapi: 3.1.0
+info:
+  title: AulaNorma health check
+  version: 1.0.0
+  description: >-
+    Comprobación de estado de la aplicación mínima de AulaNorma (FR-006). "Operativa" significa
+    que el servicio arrancó con una configuración válida y responde. Con una configuración
+    inválida, el preflight termina con código 1 antes de que arranque el servidor, tanto en
+    `npm run dev` como en `npm start`, por lo que nunca se atienden peticiones. `/api/health` no
+    requiere autenticación porque es la excepción pública cerrada del principio V de la
+    constitución 1.1.0, declarada en FR-006. Su alcance son exclusivamente los métodos GET y
+    HEAD, que constituyen la consulta pública de estado. La consulta no emite ningún registro,
+    no genera identificadores y no consume datos de la petición. Es la única ruta pública del
+    servicio. Toda petición pasa antes por una frontera de transporte
+    (`x-aulanorma-transport-boundary`) que solo delega el destino crudo exacto `/api/health` con
+    GET, HEAD u OPTIONS y rechaza todo lo demás con un contrato cerrado sin cuerpo
+    (`x-aulanorma-rejection-contract`). OPTIONS es una respuesta técnica de transporte
+    (`x-aulanorma-transport-options`), no una operación de producto, y por eso no figura en
+    `paths`. Las respuestas de rechazo o de transporte no ejecutan una operación de producto, no
+    constituyen autorización y no amplían esta excepción. OpenAPI no puede expresar la ausencia
+    de cabeceras, el destino crudo, las versiones HTTP, las reglas de `Host`, el framing del
+    cuerpo ni el estado de conexión; esas reglas son normativas en las extensiones `x-` y se
+    comprueban mediante pruebas.
+servers:
+  - url: http://127.0.0.1:3000
+    description: >-
+      Ejecución local, dirección y puerto fijos (solo interfaz de bucle local). No se
+      configuran mediante el entorno.
+paths:
+  /api/health:
+    get:
+      operationId: getHealth
+      summary: Confirma que el servicio está operativo.
+      security: []
+      responses:
+        "200":
+          description: >-
+            El servicio arrancó con una configuración válida y responde. El tipo de contenido
+            es exactamente `application/json`, expresado en `content`. El conjunto de
+            cabeceras es cerrado (`x-aulanorma-allowed-headers`): cualquier cabecera no
+            declarada aquí está prohibida.
+          headers:
+            Cache-Control:
+              description: La respuesta nunca se almacena en caché.
+              required: true
+              schema:
+                type: string
+                const: no-store
+            Content-Length:
+              description: Longitud exacta en bytes del cuerpo del contrato.
+              required: true
+              schema:
+                type: string
+                pattern: "^[1-9][0-9]*$"
+            Vary:
+              description: >-
+                Opcional. Única `Vary` admitida. En el comportamiento aprobado,
+                `Accept-Encoding` solo puede provocar su presencia; la respuesta se entrega sin
+                `Content-Encoding`, que está prohibido. Refleja el comportamiento observado y
+                cerrado del entorno HTTP, no una promesa de compresión ni de variación efectiva
+                del cuerpo. Cualquier otro valor, en especial `rsc`, `next-router-state-tree`,
+                `next-router-prefetch` o `next-router-segment-prefetch`, está prohibido (FR-006
+                C2, C5 y C6).
+              required: false
+              schema:
+                type: string
+                const: Accept-Encoding
+            Date:
+              description: >-
+                Metadato de transporte: fecha de la respuesta según el protocolo. No es un
+                tiempo interno (FR-006).
+              required: false
+              schema:
+                type: string
+            Connection:
+              description: Metadato de transporte que indica si la conexión se mantiene.
+              required: false
+              schema:
+                type: string
+                enum:
+                  - keep-alive
+                  - close
+            Keep-Alive:
+              description: >-
+                Metadato de transporte admitido solo con este valor exacto y solo cuando el
+                servidor HTTP lo emite en una respuesta satisfactoria sobre una conexión
+                persistente. Anuncia el tiempo de espera de la conexión inactiva, un parámetro
+                fijo del protocolo; no es una duración de procesamiento, una métrica ni un
+                tiempo interno.
+              required: false
+              schema:
+                type: string
+                const: timeout=5
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+              example:
+                status: ok
+                version: 0.1.0
+    head:
+      operationId: headHealth
+      summary: Misma comprobación que GET, sin cuerpo.
+      security: []
+      responses:
+        "200":
+          description: >-
+            Mismas cabeceras que GET, incluido el mismo tipo de contenido
+            `application/json` y el `Content-Length` del cuerpo que tendría GET, y ningún
+            cuerpo.
+          headers:
+            Cache-Control:
+              required: true
+              schema:
+                type: string
+                const: no-store
+            Content-Length:
+              required: true
+              schema:
+                type: string
+                pattern: "^[1-9][0-9]*$"
+            Vary:
+              required: false
+              schema:
+                type: string
+                const: Accept-Encoding
+            Date:
+              required: false
+              schema:
+                type: string
+            Connection:
+              required: false
+              schema:
+                type: string
+                enum:
+                  - keep-alive
+                  - close
+            Keep-Alive:
+              required: false
+              schema:
+                type: string
+                const: timeout=5
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - version
+      properties:
+        status:
+          type: string
+          const: ok
+        version:
+          type: string
+          description: >-
+            Información pública del contrato. Procede exclusivamente del campo version
+            de package.json. SemVer básico X.Y.Z, sin versión preliminar ni metadatos
+            +…. Las versiones de dependencias no son públicas.
+          pattern: "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"
+x-aulanorma-transport-boundary:
+  description: >-
+    Frontera de transporte previa a cualquier código de la aplicación (FR-009). Decide cada
+    petición antes de delegarla y solo delega, con una única llamada, el destino crudo exacto
+    `/api/health` con GET, HEAD u OPTIONS. Puede inspeccionar exclusivamente la versión HTTP,
+    el destino crudo, el método, `Host`, `Content-Length`, `Transfer-Encoding` y `Expect`. El
+    entorno HTTP subyacente puede además procesar metadatos estrictamente protocolarios de la
+    petición atendida, como `Accept-Encoding`. Ni la frontera ni el entorno HTTP conservan,
+    persisten, registran, reflejan, incluyen en el cuerpo, entregan a la lógica de estado ni
+    usan con fines de negocio esos valores (FR-006 C2). En el comportamiento aprobado,
+    `Accept-Encoding` solo puede provocar `Vary: Accept-Encoding`; nunca `Content-Encoding`.
+  listen: 127.0.0.1:3000, fijos; sin variables de entorno ni claves nuevas.
+  precedence:
+    - version
+    - host
+    - target
+    - method
+    - body
+  version:
+    admitted:
+      - HTTP/1.0
+      - HTTP/1.1
+    parsedButNotAdmitted: 505
+    malformed: 400 cerrado de error de análisis del analizador HTTP.
+  host:
+    http11: Exactamente una cabecera `Host`, no vacía, sin comas y sin caracteres de control.
+    http10: Opcional; si existe, cumple las mismas reglas que en HTTP/1.1.
+    duplicates: Se detectan sobre las cabeceras tal como llegaron (rawHeaders), sin combinar.
+    invalid: 400
+    parserRejected: >-
+      Las entradas que el analizador HTTP rechace antes pueden recibir el 400 cerrado de
+      error de análisis.
+  target:
+    exact: /api/health
+    rule: >-
+      Comparación byte a byte del destino crudo, sin normalizar ni decodificar. Barra final,
+      barras repetidas, codificación, consulta, sufijos, forma absoluta, asterisco y rutas
+      reservadas del framework reciben 404. Nunca hay redirección.
+    otherwise: 404
+  method:
+    operation:
+      - GET
+      - HEAD
+    transport:
+      - OPTIONS
+    otherwise: 405
+  body:
+    admitted: Sin `Transfer-Encoding` y con `Content-Length` ausente o normalizado a 0.
+    rejected: Cualquier `Transfer-Encoding` o una longitud distinta de cero reciben 400.
+    parserRejected: >-
+      Las entradas malformadas pueden ser rechazadas antes por el analizador HTTP con el 400
+      cerrado. No se promete distinguir bytes que el analizador normaliza antes de entregar la
+      petición.
+  expect: >-
+    Las peticiones con `Expect` pasan por la misma frontera. Nunca se emiten respuestas
+    automáticas 100 Continue ni 417.
+  tunnels: >-
+    CONNECT y las peticiones con `Upgrade` se rechazan de forma cerrada y nunca se delegan: 404
+    si el destino no es `/api/health` y 405 si lo es.
+  connectionState:
+    description: >-
+      Estado transitorio en memoria por conexión. No se persiste, no se registra y no es estado
+      de negocio (FR-006 C4).
+    rules:
+      - Después de un rechazo no se delega ni se responde ninguna otra petición de la conexión.
+      - Un error de análisis nunca genera una segunda respuesta.
+      - Los errores de análisis se difieren mientras haya respuestas legítimas pendientes.
+      - >-
+        Después terminan en flush (400 cerrado al terminar la última respuesta pendiente) o en
+        dropped (descartado sin escribir si la conexión se cierra antes).
+      - Las respuestas de peticiones encadenadas se entregan en orden, como máximo una por petición.
+      - Expect pasa por la misma frontera, sin 100 ni 417 automáticos.
+      - CONNECT y Upgrade se rechazan de forma cerrada.
+x-aulanorma-rejection-contract:
+  description: >-
+    Contrato cerrado de todas las respuestas de rechazo emitibles. Son respuestas de rechazo:
+    no ejecutan una operación de producto, no acceden a datos, no constituyen autorización y no
+    amplían la excepción de FR-006. No contienen HTML ni la información que FR-006 prohíbe
+    revelar.
+  body: vacío
+  headers:
+    required:
+      Cache-Control: no-store
+      Content-Length: "0"
+      Connection: close
+    optional:
+      Date: Metadato de transporte.
+    onlyIn405:
+      Allow: GET, HEAD, OPTIONS
+  forbidden:
+    - Cualquier cuerpo
+    - Content-Type
+    - Vary
+    - Keep-Alive
+    - Location
+    - Refresh
+    - Cualquier cabecera de x-aulanorma-allowed-headers.forbidden
+  afterResponse: La conexión se cierra.
+  statuses:
+    "400": >-
+      Versión, `Host` o framing malformados que el analizador HTTP rechaza; `Host` inválido;
+      cuerpo no permitido.
+    "404": >-
+      Destino crudo distinto de `/api/health`, con cualquier método, incluidas `/`, las rutas
+      anidadas, las variantes codificadas y las rutas reservadas del framework (`/404`, `/500`,
+      `/_error`, `/_not-found`, `/_next/*`, `/__nextjs_*` y sufijos como `.rsc`); CONNECT o
+      Upgrade hacia otro destino.
+    "405": >-
+      Método distinto de GET, HEAD u OPTIONS sobre `/api/health`; CONNECT o Upgrade hacia
+      `/api/health`. Único estado con `Allow: GET, HEAD, OPTIONS`.
+    "500": >-
+      Fallo cerrado, con alcance exacto. (1) La API Route captura los fallos que ocurren dentro
+      de su manejador, incluida una configuración inválida, y mientras no haya iniciado una
+      respuesta emite el 500 con este contrato. (2) Si la delegación al manejador rechaza antes
+      de enviar cabeceras, el servidor emite el mismo 500 cerrado. (3) Si una respuesta ya
+      empezó, no se escribe un segundo estado: se destruye la conexión. Nunca responde "ok" y
+      nunca delega en el framework la construcción de un error de salud. Los errores internos
+      del framework anteriores a la entrada en el manejador (por ejemplo, un fallo al cargar o
+      compilar su módulo) no pueden transformarse retrospectivamente en esta respuesta y no se
+      presentan como cubiertos por ella; se mitigan con compilación, preflight y pruebas
+      negativas obligatorias antes de aceptar un commit candidato (research.md, K25).
+    "505": Versión analizada pero distinta de HTTP/1.0 y HTTP/1.1.
+x-aulanorma-transport-options:
+  description: >-
+    Respuesta técnica de transporte de la misma excepción. No es una operación de producto, no
+    figura en `paths` y no amplía la excepción de FR-006, cuyo alcance siguen siendo GET y HEAD.
+    El 204 es de solo lectura, no accede a datos de negocio ni personales, no usa persistencia
+    ni servicios externos, no cambia el estado de negocio, tiene un contrato cerrado, no revela
+    información interna y está declarado y probado: cumple por sí mismo C1 a C7 como transporte
+    de la misma excepción.
+  method: OPTIONS
+  path: /api/health
+  status: 204
+  body: vacío
+  headers:
+    required:
+      Allow: GET, HEAD, OPTIONS
+      Cache-Control: no-store
+    transport:
+      - Date
+      - Connection
+      - "Keep-Alive: timeout=5, solo sobre una conexión persistente"
+  forbidden:
+    - Cualquier cuerpo
+    - Content-Type
+    - Vary
+x-aulanorma-allowed-headers:
+  description: >-
+    Conjunto cerrado de cabeceras. Cualquier cabecera que no figure en `application` o en
+    `transport` para su respuesta está prohibida. Queda prohibida en especial cualquier
+    cabecera que revele el framework o una dependencia.
+  application:
+    get200:
+      - "Cache-Control: no-store"
+      - "Content-Type: application/json"
+      - Content-Length con la longitud exacta del cuerpo
+      - "Vary: Accept-Encoding (opcional; única Vary admitida)"
+    head200: Las mismas que get200, sin cuerpo.
+    options204: Ver x-aulanorma-transport-options.
+    rejections: Ver x-aulanorma-rejection-contract.
+  transport:
+    Date: Fecha de la respuesta según el protocolo; no es un tiempo interno.
+    Connection: keep-alive o close.
+    Keep-Alive: >-
+      Exactamente `timeout=5`, solo en respuestas satisfactorias sobre conexiones
+      persistentes. Nunca en rechazos. No se admiten métricas, duraciones de procesamiento ni
+      temporizaciones internas.
+  forbidden:
+    - Cualquier Vary distinta de Accept-Encoding, en especial rsc, next-router-state-tree, next-router-prefetch y next-router-segment-prefetch
+    - x-nextjs-*
+    - x-middleware-*
+    - ETag
+    - Server
+    - X-Powered-By
+    - Location
+    - Refresh
+    - Content-Encoding
+    - Transfer-Encoding
+x-aulanorma-constraints:
+  - Ninguna página HTML se sirve en la superficie HTTP, aunque la compilación genere páginas de error del framework.
+  - HEAD /api/health responde 200 con las mismas cabeceras que GET y sin cuerpo.
+  - OPTIONS /api/health responde 204 de transporte, sin cuerpo (x-aulanorma-transport-options).
+  - Cualquier otro método sobre /api/health responde 405 cerrado con Allow.
+  - Todo destino distinto de /api/health responde 404 cerrado, sin redirección.
+  - Ninguna respuesta contiene Location ni Refresh; el servicio no redirige.
+  - Ninguna respuesta contiene Content-Encoding; Vary Accept-Encoding no promete compresión.
+  - La consulta no emite ningún registro ni genera requestId; ningún rechazo o respuesta de transporte emite registros, en ninguno de los dos modos.
+  - Ningún dato de la petición (IP, cabeceras, User-Agent, cookies, consulta o cuerpo) se registra, se refleja ni se usa para construir la respuesta; la frontera solo inspecciona los campos de x-aulanorma-transport-boundary.
+  - Desarrollo y producción presentan el mismo contrato observable (estados, cuerpos, conjunto de cabeceras y cierres).
+  - Los cambios de configuración exigen reiniciar; no se promete recarga en caliente.
+x-aulanorma-constitutional-exception:
+  basis: Principio V de la constitución 1.1.0 y FR-006.
+  scope: >-
+    Exclusivamente GET y HEAD sobre /api/health; no se extiende a ninguna otra operación.
+    OPTIONS es una respuesta técnica de transporte de esta misma excepción y no la amplía.
+  conditions:
+    C1: Solo lectura; solo GET y HEAD ejecutan la consulta.
+    C2: >-
+      La operación de estado no accede a datos de negocio ni personales y no consume datos de
+      la petición; la frontera de transporte solo inspecciona su lista cerrada de campos, y el
+      entorno HTTP solo procesa metadatos protocolarios como Accept-Encoding; ninguno los
+      conserva, registra, refleja ni entrega a la operación.
+    C3: Sin persistencia ni servicios externos.
+    C4: >-
+      Sin cambio de estado; la consulta no emite registros ni identificadores. El estado de
+      conexión es transitorio, en memoria, no persistente y no de negocio.
+    C5: >-
+      Contrato mínimo, explícito y cerrado a status y version, con conjunto cerrado de
+      cabeceras; única Vary admitida `Accept-Encoding`; rechazos con contrato cerrado.
+    C6: >-
+      No revela configuración, entorno, rutas internas, commits, tiempos internos,
+      dependencias, infraestructura ni información sensible; sin cabeceras del framework ni
+      HTML servido.
+    C7: >-
+      Excepción declarada en la especificación y comprobada mediante pruebas que fallan si una
+      condición deja de cumplirse, si aparece una segunda ruta pública o si un punto de
+      entrada elude la frontera.
+  forbiddenInformation:
+    - Configuración.
+    - Entorno.
+    - Rutas internas.
+    - Commits.
+    - Tiempos internos, distintos de los metadatos de transporte Date, Connection y Keep-Alive timeout=5.
+    - Dependencias, incluidos identificadores de framework en cabeceras.
+    - Infraestructura.
+    - Datos de negocio.
+    - Datos personales.
+    - Datos de la petición.
+    - Secretos, credenciales y cualquier otra información sensible.
+  verification:
+    C1: tests/contract/health.contract.test.ts y scripts/smoke-test.mjs (solo GET y HEAD ejecutan la consulta; OPTIONS 204 de transporte, que cumple por sí mismo C1 a C7; 405 cerrado)
+    C2: tests/unit/platform/health.test.ts, tests/unit/platform/logging.test.ts y tests/unit/platform/http-boundary-request.test.ts (operación sin datos de la petición; frontera limitada a su lista cerrada; ningún valor de la petición, incluido Accept-Encoding, conservado, registrado, reflejado ni entregado a la operación)
+    C3: tests/architecture/import-boundaries.test.ts y tests/setup/no-network.ts
+    C4: tests/unit/platform/health.test.ts, tests/unit/platform/logging.test.ts, tests/unit/platform/http-boundary-connection.test.ts y la auditoría de registros de scripts/smoke-test.mjs (cero registros por consulta o rechazo en ambos modos; estado de conexión transitorio)
+    C5: tests/contract/health.contract.test.ts y scripts/smoke-test.mjs (cuerpo exacto, cabeceras cerradas, única Vary Accept-Encoding, sin Content-Encoding, Keep-Alive timeout=5 y contrato cerrado de rechazo)
+    C6: tests/contract/health.contract.test.ts y scripts/smoke-test.mjs (matriz negativa por TCP crudo y equivalencia entre modos; sin HTML, cabeceras del framework, redirecciones ni filtraciones)
+    C7: tests/architecture/public-routes.test.ts y tests/architecture/entry-points.test.ts (segunda ruta pública, ampliación por analogía o entrada que elude la frontera)
+    transversal:
+      - tests/unit/platform/health.test.ts
+      - tests/unit/platform/http-boundary.test.ts
+      - tests/contract/health.contract.test.ts
+      - scripts/smoke-test.mjs

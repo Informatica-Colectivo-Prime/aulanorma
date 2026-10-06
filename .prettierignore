@@ -1,0 +1,12 @@
+.next/
+coverage/
+.tools/
+package-lock.json
+next-env.d.ts
+.specify/
+.cursor/
+.claude/
+.agents/
+.opencode/
+specs/
+docs/adr/
