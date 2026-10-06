@@ -112,16 +112,19 @@ repiten en cada pull request.
   - **En la evidencia conservada**, «SHA base» designa la base vigente cuando se obtuvo cada
     resultado, identificada siempre por su hash. Ningún resultado anterior cambia de SHA ni
     de fecha.
-  - **Se repite sobre la nueva base**:
-    - T071 y la serie de tres intentos completos de SC-004, repetidas el 2026-10-06 sobre
-      `f809b03`;
+  - **Se repite sobre la nueva base**. Todo lo que sigue se completó el 2026-10-06 sobre
+    `f809b03`; el resultado y la procedencia de cada medición están en su apartado:
+    - T071 y la serie de tres intentos completos de SC-004;
     - SC-002, SC-005, y FR-006 C6 y FR-009, porque ejecutan las dependencias instaladas y
-      las dos cadenas afectadas pasan por `next` y por `vite`;
-    - la parte local de SC-003 en macOS y en Linux x64 (esta última no llegó a completarse
-      sobre `28c58da`);
+      las dos cadenas afectadas pasan por `next` y por `vite`. SC-002 y FR-006 C6/FR-009 se
+      midieron en un mismo clon; SC-005, con cinco ejecuciones con red y cinco sin red,
+      estas últimas lanzadas por el mantenedor;
+    - la parte local de SC-003 en macOS y en Linux x64. La de Linux no llegó a completarse
+      sobre `28c58da` (dos intentos fallidos) y se completó en el tercer intento, en el
+      contenedor aceptado como desviación, con datos comunicados por el operador;
     - la parte local de SC-007, porque el historial alcanzable cambia;
     - en la integración continua de SC-003, los pull requests negativos de `dependencies`,
-      `test`, `build` y `types`. El de `dependencies` altera el propio lockfile; los de
+      `test`, `build` y `types` (#15 a #18). El de `dependencies` altera el propio lockfile; los de
       `test` y `build` tienen como control objetivo Vitest y `next build`, que cargan las
       cadenas afectadas; el de `types` se repite por decisión del mantenedor (2026-10-06),
       porque sus dos fallos colaterales registrados son `build` y `test`, aunque su
@@ -150,8 +153,10 @@ repiten en cada pull request.
   código. Su evidencia se
   conserva en [Evidencia histórica](#evidencia-histórica-sobre-3101bd5-base-sustituida) y no
   acredita la nueva base.
-- **HEAD de evidencia**: todavía no existe. Será un commit posterior al SHA base que solo
-  modifique este fichero.
+- **HEAD de evidencia**: es el último commit de la rama de la funcionalidad, posterior al SHA
+  base. Entre el SHA base y él solo cambia este fichero. Un commit no puede contener su propio
+  identificador, así que el hash exacto consta en la descripción del pull request de la
+  funcionalidad, junto con el resultado de los controles automáticos sobre él.
 - **Versión de Node.js**: 24.21.0 en todas las mediciones locales.
 - **Entorno de referencia**: macOS arm64 descrito en
   [`docs/engineering/reference-environment.md`](../../docs/engineering/reference-environment.md).
