@@ -12,6 +12,11 @@ sección final.
 
 ## R1. Persistencia
 
+> **Resultado de la viabilidad (2026-10-07)**, en [feasibility.md](./feasibility.md): modo
+> WAL, transacciones, exclusión entre escritores, disparadores de solo inserción,
+> recuperación tras la caída del proceso y copia en línea, observados en Node.js 24.21.0. La
+> documentación de esa versión declara `node:sqlite` como *release candidate* (1.2).
+
 **Decisión**: una base de datos SQLite en un único fichero, con el módulo `node:sqlite`
 incluido en Node.js, en modo WAL, más un almacén de ficheros direccionado por huella SHA-256
 para los PDF y los paquetes exportados. Migraciones como ficheros SQL numerados, aplicados por
@@ -145,6 +150,15 @@ renderizado y escapado); App Router (descartado en ADR 0001); aplicación de una
 con API JSON (más código de cliente y peor accesibilidad de partida).
 
 ## R4. PDF: extracción, contenido activo y aislamiento
+
+> **Resultado de la viabilidad (2026-10-07)**, en [feasibility.md](./feasibility.md). La
+> extracción cumple. La detección de contenido activo descrita abajo **no cumple**: las
+> consultas de `pdfjs-dist` no detectan cuatro de las seis clases probadas y dan un falso
+> positivo con el documento oficial del piloto, que lleva un campo de firma digital. Se
+> propone un examen propio de los diccionarios del fichero, pendiente de decisión y de un
+> caso con flujos de objetos. El modelo de permisos de Node.js no corta la red ni las
+> variables de entorno. El texto de esta sección se conserva como se planificó hasta que el
+> mantenedor decida.
 
 Son tres problemas distintos. Resolver uno no acredita los otros.
 
@@ -295,6 +309,11 @@ renderizador garantiza que la vista previa y el paquete muestran lo mismo.
 **Alternativas consideradas**: HTML saneado con una biblioteca; Markdown.
 
 ## R8. Generación y conformidad del paquete SCORM 1.2
+
+> **Resultado de la viabilidad (2026-10-07)**, en [feasibility.md](./feasibility.md).
+> `xmllint-wasm` valida contra los esquemas de SCORM 1.2 sin red y acepta manifiestos ajenos.
+> Los esquemas no restringen `masteryscore`, así que esa regla va en la comprobación propia.
+> Quedan por decidir el origen de referencia de los esquemas y si pueden redistribuirse.
 
 **Decisión**: SCORM 1.2, un único SCO y generador propio. El manifiesto `imsmanifest.xml` se
 produce desde una plantilla con escapado, con una organización, un ítem y un recurso `sco`.

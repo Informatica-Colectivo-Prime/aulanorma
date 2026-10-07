@@ -273,7 +273,7 @@ Nada de esto bloquea los pasos 2 a 8 con el adaptador determinista.
 
 | Dato                                                                           | Tarea que bloquea                                                        |
 | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| PDF real del piloto, con referencia oficial, origen y fecha de obtención        | Fixture real, límites definitivos y resultados esperados de UF0517       |
+| Ubicación del PDF real y de sus resultados esperados (el PDF ya está obtenido y registrado) | Fixture real y resultados esperados de UF0517                            |
 | Dominio y servidor de destino                                                  | Despliegue real y copia de seguridad en el destino (paso 9)              |
 | Proveedor, modelo, moneda, precios y presupuesto real, con cuenta de API       | Adaptador real y cualquier generación de pago (paso 10)                  |
 | Instancia de Moodle de pruebas y su versión                                    | Comprobación manual y texto final de las instrucciones (paso 11)         |

@@ -31,7 +31,7 @@ requisitos, no si el sistema funciona.
 - [x] CHK013 ¿Está definido qué debe contener la confirmación de la revisión del inventario contra la sección original? [Clarity, Spec §FR-057, §SC-036]
 - [x] CHK014 ¿Están definidos los requisitos para un documento sustituto por motivos distintos de una página ilegible, o se excluyen expresamente? [Gap, Spec §FR-003, §FR-067]
 - [x] CHK015 ¿Está definido cómo se «comprueba» una referencia heredada contra la nueva fuente y quién lo hace? [Clarity, Spec §FR-067]
-- [ ] CHK016 ¿Está cuantificado el criterio para considerar una página «sin texto extraíble»? [Ambiguity, Spec §FR-064]
+- [x] CHK016 ¿Está cuantificado el criterio para considerar una página «sin texto extraíble»? [Ambiguity, Spec §FR-064]
 - [x] CHK017 ¿Está especificado qué ocurre cuando el documento no contiene la unidad formativa o la contiene en páginas no consecutivas? [Gap, Spec §Edge Cases]
 
 ## Seguridad y acceso
@@ -136,3 +136,16 @@ cierra antes de la fase de `tasks.md` que lo necesita:
 | CHK016 | Fase 4 (se fija con la fase 2)             |
 | CHK047 | Fase 4 (primera generación y saneamiento)  |
 | CHK032 | Fase 6 (generación del temario)            |
+
+## Revisión documental tras la viabilidad (2026-10-07)
+
+**CHK016 pasa a satisfecho.** FR-064 define ahora «página sin texto extraíble» como la que no
+devuelve ningún carácter distinto de espacio, sin umbral, y añade la señal de páginas con
+imágenes. Evidencia: `feasibility.md`, apartado 2.3 (página en blanco y página solo con imagen,
+0 caracteres; las 335 páginas del documento del piloto, entre 315 y 3501; ninguna con
+imágenes). La marca acredita que el criterio está definido y es verificable; no acredita que
+el texto extraído esté completo, que sigue dependiendo de la revisión humana.
+
+Siguen abiertos cinco: CHK023 y CHK026 (antes de la fase 3), CHK007 y CHK047 (antes de la
+fase 4) y CHK032 (antes de la fase 6). La tabla anterior conserva la fila de CHK016 como
+registro de cuándo debía cerrarse.

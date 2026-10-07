@@ -442,7 +442,12 @@ las instrucciones, se recorre con un alumno de prueba, se abandona, se reanuda y
 - **FR-004**: El sistema DEBE obtener el texto del documento página a página y tratarlo como
   dato no confiable: las instrucciones que contenga NO DEBEN ejecutarse.
 - **FR-064**: El sistema DEBE identificar y mostrar las páginas sin texto extraíble, y NO DEBE
-  descartarlas en silencio. La validación de la interpretación DEBE quedar bloqueada mientras
+  descartarlas en silencio. Una página es «sin texto extraíble» cuando su extracción no
+  devuelve ningún carácter distinto de espacio; no se aplica ningún umbral de caracteres. El
+  sistema DEBE señalar además las páginas que contienen imágenes, tengan texto o no, porque
+  pueden llevar contenido que no es texto. Ninguna de las dos señales acredita que el texto
+  extraído sea todo el contenido de la página: eso lo cubre la revisión del inventario contra
+  la sección original (FR-057). La validación de la interpretación DEBE quedar bloqueada mientras
   alguna de esas páginas siga sin resolver. Una página se resuelve solo cuando el revisor
   confirma expresamente que está en blanco o es ajena a la unidad formativa y que no contiene
   información necesaria para ella; la confirmación registra revisor, fecha, hora y página. Si
@@ -765,9 +770,10 @@ Esta funcionalidad los necesita; su elección técnica corresponde al plan.
   no tiene validación ni aprobaciones, ninguna referencia mezcla páginas de ambos documentos,
   ningún índice o tema anterior puede aprobarse con referencias sin comprobar y no se ha
   iniciado ninguna generación.
-- **SC-034**: El 100 % de las páginas sin texto extraíble del documento aparecen
-  identificadas; la validación se deniega mientras alguna siga sin resolver, y cada
-  resolución consultable muestra revisor, fecha, hora y página.
+- **SC-034**: El 100 % de las páginas cuya extracción no devuelve ningún carácter distinto de
+  espacio aparecen identificadas como sin texto extraíble, y el 100 % de las páginas con
+  imágenes aparecen señaladas; la validación se deniega mientras alguna página sin texto siga
+  sin resolver, y cada resolución consultable muestra revisor, fecha, hora y página.
 
 **Revisión**
 

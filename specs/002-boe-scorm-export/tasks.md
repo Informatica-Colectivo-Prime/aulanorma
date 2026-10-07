@@ -26,7 +26,7 @@ sesión, con los nueve controles en verde, y termina con algo que se puede ver o
 - La enmienda 2.0.0 y el ADR 0003 (Propuesto) están integrados en `main`.
 - La especificación, el plan, estas tareas y el ADR 0004 (Propuesto) se integran juntos, con
   la fila del ADR 0004 en el índice de `docs/adr/README.md`.
-- Los seis puntos abiertos de `checklists/pilot-readiness.md` se resuelven antes de la fase
+- Los cinco puntos abiertos de `checklists/pilot-readiness.md` se resuelven antes de la fase
   que indica la tabla "Puntos abiertos de la lista de calidad".
 - Ninguna tarea de esta lista toca `specs/001-engineering-baseline/`. La única aceptación de
   un ADR es la del 0003, en T005, con su nota en el ADR 0001; el ADR 0004 sigue Propuesto.
@@ -54,12 +54,12 @@ lógica nueva.
 **Purpose**: resolver los puntos **[por verificar]** de research.md antes de construir sobre
 ellos. Código desechable fuera de `src/`; lo que queda es el informe.
 
-- [ ] T007 Crear `scripts/fixtures/make-pdf-fixtures.mjs`, que genera los PDF sintéticos de research R4 (página solo imagen, página en blanco, cifrado, truncado, con JavaScript, con acción de apertura o de lanzamiento, con fichero incrustado, no PDF con extensión `.pdf`, por encima del tamaño y de las páginas máximas) en `tests/fixtures/pdf/synthetic/`, sin datos reales
-- [ ] T008 Comprobar con `pdfjs-dist` la extracción por página, la detección de cada tipo de contenido activo y el aislamiento en un proceso hijo con límites de tiempo, memoria y sistema de ficheros, sobre los PDF de T007 y otro PDF oficial del BOE con procedencia anotada; registrar el resultado de cada caso de la tabla de R4 en `specs/002-boe-scorm-export/feasibility.md`
-- [ ] T009 ⛔ BLOQUEADA (PDF real del piloto) Repetir T008 con el PDF real, registrar su procedencia (organismo, referencia oficial, origen, fecha de obtención, SHA-256) en `tests/fixtures/pdf/README.md` y fijar en `feasibility.md` los límites definitivos de tamaño y páginas
-- [ ] T010 [P] Comprobar `node:sqlite` en Node.js 24.21.0: modo WAL, transacciones con bloqueo de escritura, disparadores que rechazan `UPDATE` y `DELETE`, la operación `backup` y la ausencia de avisos al arrancar; anotar en `feasibility.md` su estado *release candidate* y lo observado
-- [ ] T011 [P] Comprobar `xmllint-wasm` validando un `imsmanifest.xml` contra los XSD oficiales de SCORM 1.2 sin acceso a la red, con sus importaciones resueltas en local; anotar en `feasibility.md` el resultado y las condiciones de redistribución de los XSD
-- [ ] T012 Cerrar `feasibility.md` con una decisión por punto (seguir, ajustar o cambiar de enfoque) y, si alguna decisión cambia, corregir `research.md` y el ADR 0004 mientras sigue Propuesto; si T009 sigue bloqueada, el informe se cierra con ese caso anotado como pendiente, sin resultado
+- [X] T007 Crear `scripts/fixtures/make-pdf-fixtures.mjs`, que genera los PDF sintéticos de research R4 (página solo imagen, página en blanco, cifrado, truncado, con JavaScript, con acción de apertura o de lanzamiento, con fichero incrustado, no PDF con extensión `.pdf`, por encima del tamaño y de las páginas máximas) en `tests/fixtures/pdf/synthetic/`, sin datos reales
+- [X] T008 Comprobar con `pdfjs-dist` la extracción por página, la detección de cada tipo de contenido activo y el aislamiento en un proceso hijo con límites de tiempo, memoria y sistema de ficheros, sobre los PDF de T007 y otro PDF oficial del BOE con procedencia anotada; registrar el resultado de cada caso de la tabla de R4 en `specs/002-boe-scorm-export/feasibility.md`
+- [X] T009 Repetir T008 con el PDF real, registrar su procedencia (organismo, referencia oficial, origen, fecha de obtención, SHA-256) en `specs/002-boe-scorm-export/pilot-source.md` y fijar en `feasibility.md` los límites de partida de tamaño y páginas; la procedencia no va en `tests/fixtures/pdf/`, porque `tests/architecture/no-domain-specifics.test.ts` rechaza los códigos del certificado en `tests/`
+- [X] T010 [P] Comprobar `node:sqlite` en Node.js 24.21.0: modo WAL, transacciones con bloqueo de escritura, disparadores que rechazan `UPDATE` y `DELETE`, la operación `backup` y la ausencia de avisos al arrancar; anotar en `feasibility.md` su estado *release candidate* y lo observado
+- [X] T011 [P] Comprobar `xmllint-wasm` validando un `imsmanifest.xml` contra los XSD oficiales de SCORM 1.2 sin acceso a la red, con sus importaciones resueltas en local; anotar en `feasibility.md` el resultado y las condiciones de redistribución de los XSD
+- [ ] T012 Cerrar `feasibility.md` con una decisión por punto (seguir, ajustar o cambiar de enfoque) y, si alguna decisión cambia, corregir `research.md` y el ADR 0004 mientras sigue Propuesto. **Abierta**: el informe propone una decisión por punto, pero el cambio de método de la detección de contenido activo espera la decisión del mantenedor y falta el caso con flujos de objetos
 
 **Checkpoint**: informe con resultado por caso. Ningún "aceptado" sin haberse ejecutado.
 
@@ -121,7 +121,7 @@ página de origen de varios elementos, corrige uno y valida.
 - [ ] T039 [US1] Crear las páginas `src/pages/interpretation/` (inventario con jerarquía, duración como metadato, acceso a la página de origen junto al texto extraído, corrección, validación con confirmación expresa)
 - [ ] T040 [US1] Implementar el documento sustituto (FR-067): interpretación nueva sin validación ni aprobaciones, sin mezclar páginas ni reasignar referencias, sin iniciar generación; pruebas en `tests/integration/substitute-document.test.ts`
 - [ ] T041 [US1] Escribir `tests/integration/us1-document-interpretation.test.ts` con los escenarios de aceptación 1 a 10 de la historia 1 y las denegaciones por perfil
-- [ ] T042 [US1] ⛔ BLOQUEADA (PDF real del piloto) Añadir el PDF real como fixture con su procedencia y los resultados esperados verificados de UF0517 en `tests/fixtures/pdf/pilot/`, y la prueba `tests/integration/pilot-pdf.test.ts`
+- [ ] T042 [US1] ⛔ BLOQUEADA (ubicación de los datos del piloto) Añadir el PDF real como fixture con su procedencia y los resultados esperados verificados de UF0517 en `tests/fixtures/pdf/pilot/`, y la prueba `tests/integration/pilot-pdf.test.ts`
 
 **Checkpoint**: subir un PDF y validar su interpretación desde el navegador.
 
@@ -259,14 +259,13 @@ documental antes de empezar la fase indicada.
 | CHK023 | Un criterio de éxito para el registro que no puede alterarse                   | Fase 3   |
 | CHK026 | Qué datos se consideran personales                                             | Fase 3   |
 | CHK007 | Qué ve el usuario en un conflicto de edición y cómo reenvía su cambio          | Fase 4   |
-| CHK016 | El umbral de «página sin texto extraíble», que sale de la fase 2               | Fase 4   |
 | CHK047 | Criterios de éxito propios para FR-020, FR-029, FR-055 y FR-056                | Fase 4   |
 | CHK032 | Cuándo un tema es «fallido», cuántos reintentos hay y qué ve el docente        | Fase 6   |
 
 Ninguno impide las fases 1 y 2.
 
 - **Fase 1** no depende de ninguna otra tarea. **Fase 2** puede hacerse a la vez.
-- **Fase 3** depende de la fase 1 y de T010 y T012.
+- **Fase 3** depende de la fase 1 y de T010. La parte abierta de T012 solo afecta al tratamiento del PDF y condiciona la fase 4.
 - **Fases 4 → 5 → 6 → 7** van en ese orden: cada historia usa lo aprobado en la anterior.
 - **T058** se apoya en T040 y condiciona la aprobación de T046 y T054 tras un sustituto.
 - **Fase 8**: T070 a T073 dependen de T014 a T016; T072 necesita además T050 y T066.
@@ -281,17 +280,31 @@ bloqueada.
 
 | Estado                                        | Tareas                                                                 |
 | --------------------------------------------- | ---------------------------------------------------------------------- |
-| Ejecutables, en este orden                    | T001–T008, T010–T041, T043–T073, T078, T082–T087                       |
-| Bloqueadas por el PDF real del piloto         | T009, T042                                                             |
+| Completadas                                   | T001–T011                                                              |
+| Abierta                                       | T012                                                                   |
+| Ejecutables, en este orden                    | T013–T041, T043–T073, T078, T082–T087                                  |
+| Bloqueada por la ubicación de los datos del piloto | T042, hasta decidir dónde viven el PDF real y sus resultados esperados |
 | Bloqueada por el dominio y el servidor        | T074                                                                   |
 | Bloqueadas por el proveedor de generación     | T075; y por depender de ella, T076 y T077                              |
 | Bloqueadas por el Moodle de pruebas           | T079; y por depender de ella, T080                                     |
 | Bloqueada por las tres anteriores             | T081, que depende de T074, T077 y T079                                 |
 
-De las 87 tareas, 78 son ejecutables y 9 están bloqueadas. Dos de las ejecutables quedan
-incompletas a propósito mientras haya bloqueos: T012 cierra el informe con el caso del PDF
-real anotado como pendiente, y T086 no cierra la aceptación. Ninguna evidencia de las tareas
-bloqueadas se simula: el recorrido con respuestas deterministas se registra como ensayo.
+De las 87 tareas, 11 están completadas (T001 a T011), T012 está abierta, 67 son ejecutables y
+8 están bloqueadas. T086 no cierra la aceptación mientras quede alguna bloqueada. Ninguna
+evidencia de las tareas bloqueadas se simula: el recorrido con respuestas deterministas se
+registra como ensayo.
+
+### Decisiones pendientes tras la viabilidad
+
+Salen de [feasibility.md](./feasibility.md). No son tareas de código.
+
+| Decisión                                                                  | Antes de |
+| ------------------------------------------------------------------------- | -------- |
+| Admitir el campo de firma digital y el método de detección de contenido activo | Fase 4 |
+| Caso sintético con flujos de objetos para el examen de diccionarios       | Fase 4   |
+| Ubicación del PDF real y de sus resultados esperados (T042)               | Fase 4   |
+| Origen de referencia y redistribución de los esquemas de SCORM 1.2        | Fase 7   |
+| Límite de memoria total y corte de red del proceso de análisis            | Fase 8   |
 
 ### Parallel Opportunities
 

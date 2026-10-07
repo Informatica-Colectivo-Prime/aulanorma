@@ -1,0 +1,52 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles << /Names [(note.txt) 7 0 R] >> >> >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Length 1 /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 >>
+stream
+Ä
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> /XObject << /Im1 4 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 97 >>
+stream
+BT /F1 12 Tf 72 720 Td (Synthetic fixture, page 1.) Tj 0 -18 Td (This text is extractable.) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Filespec /F (note.txt) /EF << /F 8 0 R >> >>
+endobj
+8 0 obj
+<< /Length 21 /Type /EmbeddedFile >>
+stream
+synthetic attachment
+
+endstream
+endobj
+xref
+0 9
+0000000000 65535 f 
+0000000015 00000 n 
+0000000124 00000 n 
+0000000181 00000 n 
+0000000278 00000 n 
+0000000422 00000 n 
+0000000574 00000 n 
+0000000721 00000 n 
+0000000791 00000 n 
+trailer
+<< /Size 9 /Root 1 0 R >>
+startxref
+882
+%%EOF
