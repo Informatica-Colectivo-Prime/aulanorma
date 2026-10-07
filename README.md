@@ -247,7 +247,7 @@ modos.
 - [Controles de calidad y seguridad](docs/engineering/quality-controls.md): las ocho categorías,
   los nueve controles de la integración continua y los comandos locales equivalentes.
 - [Protección de `main`](docs/engineering/branch-protection.md): la protección actual, los nueve
-  controles que se añadirán como requeridos y la secuencia de activación.
+  controles requeridos y el registro de su activación.
 - [Entorno de referencia](docs/engineering/reference-environment.md): el equipo macOS arm64 en
   el que se miden los tiempos de aceptación.
 - [Excepciones de seguridad](docs/engineering/security-exceptions.md): el registro de excepciones
@@ -257,7 +257,7 @@ modos.
 - [Política de seguridad](SECURITY.md): cómo notificar una vulnerabilidad y qué hacer si se
   expone un secreto.
 - [Decisiones arquitectónicas](docs/adr/README.md): índice y ciclo de vida de los ADR. Los dos
-  ADR de la base están en estado **Propuesto**:
+  ADR de la base están en estado **Aceptado**:
   - [ADR 0001: arquitectura, runtime y estructura modular](docs/adr/0001-architecture-runtime-and-modular-structure.md);
   - [ADR 0002: estrategia de calidad, integración continua y seguridad](docs/adr/0002-quality-ci-and-security-strategy.md).
 

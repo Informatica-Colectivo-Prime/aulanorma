@@ -27,7 +27,7 @@ repiten en cada pull request.
     `workflows`, sin hallazgos.
 
   Esa ejecución es el primer intento de la serie de SC-004 sobre el SHA base. La casilla de
-  T071 en `tasks.md` sigue sin marcar.
+  T071 en `tasks.md` se marca en el primer pull request posterior a la activación.
 - **Commits entre la base anterior y el SHA base**: `4b142285451e259146b7dc88ccb4559274fea83d`
   (solo este fichero, con la evidencia obtenida sobre `28c58da`),
   `bd740016c10a301760efef51ee7325d6c2f51ef4` (solo `package-lock.json`) y el SHA base (solo
@@ -47,7 +47,7 @@ repiten en cada pull request.
     y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37275255796/attempts/1).
 
   Esa ejecución es el primer intento de la serie de SC-004 sobre `28c58da`. La casilla
-  de T071 en `tasks.md` sigue sin marcar.
+  de T071 en `tasks.md` seguía entonces sin marcar.
 - **Base de las mediciones conservadas**: `1fd6da9b8e6b02405987025507443d468192bada`. Fue el SHA
   base hasta el cambio de alcance y es el commit sobre el que se obtuvo la evidencia técnica
   local anterior a ese cambio. Su validación de T071:
@@ -60,7 +60,7 @@ repiten en cada pull request.
     y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381).
 
   Esa ejecución fue el primer intento de la serie de SC-004 registrada en T079 sobre
-  `1fd6da9`. La casilla de T071 en `tasks.md` sigue sin marcar.
+  `1fd6da9`. La casilla de T071 en `tasks.md` seguía entonces sin marcar.
 - **Reutilización de la evidencia de `1fd6da9` en `28c58da`** (transición del 2026-10-04,
   sustituida por la del 2026-10-06 en lo que esta indica). El cambio de alcance modifica solo
   documentación normativa y de procedimiento. Las únicas rutas que cambian son, todas bajo
@@ -153,10 +153,21 @@ repiten en cada pull request.
   código. Su evidencia se
   conserva en [Evidencia histórica](#evidencia-histórica-sobre-3101bd5-base-sustituida) y no
   acredita la nueva base.
-- **HEAD de evidencia**: es el último commit de la rama de la funcionalidad, posterior al SHA
-  base. Entre el SHA base y él solo cambia este fichero. Un commit no puede contener su propio
-  identificador, así que el hash exacto consta en la descripción del pull request de la
-  funcionalidad, junto con el resultado de los controles automáticos sobre él.
+- **HEAD de evidencia previa a integrar**: `2d8c7f5cd018fb6a895b2832b1c6b9d841f63157`, último
+  commit del pull request de la funcionalidad (#3) y posterior al SHA base. Entre el SHA base
+  y él solo cambia este fichero. Sus nueve controles terminaron en success en la primera
+  ejecución; el detalle consta en la descripción de ese pull request.
+- **Integración en `main`**: `5ca3b16c10f0df943453f8e696cd521642608213`, el squash del pull request
+  #3 (2026-10-06T20:44:11Z), con padre único `c2ad0e7de2de5434cd1be7a1d4af4c5e51ce1544`. Su
+  árbol es idéntico al del HEAD de evidencia previa a integrar
+  (`969e2bcee9475458da0742fb442976e83cb56fc6`), así que contiene exactamente el contenido
+  evaluado más la evidencia. Es un commit distinto del SHA base y del HEAD de evidencia: las
+  mediciones no se reasignan a él, y solo le corresponden las ejecuciones de `main`
+  registradas en SC-004, SC-007 y SC-009.
+- **Registro posterior a la integración**: la evidencia de `main` de SC-004, SC-007 y SC-009 se
+  añade en el primer pull request posterior a la activación de los controles requeridos. Los
+  commits de ese pull request son posteriores a la integración; no son la base de aceptación
+  ni el HEAD de evidencia previa a integrar, y su identificador no consta en este fichero.
 - **Versión de Node.js**: 24.21.0 en todas las mediciones locales.
 - **Entorno de referencia**: macOS arm64 descrito en
   [`docs/engineering/reference-environment.md`](../../docs/engineering/reference-environment.md).
@@ -777,7 +788,7 @@ reutilizan. Estos pull requests no forman parte de la serie de SC-004.
 
 ## SC-004 Activación y duración de los controles
 
-**Estado**: Pendiente
+**Estado**: Superado
 
 **Entorno**: runners `ubuntu-24.04` (Linux x64) y `macos-26` (arm64), con Node.js 24.21.0 desde
 `.node-version`.
@@ -867,8 +878,16 @@ Serie registrada en T079 (2026-10-04): tres intentos consecutivos sobre
 - En los tres intentos, `test` terminó con 840 pruebas superadas y `build` y `macos-quality`
   con "Prueba de humo superada: 21 casos.", sin líneas de diagnóstico.
 
-**Parte de `main`: pendiente**. La primera ejecución satisfactoria de `main` solo puede
-obtenerse después de integrar. Hasta entonces SC-004 sigue Pendiente.
+**Parte de `main`: completada** (T083, 2026-10-06). La primera ejecución de `quality` y
+`security` disparada por la actualización de `main` terminó con los nueve jobs en success
+sobre `5ca3b16c10f0df943453f8e696cd521642608213`, el commit de la integración. Fue la
+primera ejecución en `main` y no hubo integraciones correctivas. El detalle está en
+«`main`: primera ejecución satisfactoria».
+
+**Los cuatro casos computables** (los tres intentos de pull request sobre el SHA base y la
+primera ejecución satisfactoria de `main`) suman 36 jobs, todos en success y todos por debajo
+de 15 minutos; el más largo duró 134 s. Ninguna ejecución se excluye por indisponibilidad del
+proveedor.
 
 ### Pull request sobre `f809b03`: intento 1 (ejecución inicial)
 
@@ -1088,20 +1107,37 @@ Job más largo: `macos-quality`, 76 s. Los nueve concluyen en success y duran me
 
 | Workflow | Identificador de la ejecución | Número de intento | SHA |
 |----------|-------------------------------|-------------------|-----|
-| `quality` | | | |
-| `security` | | | |
+| `quality` | [37528698987](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37528698987/attempts/1) | 1 | `5ca3b16c10f0df943453f8e696cd521642608213` |
+| `security` | [37528698946](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37528698946/attempts/1) | 1 | `5ca3b16c10f0df943453f8e696cd521642608213` |
 
 | Job | `started_at` | `completed_at` | Duración | Conclusión |
 |-----|--------------|----------------|----------|------------|
-| `format` | | | | |
-| `lint` | | | | |
-| `types` | | | | |
-| `test` | | | | |
-| `build` | | | | |
-| `macos-quality` | | | | |
-| `secrets` | | | | |
-| `dependencies` | | | | |
-| `workflows` | | | | |
+| [`format`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37528698987/job/112492205540) | 2026-10-06T20:44:36Z | 2026-10-06T20:44:57Z | 21 s | success |
+| [`lint`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37528698987/job/112492205356) | 2026-10-06T20:44:17Z | 2026-10-06T20:44:39Z | 22 s | success |
+| [`types`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37528698987/job/112492205503) | 2026-10-06T20:44:16Z | 2026-10-06T20:44:34Z | 18 s | success |
+| [`test`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37528698987/job/112492205513) | 2026-10-06T20:44:17Z | 2026-10-06T20:44:46Z | 29 s | success |
+| [`build`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37528698987/job/112492205636) | 2026-10-06T20:44:18Z | 2026-10-06T20:45:05Z | 47 s | success |
+| [`macos-quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37528698987/job/112492205647) | 2026-10-06T20:44:23Z | 2026-10-06T20:46:26Z | 123 s | success |
+| [`secrets`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37528698946/job/112492206388) | 2026-10-06T20:44:17Z | 2026-10-06T20:44:26Z | 9 s | success |
+| [`dependencies`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37528698946/job/112492206035) | 2026-10-06T20:44:16Z | 2026-10-06T20:45:20Z | 64 s | success |
+| [`workflows`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37528698946/job/112492206368) | 2026-10-06T20:44:17Z | 2026-10-06T20:44:23Z | 6 s | success |
+
+- Evento `push` a `main`, intento 1, sin relanzamientos. Los dos workflows corresponden al
+  mismo SHA.
+- **Commit realmente analizado**: `5ca3b16c10f0df943453f8e696cd521642608213` directamente, no un
+  merge provisional; comprobado en el registro de los nueve jobs. No es el SHA base
+  (`f809b03`) ni el HEAD de evidencia previa a integrar (`2d8c7f5`), aunque su árbol es
+  idéntico al de este último.
+- Los nueve jobs son de la aplicación GitHub Actions y ninguno tiene pasos omitidos. Job más
+  largo: `macos-quality`, 123 s. La ejecución terminó a las 2026-10-06T20:46:26Z (`security`,
+  a las 20:45:22Z).
+- Registros: `test` y `macos-quality`, 18 ficheros y 840 pruebas superadas de 840; `build` y
+  `macos-quality`, "Prueba de humo superada: 21 casos.", sin el aviso de sistema de ficheros
+  lento; `dependencies`, 221 dependencias auditadas, ninguna vulnerabilidad alta o crítica sin
+  excepción y firmas y atestaciones verificadas; `secrets`, 0 excepciones vigentes y sin
+  hallazgos; `workflows`, 2 workflows analizados sin hallazgos.
+- En ese commit constan además comprobaciones de Dependabot, que no son controles de esta
+  funcionalidad ni se cuentan aquí.
 
 ### Otras ejecuciones
 
@@ -1110,7 +1146,7 @@ Job más largo: `macos-quality`, 76 s. Los nueve concluyen en success y duran me
   la incidencia de la prueba de humo. Las ejecuciones de los ocho pull requests negativos de
   SC-003 fallan por diseño, corresponden a otros commits y no son intentos de esta serie.
 - Ejecuciones canceladas por `concurrency`: ninguna en las tres series.
-- Pull requests correctivos: ninguno todavía; solo se aplican a `main`, después de integrar.
+- Pull requests correctivos: ninguno. La primera ejecución de `main` fue satisfactoria.
 
 ---
 
@@ -1275,14 +1311,14 @@ del repositorio.
   - intento 2, [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/attempts/2) y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/attempts/2);
   - intento 3, [`quality`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028387/attempts/3) y [`security`](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37180028381/attempts/3).
 
-  La primera ejecución satisfactoria de `main` pertenece a SC-004 y sigue pendiente; no es un
-  requisito de este criterio, que se evalúa antes de integrar.
+  La primera ejecución satisfactoria de `main` pertenece a SC-004, donde consta; no es un
+  requisito de este criterio, que se evaluó antes de integrar.
 
 ---
 
 ## SC-007 Historial sin secretos
 
-**Estado**: Pendiente
+**Estado**: Superado
 
 **Entorno**: macOS arm64 de referencia con Node.js 24.21.0 y job `secrets` en `ubuntu-24.04`.
 **Momento**: antes de integrar, sobre el SHA base, aunque SC-001 esté Pendiente, y confirmación
@@ -1334,11 +1370,22 @@ con la primera ejecución satisfactoria de `main`.
   de la ejecución local:
   [secrets 112130779136](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37421218270/job/112130779136),
   ejecución `security` 37421218270, intento 1, sobre el SHA base, con conclusión success.
-- Enlace al job `secrets` de la primera ejecución satisfactoria de `main`: pendiente; se obtiene
-  en T083 y se registra en T087.
+- Enlace al job `secrets` de la primera ejecución satisfactoria de `main`:
+  [secrets 112492206388](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37528698946/job/112492206388),
+  ejecución `security` 37528698946, evento `push`, intento 1, sobre
+  `5ca3b16c10f0df943453f8e696cd521642608213`, con conclusión success en 9 s.
+  - Su registro muestra "Excepciones de secretos vigentes: 0." y "check:secrets: sin hallazgos
+    no exceptuados.".
+  - El registro no imprime cuántos commits examinó Gitleaks, así que aquí no se registra
+    ninguna cifra. El envoltorio falla si ese número no está entre 1 y los commits
+    alcanzables, y el job terminó con éxito.
+  - El historial que analiza es el de `main`, distinto del de la rama de la funcionalidad:
+    la integración fue un squash, y los commits de la rama no son alcanzables desde `main`.
+    Los 38 commits de la medición local corresponden al SHA base, no a `main`.
 
-Parte local completada sobre el SHA base `f809b03` (T076, 2026-10-06). SC-007 sigue Pendiente
-hasta la confirmación en `main`.
+Parte local completada sobre el SHA base `f809b03` (T076, 2026-10-06) y confirmación en
+`main` obtenida en la primera ejecución satisfactoria (T083, 2026-10-06), las dos sin
+hallazgos.
 
 ### Medición anterior sobre `28c58da`
 
@@ -1495,16 +1542,55 @@ SC-001. Hasta entonces SC-008 queda Pendiente y sin evidencia, y no bloquea la i
 congelación termina al quedar activados los nueve controles; la evidencia se registra en el
 primer pull request posterior.
 
-- SHA de la primera ejecución satisfactoria:
-- Fecha y hora final de la primera ejecución satisfactoria:
-- Fecha y hora de activación (y `updated_at` si es un ruleset):
+- SHA de la primera ejecución satisfactoria: `5ca3b16c10f0df943453f8e696cd521642608213`.
+- Fecha y hora final de la primera ejecución satisfactoria: 2026-10-06T20:46:26Z. Es el inicio
+  de la congelación.
+- Fecha y hora de activación (y `updated_at` si es un ruleset): 2026-10-06T20:51:36Z, hora en
+  la que se releyó la protección desde la API justo después de aplicarla (T084). Es el fin
+  de la congelación. La regla es una regla clásica de protección de rama, no un ruleset.
 - Enlace a esa ejecución:
+  [`quality` 37528698987](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37528698987)
+  y
+  [`security` 37528698946](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37528698946).
 - Extracto de la respuesta que muestra los nueve nombres exactos como requeridos, sin actores
-  con permiso de elusión y con los administradores sujetos a la regla:
+  con permiso de elusión y con los administradores sujetos a la regla. Resultado de la
+  consulta de verificación de `docs/engineering/branch-protection.md`:
+
+  ```json
+  {"bypass":null,"checks":[{"app_id":15368,"context":"format"},{"app_id":15368,"context":"lint"},
+  {"app_id":15368,"context":"types"},{"app_id":15368,"context":"test"},
+  {"app_id":15368,"context":"build"},{"app_id":15368,"context":"macos-quality"},
+  {"app_id":15368,"context":"secrets"},{"app_id":15368,"context":"dependencies"},
+  {"app_id":15368,"context":"workflows"}],"enforce_admins":true,"force_pushes":false,"strict":true}
+  ```
+
+  - El identificador 15368 es el de la aplicación GitHub Actions, el mismo que informó los
+    nueve controles en la primera ejecución satisfactoria.
+  - El resto de la regla no cambió: comparadas campo a campo, la configuración anterior y la
+    posterior son idénticas salvo el bloque de controles requeridos. Siguen el pull request
+    obligatorio con 0 aprobaciones, el historial lineal, la resolución de conversaciones y
+    la prohibición de borrar la rama; no hay restricciones de push ni rulesets.
+  - No se añadieron controles de Dependabot ni excepciones.
 - Lista de commits de `main` que demuestra que no hubo integraciones desde esa primera ejecución
-  satisfactoria hasta la activación:
+  satisfactoria hasta la activación. Salida de
+  `git log --first-parent --format='%H %cI %s' origin/main` después de la activación, en sus
+  dos primeras líneas:
+
+  ```text
+  5ca3b16c10f0df943453f8e696cd521642608213 2026-10-06T22:44:10+02:00 feat: establish engineering baseline (#3)
+  c2ad0e7de2de5434cd1be7a1d4af4c5e51ce1544 2026-09-26T10:42:54+02:00 docs: amend constitution to v1.1.0 (#2)
+  ```
+
+  El commit más reciente es el de la integración, anterior al inicio de la congelación.
+  Ningún pull request se integró entre las 20:46:26Z y las 20:51:36Z.
 - Integraciones correctivas anteriores, registradas como antecedentes y no como excepciones a
-  la congelación:
+  la congelación: ninguna.
+- Al recibir `main` su configuración, Dependabot abrió cuatro pull requests (#19 a #22). No
+  se integró ninguno durante la congelación.
+
+Activación completada y verificada. **SC-009 sigue Pendiente** hasta comprobar en el primer
+pull request posterior a la activación (T089) que los nueve controles aparecen como
+requeridos y que la integración queda bloqueada mientras no estén en verde.
 
 ---
 

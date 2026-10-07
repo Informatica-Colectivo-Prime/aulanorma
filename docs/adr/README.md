@@ -23,11 +23,12 @@ Cada ADR sigue el ciclo **Propuesto → Aceptado → Sustituido**.
 - **Sustituido**: la decisión ya no rige. El ADR permanece en el registro para
   trazabilidad.
 
-Los ADR 0001 y 0002 permanecen **Propuesto** durante todo el pull request de
-implementación de `001-engineering-baseline`. Se cambian a **Aceptado**, junto con este
+Los ADR 0001 y 0002 permanecieron **Propuesto** durante todo el pull request de
+implementación de `001-engineering-baseline`. Pasan a **Aceptado**, junto con este
 índice, en el primer pull request posterior a la integración y a la activación de los
-nueve controles requeridos. Ese pull request contiene también el registro de activación y
-la evidencia posterior.
+nueve controles requeridos, ambas del 2026-10-06. Ese pull request contiene también el
+registro de activación y la evidencia posterior. Desde su aceptación no se reescriben para
+cambiar el sentido de la decisión.
 
 ## Formato
 
@@ -39,5 +40,5 @@ consideradas** y **Consecuencias**.
 
 | ADR | Título | Estado |
 |-----|--------|--------|
-| [0001](./0001-architecture-runtime-and-modular-structure.md) | Arquitectura, runtime y estructura modular | Propuesto |
-| [0002](./0002-quality-ci-and-security-strategy.md) | Estrategia de calidad, integración continua y seguridad | Propuesto |
+| [0001](./0001-architecture-runtime-and-modular-structure.md) | Arquitectura, runtime y estructura modular | Aceptado |
+| [0002](./0002-quality-ci-and-security-strategy.md) | Estrategia de calidad, integración continua y seguridad | Aceptado |
