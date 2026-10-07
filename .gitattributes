@@ -1,0 +1,3 @@
+# Los PDF de prueba son binarios: sus tablas de referencias exigen espacios
+# finales que no deben tratarse como texto.
+*.pdf binary
