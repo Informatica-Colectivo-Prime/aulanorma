@@ -209,6 +209,9 @@ export interface StructuredInterpretation {
   // `true` si el documento de la interpretación tiene un sustituto: la
   // interpretación es histórico y ya no se corrige ni se valida.
   isHistorical(id: string): boolean;
+  // Momento en que se registró el primer sustituto de su documento; `null`
+  // si no tiene ninguno.
+  historicalSince(id: string): number | null;
   editRequirement(
     input: Target & {
       readonly requirementId: string;
@@ -930,6 +933,15 @@ export function createStructuredInterpretation({
         current !== undefined &&
         source.substitutesOf(current.documentId).length > 0
       );
+    },
+
+    historicalSince(id) {
+      const current = get(id);
+      const substitutes =
+        current === undefined ? [] : source.substitutesOf(current.documentId);
+      return substitutes.length === 0
+        ? null
+        : Math.min(...substitutes.map((item) => item.registeredAt));
     },
 
     editRequirement(input) {

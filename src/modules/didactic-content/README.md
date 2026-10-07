@@ -18,8 +18,18 @@ Contiene el **índice del temario** (historia 2 de `specs/002-boe-scorm-export`)
 - la aprobación, que exige cobertura completa, y el rechazo, con motivo obligatorio;
 - la vigencia derivada de cada aprobación.
 
-Todavía no contiene los temas, sus aprobaciones ni la versión del temario. No hay datos de
-ningún certificado: el código de la unidad es un dato.
+Y el **temario** (historia 3):
+
+- el contenido estructurado de un tema y su renderizador, que escapa todo el texto
+  (`render/`);
+- la generación tema a tema, con temas fallidos, sin reintentos automáticos y con reanudación
+  explícita (`syllabus.ts`);
+- la edición de bloques con control de revisión, y la aprobación y el rechazo de cada tema;
+- el desarrollo de cada requisito: su cita y, además, contenido que lo desarrolle;
+- la aprobación de una versión, con su instantánea inmutable;
+- la comprobación de referencias heredadas tras un documento sustituto (`references.ts`).
+
+No hay datos de ningún certificado: el código de la unidad es un dato.
 
 ## Dependencias permitidas
 

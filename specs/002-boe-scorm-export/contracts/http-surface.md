@@ -42,7 +42,7 @@ operación, quién puede ejecutarla y sus condiciones.
 - **Cuerpos**: tamaño máximo por operación, aplicado en la frontera.
 - **Sin borrado**: no existe ninguna operación `DELETE`.
 
-## Rutas implementadas (cimientos e historias 1 y 2)
+## Rutas implementadas (cimientos e historias 1 a 3)
 
 | Destino                 | Métodos                  | Operación                                 |
 | ----------------------- | ------------------------ | ----------------------------------------- |
@@ -78,6 +78,20 @@ operación, quién puede ejecutarla y sus condiciones.
 | `/api/outlines/approve` | `POST`                   | Aprobar índice                            |
 | `/api/outlines/reject`  | `POST`                   | Rechazar índice                           |
 | `/api/outlines/resubmit` | `POST`                  | Devolver a revisión uno rechazado         |
+| `/syllabus/:id`         | `GET`                    | Ver el temario de un índice               |
+| `/api/syllabus/generate` | `POST`                  | Lanzar o reanudar la generación           |
+| `/api/syllabus/approve` | `POST`                   | Aprobar versión del temario               |
+| `/topics/:id`           | `GET`                    | Ver un tema junto a su fuente normativa   |
+| `/topics/:id/blocks/new` | `GET`                   | Ver el formulario de un bloque nuevo      |
+| `/topics/:id/blocks/:id` | `GET`                   | Ver el formulario de un bloque            |
+| `/api/topics/edit`      | `POST`                   | Editar tema                               |
+| `/api/topics/approve`   | `POST`                   | Aprobar tema                              |
+| `/api/topics/reject`    | `POST`                   | Rechazar tema                             |
+| `/api/topics/resubmit`  | `POST`                   | Devolver a revisión uno rechazado         |
+| `/api/references/check` | `POST`                   | Comprobar referencia heredada             |
+| `/budget`               | `GET`                    | Consultar presupuesto                     |
+| `/api/budget/limit`     | `POST`                   | Modificar límite de coste                 |
+| `/api/budget/reconcile` | `POST`                   | Conciliar una operación incierta          |
 
 Las demás operaciones de la tabla siguiente todavía no existen. Los destinos son exactos: no
 admiten parámetros de consulta ni barra final. `:id` es un identificador opaco de 32 cifras
@@ -113,6 +127,15 @@ interpretación muestra esas cifras para el índice, y su solicitud las lleva co
 regla. Estimación, reserva máxima y consumo confirmado se muestran por separado; con el
 adaptador determinista son cero y figuran como coste simulado.
 
+**Temario (fase 6)**. `/syllabus/:id` usa el identificador del índice. Lanzar la generación,
+reanudarla y pedir otro intento de un tema fallido son la misma acción, que lleva las cifras
+mostradas. La generación se ejecuta dentro de la petición y responde con una redirección y el
+recuento de temas terminados, fallidos y no enviados. Aprobar la versión lleva una huella del
+estado mostrado: si el temario cambió, 409; si falta algo, 422 con los temas y los requisitos
+pendientes, cada uno con su referencia normativa. Consultar el presupuesto admite el perfil
+`teacher` o el `admin`; modificar el límite y conciliar, solo `admin`. Las cantidades se
+escriben en unidades de la moneda, con seis decimales como máximo.
+
 Cada acción admite un cuerpo máximo: 4 KiB los formularios simples, 64 KiB los que llevan el
 texto de un requisito o un motivo, y 64 MiB la subida, sobre la que la ruta aplica además el
 tamaño máximo configurado.
@@ -145,7 +168,7 @@ tamaño máximo configurado.
 | Exportar                                     | `teacher`         | Versión vigente; cobertura completa en ese momento                 | FR-030, FR-031, FR-037     |
 | Descargar paquete e instrucciones            | `teacher`         | Versión vigente en el momento de cada descarga                     | FR-035, FR-040, FR-062     |
 | Consultar historial y registros              | `teacher`, `admin` | —                                                                 | FR-028, FR-039             |
-| Consultar presupuesto                        | `teacher`         | —                                                                  | FR-027                     |
+| Consultar presupuesto                        | `teacher`, `admin` | —                                                                 | FR-027                     |
 | Modificar límite de coste                    | `admin`           | Registra valor anterior y nuevo; no inicia nada                    | FR-027, FR-028, FR-066     |
 | Conciliar una operación incierta             | `admin`           | Registra actor, fecha e importe confirmado                         | FR-021, FR-028             |
 

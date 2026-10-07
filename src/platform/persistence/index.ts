@@ -132,7 +132,7 @@ export function migrate(
 // que la consulta: `audit_event`, a `audit`; las de `0002`, a `identity`; las
 // de `0003`, a la capa `normative-source`; las de `0004`, a
 // `structured-interpretation`; las de `0005` y `0006`, a `generation`; y las
-// de `0007`, a la capa `didactic-content`.
+// de `0007` y `0008`, a la capa `didactic-content`.
 
 const AUDIT_EVENT = `
 CREATE TABLE audit_event (
@@ -504,6 +504,107 @@ ${appendOnly("outline_approval", "id = NEW.id")}
 ${appendOnly("rejection", "id = NEW.id")}
 `;
 
+// Temario (data-model.md, «Contenido didáctico»). Un tema por entrada del
+// índice, con bloques de requisito y de desarrollo. Los temas y sus bloques se
+// editan con control de revisión y no se borran: un bloque quitado queda
+// marcado. Cambios, aprobaciones, versiones y comprobaciones de referencias
+// solo se insertan. Un bloque de requisito cita exactamente un requisito, y
+// la versión guarda una instantánea inmutable con su huella.
+const SYLLABUS = `
+CREATE TABLE topic (
+  id TEXT PRIMARY KEY,
+  outline_entry_id TEXT NOT NULL UNIQUE REFERENCES outline_entry (id),
+  status TEXT NOT NULL CHECK (
+    status IN ('pending', 'failed', 'draft', 'in_review', 'approved', 'rejected')
+  ),
+  revision INTEGER NOT NULL CHECK (revision >= 1),
+  failure TEXT CHECK (
+    failure IS NULL OR failure IN
+      ('provider_error', 'invalid_output', 'rejected_by_domain', 'uncertain')
+  ),
+  last_call_id TEXT,
+  created_at INTEGER NOT NULL,
+  CHECK ((status = 'failed') = (failure IS NOT NULL))
+) STRICT;
+CREATE TRIGGER topic_no_delete BEFORE DELETE ON topic
+BEGIN SELECT RAISE(ABORT, 'topic cannot be deleted'); END;
+CREATE TABLE topic_block (
+  id TEXT PRIMARY KEY,
+  topic_id TEXT NOT NULL REFERENCES topic (id),
+  position INTEGER NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('requirement', 'development')),
+  body TEXT NOT NULL,
+  removed INTEGER NOT NULL CHECK (removed IN (0, 1))
+) STRICT;
+CREATE INDEX topic_block_topic ON topic_block (topic_id);
+CREATE TRIGGER topic_block_no_delete BEFORE DELETE ON topic_block
+BEGIN SELECT RAISE(ABORT, 'topic_block cannot be deleted'); END;
+CREATE TRIGGER topic_block_kind BEFORE UPDATE ON topic_block
+WHEN NEW.kind <> OLD.kind OR NEW.topic_id <> OLD.topic_id
+BEGIN SELECT RAISE(ABORT, 'topic_block kind cannot change'); END;
+CREATE TABLE block_requirement (
+  topic_block_id TEXT NOT NULL REFERENCES topic_block (id),
+  requirement_id TEXT NOT NULL,
+  PRIMARY KEY (topic_block_id, requirement_id)
+) STRICT;
+CREATE TRIGGER block_requirement_single BEFORE INSERT ON block_requirement
+WHEN EXISTS (
+  SELECT 1 FROM topic_block WHERE id = NEW.topic_block_id AND kind = 'requirement'
+) AND EXISTS (
+  SELECT 1 FROM block_requirement WHERE topic_block_id = NEW.topic_block_id
+)
+BEGIN SELECT RAISE(ABORT, 'a requirement block cites exactly one requirement'); END;
+CREATE TABLE topic_change (
+  id TEXT PRIMARY KEY,
+  topic_id TEXT NOT NULL REFERENCES topic (id),
+  block_id TEXT REFERENCES topic_block (id),
+  kind TEXT NOT NULL CHECK (kind IN ('generate', 'add', 'edit', 'move', 'remove')),
+  author TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  before TEXT NOT NULL,
+  after TEXT NOT NULL,
+  resulting_revision INTEGER NOT NULL
+) STRICT;
+CREATE TABLE topic_approval (
+  id TEXT PRIMARY KEY,
+  topic_id TEXT NOT NULL REFERENCES topic (id),
+  topic_revision INTEGER NOT NULL,
+  outline_approval_id TEXT NOT NULL REFERENCES outline_approval (id),
+  approved_by TEXT NOT NULL,
+  approved_at INTEGER NOT NULL
+) STRICT;
+CREATE TABLE syllabus_version (
+  id TEXT PRIMARY KEY,
+  outline_id TEXT NOT NULL REFERENCES outline (id),
+  outline_approval_id TEXT NOT NULL REFERENCES outline_approval (id),
+  label TEXT NOT NULL,
+  content_sha256 TEXT NOT NULL CHECK (length(content_sha256) = 64),
+  snapshot TEXT NOT NULL,
+  approved_by TEXT NOT NULL,
+  approved_at INTEGER NOT NULL,
+  UNIQUE (outline_id, label)
+) STRICT;
+CREATE TABLE syllabus_version_topic (
+  syllabus_version_id TEXT NOT NULL REFERENCES syllabus_version (id),
+  topic_approval_id TEXT NOT NULL REFERENCES topic_approval (id),
+  PRIMARY KEY (syllabus_version_id, topic_approval_id)
+) STRICT;
+CREATE TABLE reference_check (
+  id TEXT PRIMARY KEY,
+  target_kind TEXT NOT NULL CHECK (target_kind IN ('outline', 'topic')),
+  target_id TEXT NOT NULL,
+  requirement_id TEXT NOT NULL,
+  checked_by TEXT NOT NULL,
+  checked_at INTEGER NOT NULL,
+  UNIQUE (target_kind, target_id, requirement_id)
+) STRICT;
+${appendOnly("topic_change", "id = NEW.id")}
+${appendOnly("topic_approval", "id = NEW.id")}
+${appendOnly("syllabus_version", "id = NEW.id OR (outline_id = NEW.outline_id AND label = NEW.label)")}
+${appendOnly("syllabus_version_topic", "syllabus_version_id = NEW.syllabus_version_id AND topic_approval_id = NEW.topic_approval_id")}
+${appendOnly("reference_check", "id = NEW.id OR (target_kind = NEW.target_kind AND target_id = NEW.target_id AND requirement_id = NEW.requirement_id)")}
+`;
+
 export const PLATFORM_MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ id: "0001_audit_event", sql: AUDIT_EVENT }),
   Object.freeze({ id: "0002_identity", sql: IDENTITY }),
@@ -515,6 +616,7 @@ export const PLATFORM_MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ id: "0005_generation", sql: GENERATION }),
   Object.freeze({ id: "0006_budget", sql: BUDGET }),
   Object.freeze({ id: "0007_outline", sql: OUTLINE }),
+  Object.freeze({ id: "0008_syllabus", sql: SYLLABUS }),
 ]);
 
 // --- Almacén de ficheros direccionado por huella ---

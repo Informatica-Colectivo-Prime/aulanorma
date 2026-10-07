@@ -99,6 +99,24 @@ Comprobado desde el navegador el 2026-10-07 con el PDF real: 4 entradas, 71 de 7
 cubiertos; al quitar la entrada de la segunda capacidad, 62 de 71 y la aprobación bloqueada
 con sus 9 pendientes. Ver [../us2-check.md](../us2-check.md).
 
+## Las respuestas de ensayo de los temas
+
+`topic-recording-1.json` a `topic-recording-4.json` son las respuestas que el adaptador
+determinista da al desarrollo de cada entrada de la propuesta de índice anterior, sin editar.
+
+- **No son contenido didáctico ni la salida de ningún modelo.** Cada una cita los requisitos
+  de su entrada y añade un único bloque de desarrollo, vinculado a todos ellos, con un texto
+  de relleno que dice expresamente que lo es.
+- Sirven para **ensayar** la separación entre norma y desarrollo, los vínculos, las
+  aprobaciones y la invalidación. No acreditan que ningún requisito esté desarrollado de
+  verdad, ni la calidad pedagógica de nada.
+- Dependen del inventario y del índice exactos: con una interpretación corregida o una
+  entrada cambiada, el tema no tiene respuesta y queda como fallido.
+
+Comprobado desde el navegador el 2026-10-07 con el PDF real: cuatro temas, 71 de 71
+requisitos citados y vinculados a un bloque de desarrollo. Ver
+[../us3-check.md](../us3-check.md).
+
 **La interpretación del piloto sigue pendiente de la revisión del mantenedor.** Las
 validaciones y aprobaciones de esos ensayos se hicieron con cuentas y datos desechables, que
 no se conservan: no son la validación ni la aprobación de ninguna persona.

@@ -91,6 +91,11 @@ export const ROUTES: readonly Route[] = Object.freeze([
   page("/outlines/:id/preview"),
   page("/outlines/:id/entries/new"),
   page("/outlines/:id/entries/:id"),
+  page("/syllabus/:id"),
+  page("/topics/:id"),
+  page("/topics/:id/blocks/new"),
+  page("/topics/:id/blocks/:id"),
+  page("/budget"),
   action("/api/documents/upload", UPLOAD_BODY),
   action("/api/documents/resolve-page", FORM_BODY),
   action("/api/interpretations/request", FORM_BODY),
@@ -103,6 +108,15 @@ export const ROUTES: readonly Route[] = Object.freeze([
   action("/api/outlines/approve", FORM_BODY),
   action("/api/outlines/reject", TEXT_FORM_BODY),
   action("/api/outlines/resubmit", FORM_BODY),
+  action("/api/syllabus/generate", FORM_BODY),
+  action("/api/syllabus/approve", FORM_BODY),
+  action("/api/topics/edit", TEXT_FORM_BODY),
+  action("/api/topics/approve", FORM_BODY),
+  action("/api/topics/reject", TEXT_FORM_BODY),
+  action("/api/topics/resubmit", FORM_BODY),
+  action("/api/references/check", FORM_BODY),
+  action("/api/budget/limit", FORM_BODY),
+  action("/api/budget/reconcile", TEXT_FORM_BODY),
 ]);
 
 const SEGMENTS: Readonly<Record<string, string>> = {

@@ -3,8 +3,13 @@
 // una unidad sintética, ya validada, y un proveedor simulado que responde a
 // la tarea `outline` con lo que cada prueba indique. No hay documento real,
 // red ni proveedor.
-import { createOutlines } from "@/modules/didactic-content";
-import type { OutlineOutput, Outlines } from "@/modules/didactic-content";
+import { createOutlines, createSyllabus } from "@/modules/didactic-content";
+import type {
+  OutlineOutput,
+  Outlines,
+  Syllabus,
+  TopicOutput,
+} from "@/modules/didactic-content";
 import type { NormativeSource } from "@/modules/normative-source";
 import { createStructuredInterpretation } from "@/modules/structured-interpretation";
 import type {
@@ -18,6 +23,7 @@ import { createBudget, createGeneration } from "@/platform/generation";
 import type {
   Budget,
   Generation,
+  ProviderReply,
   ProviderRequest,
 } from "@/platform/generation";
 import {
@@ -97,7 +103,46 @@ export function proposal(
   };
 }
 
+// Desarrollo completo de un tema: cita cada requisito recibido y los
+// desarrolla todos en un bloque. Sin requisitos, un desarrollo sin respaldo.
+export function topicOutput(request: ProviderRequest): TopicOutput {
+  const { entryTitle, requirements } = request.input as {
+    entryTitle: string;
+    requirements: { ref: string }[];
+  };
+  const refs = requirements.map((item) => item.ref);
+  return {
+    blocks: [
+      ...refs.map((ref) => ({
+        kind: "requirement" as const,
+        requirementRef: ref,
+      })),
+      {
+        kind: "development" as const,
+        requirementRefs: refs,
+        content: [
+          { type: "heading" as const, text: `Desarrollo de ${entryTitle}` },
+          { type: "paragraph" as const, text: "Texto de desarrollo." },
+          { type: "list" as const, items: ["Primera idea", "Segunda idea"] },
+        ],
+      },
+    ],
+  };
+}
+
+// Lo que el proveedor simulado hace con la petición de un tema: devuelve una
+// salida, `undefined` para fallar, una respuesta completa o lanza un error.
+export type TopicReply = (request: ProviderRequest) => unknown;
+
 export interface OutlineFixture {
+  readonly syllabus: Syllabus;
+  // Respuesta a la tarea `topic`. Por defecto, `topicOutput`.
+  topicReply: TopicReply;
+  // Coste máximo y consumo confirmado de cada tema; `null`, sin confirmar.
+  topicMaxCost: number;
+  topicCost: number | null;
+  // Aprueba el índice y devuelve su identificador.
+  approvedOutline(reply?: unknown): Promise<string>;
   readonly db: Database;
   readonly audit: Audit;
   readonly budget: Budget;
@@ -127,6 +172,7 @@ export async function createOutlineFixture(): Promise<OutlineFixture> {
   let clock = Date.UTC(2026, 9, 7);
   const now = () => (clock += 1000);
   let superseded = false;
+  let supersededAt = 0;
   const sent: ProviderRequest[] = [];
 
   const document = {
@@ -150,7 +196,8 @@ export async function createOutlineFixture(): Promise<OutlineFixture> {
     registerDocument: () => Promise.reject(new Error("no se usa")),
     listDocuments: () => [document],
     getDocument: (id) => (id === DOCUMENT ? document : undefined),
-    substitutesOf: () => (superseded ? [document] : []),
+    substitutesOf: () =>
+      superseded ? [{ ...document, registeredAt: supersededAt }] : [],
     listPages: () => [],
     getPage: (id, number) =>
       id === DOCUMENT && PAGES[number] !== undefined
@@ -178,7 +225,16 @@ export async function createOutlineFixture(): Promise<OutlineFixture> {
   const fixture: {
     reply: unknown;
     outlineMaxCost: number;
-  } = { reply: proposal(), outlineMaxCost: 0 };
+    topicReply: TopicReply;
+    topicMaxCost: number;
+    topicCost: number | null;
+  } = {
+    reply: proposal(),
+    outlineMaxCost: 0,
+    topicReply: topicOutput,
+    topicMaxCost: 0,
+    topicCost: 0,
+  };
   const generation = createGeneration({
     db,
     budget,
@@ -187,9 +243,21 @@ export async function createOutlineFixture(): Promise<OutlineFixture> {
       name: "deterministic",
       estimateCost: () => 0,
       maxCost: (request) =>
-        request.task === "outline" ? fixture.outlineMaxCost : 0,
-      generate: (request) => {
+        request.task === "outline"
+          ? fixture.outlineMaxCost
+          : request.task === "topic"
+            ? fixture.topicMaxCost
+            : 0,
+      generate: (request): Promise<ProviderReply> => {
         sent.push(request);
+        if (request.task === "topic") {
+          const output = fixture.topicReply(request);
+          return Promise.resolve(
+            output === undefined
+              ? { ok: false, usage, cost: fixture.topicCost }
+              : { ok: true, output, usage, cost: fixture.topicCost },
+          );
+        }
         const output =
           request.task === "interpretation" ? INTERPRETATION : fixture.reply;
         return Promise.resolve(
@@ -214,6 +282,16 @@ export async function createOutlineFixture(): Promise<OutlineFixture> {
     interpretations,
     generation,
     prompt: { version: "v1", instructions: "Instrucciones del índice." },
+    now,
+  });
+
+  const syllabus = createSyllabus({
+    db,
+    audit,
+    interpretations,
+    outlines,
+    generation,
+    prompt: { version: "v1", instructions: "Instrucciones del tema." },
     now,
   });
 
@@ -244,7 +322,43 @@ export async function createOutlineFixture(): Promise<OutlineFixture> {
   validate();
   sent.length = 0;
 
+  const requestOutline = async (reply: unknown = proposal()) => {
+    fixture.reply = reply;
+    const result = await outlines.request({ ...TEACHER, interpretationId });
+    if (!result.ok) {
+      throw new Error(`El índice debía crearse: ${result.reason}.`);
+    }
+    return result.outlineId;
+  };
+
   return {
+    syllabus,
+    get topicReply() {
+      return fixture.topicReply;
+    },
+    set topicReply(value: TopicReply) {
+      fixture.topicReply = value;
+    },
+    get topicMaxCost() {
+      return fixture.topicMaxCost;
+    },
+    set topicMaxCost(value: number) {
+      fixture.topicMaxCost = value;
+    },
+    get topicCost() {
+      return fixture.topicCost;
+    },
+    set topicCost(value: number | null) {
+      fixture.topicCost = value;
+    },
+    async approvedOutline(reply) {
+      const outlineId = await requestOutline(reply);
+      const result = outlines.approve({ ...TEACHER, outlineId, revision: 1 });
+      if (!result.ok) {
+        throw new Error(`El índice debía aprobarse: ${result.reason}.`);
+      }
+      return outlineId;
+    },
     db,
     audit,
     budget,
@@ -267,6 +381,7 @@ export async function createOutlineFixture(): Promise<OutlineFixture> {
     },
     supersede() {
       superseded = true;
+      supersededAt = now();
     },
     requirement(code) {
       const found = interpretations
@@ -278,13 +393,6 @@ export async function createOutlineFixture(): Promise<OutlineFixture> {
       return found;
     },
     validate,
-    async requestOutline(reply = proposal()) {
-      fixture.reply = reply;
-      const result = await outlines.request({ ...TEACHER, interpretationId });
-      if (!result.ok) {
-        throw new Error(`El índice debía crearse: ${result.reason}.`);
-      }
-      return result.outlineId;
-    },
+    requestOutline,
   };
 }

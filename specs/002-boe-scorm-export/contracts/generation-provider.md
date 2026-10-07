@@ -78,9 +78,10 @@ lo confirma; sin él, con el tiempo agotado (120 s por defecto) o con un fallo, 
 queda `uncertain`. Una operación sin reserva posible devuelve `budget_exceeded` sin llamar al
 adaptador. Al arrancar, lo que constaba como enviado y sin liquidar pasa a `uncertain`, y lo
 reservado sin enviar se libera. El presupuesto nace con límite cero y moneda `XXX`, sin
-fijar; una operación de coste cero cabe en un saldo cero, pero no en uno negativo. Las
-páginas de consulta, de modificación del límite y de conciliación son de la historia 3: hoy
-el límite solo se cambia por la interfaz del módulo, que usan las pruebas.
+fijar; una operación de coste cero cabe en un saldo cero, pero no en uno negativo. Desde la
+fase 6, el presupuesto se consulta en `/budget`, y una cuenta de administración modifica allí
+el límite y concilia las operaciones inciertas. El resultado de una operación indica además
+si su consumo quedó sin confirmar, para que nadie la reenvíe por su cuenta.
 
 ## Adaptadores
 

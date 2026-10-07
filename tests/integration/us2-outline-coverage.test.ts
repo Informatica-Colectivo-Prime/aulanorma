@@ -20,6 +20,7 @@ import * as correctAction from "@/pages/api/interpretations/correct";
 import * as interpretationRequestAction from "@/pages/api/interpretations/request";
 import * as validateAction from "@/pages/api/interpretations/validate";
 import * as approveAction from "@/pages/api/outlines/approve";
+import * as referenceAction from "@/pages/api/references/check";
 import * as editAction from "@/pages/api/outlines/edit";
 import * as rejectAction from "@/pages/api/outlines/reject";
 import * as requestAction from "@/pages/api/outlines/request";
@@ -573,7 +574,7 @@ describe("escenarios 6, 7 y 8: cobertura incompleta", () => {
       "No se puede aprobar: quedan requisitos obligatorios sin cubrir.",
     );
     const alert = body.slice(
-      body.indexOf("Requisitos pendientes de cubrir:"),
+      body.indexOf("Requisitos pendientes:"),
       body.indexOf("<dl>"),
     );
     expect(alert).toContain(
@@ -1048,7 +1049,7 @@ describe("autorización en el servidor (SC-007)", () => {
 });
 
 describe("documento con sustituto", () => {
-  test("el índice queda como histórico: se consulta, pero no se cambia ni se aprueba", async () => {
+  test("el índice se conserva sin poder cambiarse, y solo se aprueba de nuevo tras comprobar cada referencia", async () => {
     await enter("docente1", ["teacher"]);
     const { outlineId } = await proposed();
     await decide(approveAction, outlineId);
@@ -1073,9 +1074,10 @@ describe("documento con sustituto", () => {
     const page = await viewOutline(outlineId);
     expect(page.status).toBe(200);
     const body = flat(page);
-    expect(body).toContain("Se conserva como histórico");
+    expect(body).toContain("Se conserva y ya no se puede cambiar.");
     expect(body).toContain("Aprobación sin vigencia");
-    expect(body).not.toContain('action="/api/outlines/');
+    expect(body).not.toContain('action="/api/outlines/edit"');
+    expect(body).not.toContain('action="/api/outlines/reject"');
     expect(body).not.toContain("Añadir una entrada");
     const token = await csrf();
     const attempt = await client.post(editAction, {
@@ -1086,10 +1088,55 @@ describe("documento con sustituto", () => {
       title: "X",
     });
     expect(attempt.status).toBe(422);
-    expect(flat(attempt)).toContain("ya no se puede cambiar ni aprobar");
+    expect(flat(attempt)).toContain("ya no se puede cambiar ni rechazar");
     expect(
       (await client.get(newEntryPage, { params: { id: outlineId } })).status,
     ).toBe(404);
     expect(review(outlineId)).toEqual({ status: "approved", revision: 1 });
+
+    // Referencias heredadas (FR-067): sin comprobarlas una a una, no se
+    // aprueba; con todas comprobadas, sí.
+    expect(body).toContain("Referencias heredadas");
+    expect(body).toContain("0 comprobadas; 5 pendientes.");
+    expect(body.match(/action="\/api\/references\/check"/g)).toHaveLength(5);
+    const blocked = await decide(approveAction, outlineId);
+    expect(blocked.status).toBe(422);
+    expect(flat(blocked)).toContain(
+      "quedan referencias de este índice sin comprobar contra el documento sustituto",
+    );
+    const requirements = client.runtime.db
+      .prepare("SELECT id FROM requirement")
+      .all()
+      .map((row) => String(row.id));
+    const [firstRequirement = ""] = requirements;
+    const unconfirmed = await client.post(referenceAction, {
+      csrf: token,
+      kind: "outline",
+      target: outlineId,
+      requirement: firstRequirement,
+    });
+    expect(unconfirmed.location).toBe(`/outlines/${outlineId}`);
+    expect(flat(await viewOutline(outlineId))).toContain(
+      "tienes que confirmar que la has hecho",
+    );
+    for (const requirement of requirements) {
+      const checked = await client.post(referenceAction, {
+        csrf: token,
+        kind: "outline",
+        target: outlineId,
+        requirement,
+        confirmed: "yes",
+      });
+      expect(checked.status).toBe(303);
+    }
+    expect(count("reference_check")).toBe(5);
+    expect(flat(await viewOutline(outlineId))).toContain(
+      "5 comprobadas; 0 pendientes.",
+    );
+    expect((await decide(approveAction, outlineId)).status).toBe(303);
+    expect(flat(await viewOutline(outlineId))).toMatch(
+      /Aprobación de la versión 1[^<]+<span class="tag">Sin vigencia<\/span>.*Aprobación de la versión 1[^<]+<span class="tag good">Vigente/,
+    );
+    expect(count("generation_run")).toBe(2);
   });
 });

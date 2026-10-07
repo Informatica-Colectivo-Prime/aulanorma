@@ -142,6 +142,12 @@ const SURFACE: readonly SurfaceRoute[] = [
   page("/outlines/:id/preview", "outlines/[id]/preview.ts"),
   page("/outlines/:id/entries/new", "outlines/[id]/entries/new.ts"),
   page("/outlines/:id/entries/:id", "outlines/[id]/entries/[eid].ts"),
+  // Historia 3: temario, presupuesto y aprobaciones. Todas exigen sesión.
+  page("/syllabus/:id", "syllabus/[id].ts"),
+  page("/topics/:id", "topics/[id]/index.ts"),
+  page("/topics/:id/blocks/new", "topics/[id]/blocks/new.ts"),
+  page("/topics/:id/blocks/:id", "topics/[id]/blocks/[bid].ts"),
+  page("/budget", "budget/index.ts"),
   action("/api/documents/upload", UPLOAD, "protectedUpload"),
   action("/api/documents/resolve-page"),
   action("/api/interpretations/request"),
@@ -154,6 +160,15 @@ const SURFACE: readonly SurfaceRoute[] = [
   action("/api/outlines/approve"),
   action("/api/outlines/reject", TEXT_FORM),
   action("/api/outlines/resubmit"),
+  action("/api/syllabus/generate"),
+  action("/api/syllabus/approve"),
+  action("/api/topics/edit", TEXT_FORM),
+  action("/api/topics/approve"),
+  action("/api/topics/reject", TEXT_FORM),
+  action("/api/topics/resubmit"),
+  action("/api/references/check"),
+  action("/api/budget/limit"),
+  action("/api/budget/reconcile", TEXT_FORM),
 ];
 
 function listFiles(relativeDirectory: string): string[] {

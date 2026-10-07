@@ -86,6 +86,17 @@ no cuenta. Un índice cuya interpretación pertenece a un documento con sustitut
 se consulta, pero no se cambia ni se aprueba, hasta que exista la comprobación de referencias
 heredadas (T058). `Topic` y las entidades que dependen de él todavía no existen.
 
+**Implementación (fase 6)**. `Topic` guarda `failure` (`provider_error`, `invalid_output`,
+`rejected_by_domain` o `uncertain`), presente solo si es `failed`, y la última llamada de
+generación. `TopicBlock` lleva `removed`; un bloque `requirement` no tiene texto propio: se
+muestra con el texto y la referencia del requisito que cita, y la base de datos impide que
+cite más de uno. `body` es la lista de encabezados, párrafos y listas de texto plano de un
+bloque `development`. Cada cambio queda en `topic_change` (`generate`, `add`, `edit`, `move` o
+`remove`). `SyllabusVersion` guarda además `outline_id`; `label` es `v1`, `v2`…; `snapshot`
+incluye el texto y la referencia de cada requisito, sin identidades de usuarios. Tras un
+documento sustituto, una aprobación del índice o de un tema solo es vigente si es posterior a
+él y todas sus referencias tienen su `ReferenceCheck`; el índice y los temas no se editan.
+
 **Vigencia**:
 
 - `OutlineApproval`: su `outline_revision` es la actual y su validación de la interpretación
