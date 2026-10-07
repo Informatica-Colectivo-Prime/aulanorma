@@ -1535,7 +1535,7 @@ SC-001. Hasta entonces SC-008 queda Pendiente y sin evidencia, y no bloquea la i
 
 ## SC-009 Controles requeridos en `main`
 
-**Estado**: Pendiente
+**Estado**: Superado
 
 **Entorno**: configuración del repositorio en GitHub, con un mantenedor con permisos.
 **Momento**: inmediatamente después de la primera ejecución satisfactoria de `main`. La
@@ -1588,9 +1588,49 @@ primer pull request posterior.
 - Al recibir `main` su configuración, Dependabot abrió cuatro pull requests (#19 a #22). No
   se integró ninguno durante la congelación.
 
-Activación completada y verificada. **SC-009 sigue Pendiente** hasta comprobar en el primer
-pull request posterior a la activación (T089) que los nueve controles aparecen como
-requeridos y que la integración queda bloqueada mientras no estén en verde.
+### Comprobación de bloqueo en el primer pull request posterior (T089)
+
+Primer pull request posterior a la activación: [#23](https://github.com/Informatica-Colectivo-Prime/aulanorma/pull/23), hacia
+`main`, abierto el 2026-10-07 listo para revisión, no en borrador. En el momento de la
+comprobación:
+
+- **HEAD**: `b2aa747ef2a62d727373dde6ca76da591e38d40a`. **Base**: `main` en
+  `5ca3b16c10f0df943453f8e696cd521642608213`.
+- **Ejecuciones**: [`quality` 37574314985](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37574314985)
+  y [`security` 37574315050](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37574315050),
+  evento `pull_request`, intento 1, sin relanzamientos. Los nueve jobs analizaron el merge
+  provisional `3075bed91c84f1d5f3e218907c1e416090d64c33`, cuyos padres son la base y el HEAD.
+- **Método**: consultas de lectura a la API de GitHub sobre el pull request, repetidas
+  mientras se ejecutaban los controles. No se intentó integrar para comprobar el bloqueo.
+
+| Hora (UTC, 2026-10-07) | Estado de integración | Conflictos | Controles requeridos | En success | Sin terminar |
+|------------------------|-----------------------|------------|----------------------|------------|--------------|
+| 05:01:53 | `UNKNOWN` | `UNKNOWN` | Todavía sin informar | — | — |
+| 05:02:02 | `BLOCKED` | `MERGEABLE` | 9 | 0 | 9 |
+| 05:02:11 | `BLOCKED` | `MERGEABLE` | 9 | 2 | 7 |
+| 05:02:20 | `BLOCKED` | `MERGEABLE` | 9 | 5 | 4 |
+| 05:02:29 | `BLOCKED` | `MERGEABLE` | 9 | 8 | 1 (`macos-quality`) |
+| 05:02:39 | `BLOCKED` | `MERGEABLE` | 9 | 8 | 1 (`macos-quality`) |
+| 05:04:30 | `CLEAN` | `MERGEABLE` | 9 | 9 | 0 |
+
+- **La primera instantánea no es evidencia de bloqueo**: `UNKNOWN` solo indica que GitHub
+  todavía no había calculado el estado. La evidencia son las cinco instantáneas `BLOCKED`.
+- **Controles requeridos**: en todas las instantáneas con controles informados, la API marca
+  como requeridos para este pull request exactamente `format`, `lint`, `types`, `test`,
+  `build`, `macos-quality`, `secrets`, `dependencies` y `workflows`, todos de la aplicación
+  GitHub Actions (identificador 15368). Ninguna otra comprobación figura en el pull request.
+- **Motivo del bloqueo**: el pull request no estaba en borrador, no tenía conflictos
+  (`MERGEABLE`), la regla no exige aprobaciones y no había conversaciones abiertas. Lo único
+  que faltaba eran los controles requeridos, y el estado siguió en `BLOCKED` con ocho de los
+  nueve en success.
+- **Transición**: el estado pasó a `CLEAN` solo cuando los nueve terminaron en success. Los
+  nueve jobs concluyeron entre las 05:02:06Z y las 05:03:56Z; el más largo, `macos-quality`,
+  duró 112 s.
+
+Con la activación verificada, sin integraciones durante la congelación, y esta comprobación,
+los nueve controles quedaron requeridos antes de integrar cualquier otro cambio en `main`.
+La integración de ese pull request, con los nueve en verde, consta en su propio registro en
+GitHub y no en este fichero.
 
 ---
 
