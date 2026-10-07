@@ -30,6 +30,10 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       AULANORMA_LOG_LEVEL: info
       AULANORMA_ENVIRONMENT: ci
+      AULANORMA_DATA_DIR: /tmp/aulanorma-ci-data
+      AULANORMA_PUBLIC_ORIGIN: http://127.0.0.1:3000
+      AULANORMA_SESSION_IDLE_MINUTES: "30"
+      AULANORMA_SESSION_MAX_HOURS: "12"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -50,6 +54,10 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       AULANORMA_LOG_LEVEL: info
       AULANORMA_ENVIRONMENT: ci
+      AULANORMA_DATA_DIR: /tmp/aulanorma-ci-data
+      AULANORMA_PUBLIC_ORIGIN: http://127.0.0.1:3000
+      AULANORMA_SESSION_IDLE_MINUTES: "30"
+      AULANORMA_SESSION_MAX_HOURS: "12"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -70,6 +78,10 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       AULANORMA_LOG_LEVEL: info
       AULANORMA_ENVIRONMENT: ci
+      AULANORMA_DATA_DIR: /tmp/aulanorma-ci-data
+      AULANORMA_PUBLIC_ORIGIN: http://127.0.0.1:3000
+      AULANORMA_SESSION_IDLE_MINUTES: "30"
+      AULANORMA_SESSION_MAX_HOURS: "12"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -90,6 +102,10 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       AULANORMA_LOG_LEVEL: info
       AULANORMA_ENVIRONMENT: ci
+      AULANORMA_DATA_DIR: /tmp/aulanorma-ci-data
+      AULANORMA_PUBLIC_ORIGIN: http://127.0.0.1:3000
+      AULANORMA_SESSION_IDLE_MINUTES: "30"
+      AULANORMA_SESSION_MAX_HOURS: "12"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -110,6 +126,10 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       AULANORMA_LOG_LEVEL: info
       AULANORMA_ENVIRONMENT: ci
+      AULANORMA_DATA_DIR: /tmp/aulanorma-ci-data
+      AULANORMA_PUBLIC_ORIGIN: http://127.0.0.1:3000
+      AULANORMA_SESSION_IDLE_MINUTES: "30"
+      AULANORMA_SESSION_MAX_HOURS: "12"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -132,6 +152,10 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       AULANORMA_LOG_LEVEL: info
       AULANORMA_ENVIRONMENT: ci
+      AULANORMA_DATA_DIR: /tmp/aulanorma-ci-data
+      AULANORMA_PUBLIC_ORIGIN: http://127.0.0.1:3000
+      AULANORMA_SESSION_IDLE_MINUTES: "30"
+      AULANORMA_SESSION_MAX_HOURS: "12"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

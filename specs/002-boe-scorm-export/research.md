@@ -58,6 +58,14 @@ un ejecutor propio al arrancar. Todo el acceso pasa por `src/platform/persistenc
 
 ## R2. Identidad, sesión y autorización
 
+> **Resultado de la implementación (2026-10-07)**, en
+> [foundations-check.md](./foundations-check.md). Implementado como se describe, con tres
+> precisiones: el prefijo `__Host-` y `Secure` se emiten cuando el origen público es HTTPS, y
+> con el origen local por HTTP las cookies van sin ellos; la política de referencia es
+> `same-origin`, porque con `no-referrer` el navegador envía `Origin: null` en los formularios;
+> y los fallos de una cuenta se acumulan mientras no pasen 30 minutos sin ninguno, para que el
+> bloqueo máximo de 15 minutos se mantenga ante quien insiste.
+
 **Decisión**: cuentas locales y sesiones en el servidor, solo con primitivas existentes de
 `node:crypto`. No se usa autenticación básica.
 
@@ -126,6 +134,12 @@ seudónimos, sin correo ni nombre real.
 la página de entrada puede servirse sin recursos estáticos protegidos.
 
 ## R3. Superficie de entrega
+
+> **Resultado de la implementación (2026-10-07)**. Las páginas escriben su respuesta completa
+> desde `getServerSideProps`, con una plantilla propia que escapa todo valor interpolado, en
+> lugar de dejar que Next.js renderice el componente. Así el HTML no carga scripts ni recursos
+> del framework, es idéntico en desarrollo y en producción, y la frontera no necesita delegar
+> ninguna ruta de recursos estáticos. No se ha añadido ninguna dependencia.
 
 **Decisión**: páginas del Pages Router renderizadas en el servidor para la interfaz docente y
 API Routes para las mutaciones, todas detrás de la frontera HTTP de `server.mjs`, ampliada con

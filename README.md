@@ -6,11 +6,12 @@ revisará y aprobará el índice y el contenido, y la plataforma entregará un p
 descargable para incorporarlo manualmente a Moodle. La publicación automática en Moodle queda
 fuera del alcance vigente ([ADR 0003](docs/adr/0003-scorm-export-instead-of-automatic-moodle-publication.md)).
 
-Por ahora, este repositorio contiene su base de ingeniería: una aplicación mínima con Next.js,
-sin interfaz visible, sin persistencia y sin llamadas a servicios externos. Solo expone una
-comprobación de estado, `GET /api/health`, detrás de una frontera HTTP que rechaza de forma
-cerrada cualquier otra petición. La configuración se valida al arrancar y, si no es válida, la
-aplicación no arranca.
+Por ahora, este repositorio contiene su base de ingeniería y los cimientos del producto: una
+aplicación Next.js sin llamadas a servicios externos, con una base de datos SQLite, cuentas,
+sesiones y permisos, y una interfaz mínima para entrar, ver el inicio, cambiar la contraseña y
+salir. **Todavía no hay ninguna función de documentos, índice, temario ni exportación.** Una
+frontera HTTP rechaza de forma cerrada cualquier petición que no sea de su lista de rutas. La
+configuración se valida al arrancar y, si no es válida, la aplicación no arranca.
 
 ## Requisitos previos
 
@@ -58,9 +59,11 @@ error `EBADDEVENGINES` o `EBADENGINE` que indica el rango requerido.
 cp .env.example .env.development.local
 ```
 
-[`.env.example`](.env.example) documenta las dos variables, `AULANORMA_LOG_LEVEL` y
-`AULANORMA_ENVIRONMENT`, con valores de ejemplo válidos. Ninguna es un secreto y no hace falta
-cambiarlas. `.env.development.local` está excluido de Git y solo lo carga `npm run dev`. Una
+[`.env.example`](.env.example) documenta las seis variables con valores de ejemplo válidos:
+el nivel de registro, el entorno, el directorio de datos, el origen público y los dos tiempos
+de caducidad de la sesión. Ninguna es un secreto y no hace falta cambiarlas para probar. El
+directorio de datos de ejemplo está en un temporal del sistema, que puede vaciarse al reiniciar
+el equipo: cámbialo si quieres conservar las cuentas. `.env.development.local` está excluido de Git y solo lo carga `npm run dev`. Una
 variable definida en la terminal prevalece sobre el fichero, aunque esté vacía.
 
 Hay una excepción deliberada: `npm run dev` fija vacías `TURBOPACK`, `IS_TURBOPACK_TEST` y
@@ -112,8 +115,47 @@ Resultado esperado, en ese orden:
 - `505`, porque la versión no es HTTP/1.0 ni HTTP/1.1.
 
 Los cuatro llevan `content-length: 0`, `cache-control: no-store` y `connection: close`, sin
-cuerpo ni `content-type`. Cualquier otra ruta, como `/`, responde el mismo `404` cerrado:
-ninguna página HTML se sirve.
+cuerpo ni `content-type`. Cualquier ruta que no esté en la lista cerrada, como `/foo`, responde
+el mismo `404` cerrado.
+
+### 3 bis. Crear cuentas y probar la interfaz
+
+Las cuentas se crean desde el servidor, con un script; no hay registro libre ni recuperación
+por correo. Con `npm run dev` detenido o en marcha, en otra terminal:
+
+```bash
+NODE_ENV=development node scripts/admin/users.mjs create docente1 --role teacher
+NODE_ENV=development node scripts/admin/users.mjs create admin1 --role admin
+NODE_ENV=development node scripts/admin/users.mjs create sinperfil
+NODE_ENV=development node scripts/admin/users.mjs list
+```
+
+Cada `create` pide dos veces la contraseña inicial, sin mostrarla. Debe tener al menos 12
+caracteres. La contraseña nunca se pasa como argumento, no se imprime y no se guarda: solo se
+guarda una derivación. `NODE_ENV` indica qué configuración se carga, igual que en `npm run dev`
+(`development`) y `npm start` (`production`).
+
+Los tres perfiles de prueba son: `teacher` (docente autorizado), `admin` (administración) y una
+cuenta sin perfiles, que puede entrar y salir pero no usar ninguna función. Una misma cuenta
+puede tener los dos perfiles, con `--role admin --role teacher`.
+
+Con el servidor en marcha, abre <http://127.0.0.1:3000/> en el navegador:
+
+1. Sin sesión, cualquier página lleva a la entrada.
+2. Con una contraseña incorrecta, la entrada lo dice sin revelar si la cuenta existe. Al
+   tercer fallo seguido, la cuenta queda bloqueada unos segundos, y cada fallo posterior
+   duplica la espera, hasta 15 minutos.
+3. Al entrar por primera vez, solo se puede cambiar la contraseña inicial.
+4. Después, el inicio muestra la cuenta y sus perfiles, y lo que todavía no está disponible.
+5. «Salir», en la cabecera, cierra la sesión.
+
+La sesión caduca a los 30 minutos sin uso y a las 12 horas en cualquier caso. Todo se puede
+recorrer solo con el teclado.
+
+Otras órdenes del script: `roles <usuario> --role …` fija los perfiles, `password <usuario>`
+asigna otra contraseña inicial, `disable` y `enable` desactivan y reactivan la cuenta, y
+`revoke` cierra sus sesiones. Cambiar los perfiles, la contraseña o el estado de una cuenta
+cierra todas sus sesiones.
 
 Detén el servidor con `Ctrl+C`.
 
@@ -246,7 +288,8 @@ modos.
 ## Documentación
 
 - [Arquitectura](docs/engineering/architecture.md): las cuatro capas, su ubicación y
-  responsabilidad, la matriz de dependencias, la frontera HTTP y los puntos de entrada.
+  responsabilidad, la matriz de dependencias, la frontera HTTP con su lista cerrada de rutas,
+  las guardas de acceso y los puntos de entrada.
 - [Controles de calidad y seguridad](docs/engineering/quality-controls.md): las ocho categorías,
   los nueve controles de la integración continua y los comandos locales equivalentes.
 - [Protección de `main`](docs/engineering/branch-protection.md): la protección actual, los nueve

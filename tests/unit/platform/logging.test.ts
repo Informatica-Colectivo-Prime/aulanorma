@@ -52,6 +52,7 @@ interface LoggingModule {
     mode: Mode,
     problems: readonly ProblemInput[],
   ): void;
+  logProductEvent(logger: unknown, event: string, correlationId: string): void;
 }
 
 interface PinoInstance {
@@ -96,7 +97,21 @@ const LEVELS: readonly Level[] = [
 ];
 const MODES: readonly Mode[] = ["development", "production"];
 const ENVIRONMENTS = ["development", "test", "ci"] as const;
-const EXPORTS = ["createLogger", "logConfigInvalid", "logStartupCompleted"];
+const EXPORTS = [
+  "createLogger",
+  "logConfigInvalid",
+  "logProductEvent",
+  "logStartupCompleted",
+];
+const PRODUCT_EVENTS = [
+  "session.signed_in",
+  "session.sign_in_refused",
+  "session.signed_out",
+  "account.password_changed",
+  "account.password_change_refused",
+  "access.denied",
+  "request.failed",
+] as const;
 const PINO_MEMBERS = [
   "trace",
   "debug",
@@ -381,7 +396,7 @@ const SAMPLE_PROBLEMS: readonly ProblemInput[] = [
 ];
 
 describe("interfaz pública", () => {
-  test("exporta en ejecución únicamente las tres funciones", () => {
+  test("exporta en ejecución únicamente las cuatro funciones", () => {
     expect(Object.keys(logging).sort()).toEqual(EXPORTS);
     for (const name of EXPORTS) {
       expect(typeof Reflect.get(logging, name), name).toBe("function");
@@ -793,4 +808,58 @@ describe("procesos separados", () => {
     });
     expect(line.time).toMatch(ISO_TIME);
   }, 20_000);
+});
+
+// Eventos de producto (specs/002-boe-scorm-export, T017): lista cerrada de
+// nombres y un único campo propio, `correlationId`.
+describe("logProductEvent(logger, event, correlationId)", () => {
+  test.each(PRODUCT_EVENTS)(
+    "%s escribe una sola línea con el evento, el entorno y correlationId",
+    (event) => {
+      const memory = memoryDestination();
+      const logger = logging.createLogger({
+        environment: "ci",
+        level: "info",
+        destination: memory.destination,
+      });
+      const correlationId = randomUUID();
+      logging.logProductEvent(logger, event, correlationId);
+      const line = onlyLine(memory);
+      expect(Object.keys(line).sort()).toEqual([
+        "correlationId",
+        "environment",
+        "level",
+        "msg",
+        "service",
+        "time",
+      ]);
+      expect(line.msg).toBe(event);
+      expect(line.level).toBe("info");
+      expect(line.environment).toBe("ci");
+      expect(line.service).toBe("aulanorma");
+      expect(line.correlationId).toBe(correlationId);
+      expect(line.time).toMatch(ISO_TIME);
+    },
+  );
+
+  test.each(LEVELS)("se escribe también con el nivel %s", (level) => {
+    const memory = memoryDestination();
+    const logger = logging.createLogger({
+      environment: "test",
+      level,
+      destination: memory.destination,
+    });
+    logging.logProductEvent(logger, "session.signed_in", "c-1");
+    expect(onlyLine(memory).msg).toBe("session.signed_in");
+  });
+
+  test("no admite campos libres: su firma solo tiene el evento y el identificador", () => {
+    expect(logging.logProductEvent.length).toBe(3);
+  });
+
+  test("rechaza un manejador que no creó este módulo", () => {
+    expect(() => {
+      logging.logProductEvent(Object.freeze({}), "session.signed_in", "c-1");
+    }).toThrow(TypeError);
+  });
 });

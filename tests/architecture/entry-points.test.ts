@@ -376,11 +376,24 @@ describe("otros puntos de entrada", () => {
     expect(forbidden, "entradas que eludirían la frontera").toEqual([]);
   });
 
-  test("src/pages no contiene otra ruta que la API Route de estado", () => {
+  // Lista cerrada de la superficie (ADR 0004 y
+  // specs/002-boe-scorm-export/contracts/http-surface.md). Su correspondencia
+  // con la frontera y con las guardas de acceso la comprueba
+  // `public-routes.test.ts`.
+  test("src/pages no contiene otra ruta que las de la lista cerrada", () => {
+    const declared = [
+      "src/pages/account/password.ts",
+      "src/pages/api/account/password.ts",
+      "src/pages/api/health.ts",
+      "src/pages/api/session/sign-in.ts",
+      "src/pages/api/session/sign-out.ts",
+      "src/pages/index.ts",
+      "src/pages/login.ts",
+    ];
     const extra = listFiles("src/pages").filter(
-      (file) => file !== "src/pages/api/health.ts",
+      (file) => !declared.includes(file),
     );
-    expect(extra, "segunda ruta pública").toEqual([]);
+    expect(extra, "ruta no declarada").toEqual([]);
   });
 });
 
@@ -489,7 +502,10 @@ describe("next.config.ts", () => {
     expect(found).toEqual([]);
   });
 
-  test("logging.incomingRequests.ignore es exactamente [/^\\/api\\/health$/]", () => {
+  // Con una sola ruta bastaba ignorar `/api/health`. Con la superficie de
+  // producto (ADR 0004), el registro automático de peticiones de Next.js se
+  // desactiva por completo, que es más estricto.
+  test("logging.incomingRequests es exactamente false", () => {
     const config = exportedConfig(requireFile(NEXT_CONFIG, "T039"));
     const logging = property(config, "logging");
     expect(logging !== undefined && ts.isObjectLiteralExpression(logging)).toBe(
@@ -499,17 +515,12 @@ describe("next.config.ts", () => {
       logging !== undefined && ts.isObjectLiteralExpression(logging)
         ? property(logging, "incomingRequests")
         : undefined;
-    const ignore =
-      incoming !== undefined && ts.isObjectLiteralExpression(incoming)
-        ? property(incoming, "ignore")
-        : undefined;
+    expect(incoming?.kind).toBe(ts.SyntaxKind.FalseKeyword);
     expect(
-      ignore !== undefined && ts.isArrayLiteralExpression(ignore)
-        ? ignore.elements.map((element) =>
-            ts.isRegularExpressionLiteral(element) ? element.text : "otro",
-          )
+      logging !== undefined && ts.isObjectLiteralExpression(logging)
+        ? logging.properties.length
         : undefined,
-    ).toEqual(["/^\\/api\\/health$/"]);
+    ).toBe(1);
   });
 
   test("poweredByHeader es exactamente false", () => {

@@ -18,7 +18,9 @@ operación, quién puede ejecutarla y sus condiciones.
 - **Mutaciones**: solo `POST`, con comprobación de origen contra el origen público
   configurado y testigo de sesión. El envío del formulario de entrada lo exige también, con
   el testigo de su sesión previa.
-- **Sesiones**: cookie `__Host-`, `Secure`, `HttpOnly` y `SameSite=Strict`; caducidad por
+- **Sesiones**: cookie `HttpOnly` y `SameSite=Strict`, con el prefijo `__Host-` y `Secure`
+  cuando el origen público es HTTPS (con el origen local por HTTP, admitido solo para
+  desarrollo, se emite sin ellos); caducidad por
   inactividad (30 minutos) y por duración máxima (12 horas), configurables; se revocan al
   cerrar sesión, cambiar la contraseña, desactivar la cuenta o cambiar sus permisos (FR-068).
 - **Generación de pago**: toda solicitud muestra antes la estimación y el presupuesto
@@ -30,6 +32,22 @@ operación, quién puede ejecutarla y sus condiciones.
   referencia normativa cuando aplica.
 - **Cuerpos**: tamaño máximo por operación, aplicado en la frontera.
 - **Sin borrado**: no existe ninguna operación `DELETE`.
+
+## Rutas implementadas (cimientos, fase 3)
+
+| Destino                 | Métodos                  | Operación                                 |
+| ----------------------- | ------------------------ | ----------------------------------------- |
+| `/api/health`           | `GET`, `HEAD`, `OPTIONS` | Comprobar estado                          |
+| `/login`                | `GET`                    | Ver el formulario de entrada              |
+| `/api/session/sign-in`  | `POST`                   | Iniciar sesión                            |
+| `/`                     | `GET`                    | Inicio                                    |
+| `/account/password`     | `GET`                    | Ver el formulario de cambio de contraseña |
+| `/api/session/sign-out` | `POST`                   | Cerrar sesión                             |
+| `/api/account/password` | `POST`                   | Cambiar la contraseña                     |
+
+Las demás operaciones de la tabla siguiente todavía no existen. Las páginas responden con HTML
+completo o con una redirección; las acciones, siempre con una redirección o con un rechazo sin
+cuerpo. Los destinos son exactos: no admiten parámetros de consulta.
 
 ## Operaciones
 

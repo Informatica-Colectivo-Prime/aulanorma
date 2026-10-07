@@ -30,12 +30,25 @@ const PLATFORM_AREAS = [
   "http-boundary",
   "health",
   "version",
+  "persistence",
+  "audit",
+  "identity",
+  "web",
 ];
-const DELIVERY_PLATFORM_AREAS = ["config", "logging", "health", "version"];
+const DELIVERY_PLATFORM_AREAS = [
+  "config",
+  "logging",
+  "health",
+  "version",
+  "web",
+];
 const PORTABLE_MODULES = [
   "src/platform/config/index.ts",
   "src/platform/logging/index.ts",
   "src/platform/http-boundary/index.ts",
+  "src/platform/persistence/index.ts",
+  "src/platform/audit/index.ts",
+  "src/platform/identity/index.ts",
 ];
 const NETWORK_MODULES = [
   "http",
@@ -316,8 +329,8 @@ const serverAdapter = {
             "La entrega no importa ninguna capa de dominio (matriz de data-model.md).",
           ),
           pattern(
-            "^\\./src/(?!platform/(?:config|logging|http-boundary)/index\\.ts$)",
-            "De `src/`, `server.mjs` solo importa `config`, `logging` y `http-boundary` por su `index.ts`.",
+            "^\\./src/(?!platform/(?:config|logging|http-boundary|persistence)/index\\.ts$)",
+            "De `src/`, `server.mjs` solo importa `config`, `logging`, `http-boundary` y `persistence` por su `index.ts`.",
           ),
           pattern(
             "^\\.\\./",
@@ -432,7 +445,7 @@ export default defineConfig([
     patterns: [
       pattern(
         `^@/(?!platform/(?:${alternatives(DELIVERY_PLATFORM_AREAS)})$)`,
-        "La entrega solo importa `@/platform/<área>` (config, logging, health o version).",
+        "La entrega solo importa `@/platform/<área>` (config, logging, health, version o web).",
       ),
       relativeEscape([...PLATFORM_AREAS, ...LAYERS, ...OTHER_SEGMENTS]),
     ],

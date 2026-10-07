@@ -1,25 +1,34 @@
 # Arquitectura
 
 AulaNorma es un monolito modular: una única aplicación Next.js 16.3.6 con Pages Router, que se
-despliega como una sola unidad. En esta funcionalidad no tiene interfaz visible, persistencia ni
-llamadas a servicios externos, y solo expone la comprobación de estado `/api/health`. Las
-decisiones que describe este documento están en el
-[ADR 0001](../adr/0001-architecture-runtime-and-modular-structure.md), en estado **Aceptado**.
+despliega como una sola unidad. Expone la comprobación de estado `/api/health` y, desde los
+cimientos del producto, una lista cerrada de rutas con entrada, sesión y permisos, sobre una
+base de datos SQLite. No hace llamadas a servicios externos. Las decisiones que describe este
+documento están en el
+[ADR 0001](../adr/0001-architecture-runtime-and-modular-structure.md) y en el
+[ADR 0004](../adr/0004-product-surface-persistence-identity-and-generation.md), que lo
+sustituye en parte; los dos están en estado **Aceptado**.
 
 ## Estructura
 
 ```text
-server.mjs                 # Adaptador de arranque: frontera HTTP y una única llamada a Next.js
+server.mjs                 # Adaptador de arranque: migraciones, frontera HTTP y Next.js
 scripts/preflight.mjs      # Validación de la configuración antes de arrancar server.mjs
+scripts/admin/users.mjs    # Altas, perfiles, contraseñas iniciales y cierre de sesiones
 src/
-├── pages/api/health.ts    # Única API Route: la comprobación de estado
-├── platform/              # Utilidades transversales; API pública: el index.ts de cada área
-│   ├── config/
-│   ├── logging/
-│   ├── http-boundary/
-│   ├── health/
-│   └── version/
-└── modules/               # Las cuatro capas de la constitución, vacías en esta funcionalidad
+├── pages/                 # Entrega: lista cerrada de rutas
+│   ├── api/health.ts              # Comprobación de estado, sin sesión (excepción cerrada)
+│   ├── login.ts                   # Formulario de entrada
+│   ├── index.ts                   # Inicio
+│   ├── account/password.ts        # Cambio de contraseña
+│   └── api/                       # Acciones: session/sign-in, session/sign-out, account/password
+├── platform/              # Utilidades transversales; API pública: el índice de cada área
+│   ├── config/  logging/  http-boundary/  health/  version/
+│   ├── persistence/       # SQLite, migraciones y almacén de ficheros por huella
+│   ├── audit/             # Registro de solo inserción
+│   ├── identity/          # Cuentas, contraseñas, sesiones, intentos y permisos
+│   └── web/               # Guardas de acceso, cookies y documento HTML de las rutas
+└── modules/               # Las cuatro capas de la constitución, todavía vacías
     ├── normative-source/
     ├── structured-interpretation/
     ├── didactic-content/
@@ -63,14 +72,14 @@ Cada celda indica si el módulo de la fila puede importar al de la columna, siem
 su API pública (`index.ts`). Es la matriz de
 [`data-model.md`](../../specs/001-engineering-baseline/data-model.md#matriz-de-dependencias-entre-capas).
 
-| Importa →                                         | `platform`               | `normative-source` | `structured-interpretation` | `didactic-content` | `content-export` |
-| ------------------------------------------------- | ------------------------ | ------------------ | --------------------------- | ------------------ | ---------------- |
-| `platform`                                        | —                        | No                 | No                          | No                 | No               |
-| `normative-source`                                | Sí                       | —                  | No                          | No                 | No               |
-| `structured-interpretation`                       | Sí                       | Sí                 | —                           | No                 | No               |
-| `didactic-content`                                | Sí                       | No                 | Sí                          | —                  | No               |
-| `content-export`                                  | Sí                       | No                 | No                          | Sí                 | —                |
-| Entrega: `server.mjs` y `src/pages/api/health.ts` | **Sí, solo API pública** | **No**             | **No**                      | **No**             | **No**           |
+| Importa →                              | `platform`               | `normative-source` | `structured-interpretation` | `didactic-content` | `content-export` |
+| -------------------------------------- | ------------------------ | ------------------ | --------------------------- | ------------------ | ---------------- |
+| `platform`                             | —                        | No                 | No                          | No                 | No               |
+| `normative-source`                     | Sí                       | —                  | No                          | No                 | No               |
+| `structured-interpretation`            | Sí                       | Sí                 | —                           | No                 | No               |
+| `didactic-content`                     | Sí                       | No                 | Sí                          | —                  | No               |
+| `content-export`                       | Sí                       | No                 | No                          | Sí                 | —                |
+| Entrega: `server.mjs` y `src/pages/**` | **Sí, solo API pública** | **No**             | **No**                      | **No**             | **No**           |
 
 Reglas:
 
@@ -80,43 +89,63 @@ Reglas:
 - **Capas de dominio**: cada una solo depende de `platform` y de la capa inmediatamente anterior,
   en la dirección que fija el principio II.
 - **`platform`** no depende de ninguna capa de dominio.
-- **Entrega limitada a `platform`**: la entrega no importa ninguna capa de dominio, porque
-  `/api/health` no las necesita. La primera porción vertical de producto definirá sus puntos de
-  entrada y ampliará esta fila solo para las capas que justifique, con su propia prueba de
-  arquitectura.
+- **Entrega limitada a `platform`**: la entrega no importa todavía ninguna capa de dominio,
+  porque las rutas actuales no las necesitan. El ADR 0004 prevé abrir esta fila a las cuatro
+  capas; se hará con la primera historia que lo necesite, con su propia prueba de arquitectura.
+- **Rutas de producto solo a través de `web`**: las páginas y las acciones importan
+  `@/platform/web`, donde están las guardas de acceso, y no importan directamente `identity`,
+  `persistence` ni `audit`.
 
 ## Entrega HTTP
 
-La capa de entrega son `server.mjs` y `src/pages/api/health.ts`:
+La capa de entrega son `server.mjs` y los ficheros de `src/pages`:
 
 - **`src/pages/api/health.ts`** puede importar `@/platform/config`, `@/platform/logging`,
-  `@/platform/health` y `@/platform/version`. Hoy importa `config` (`readRuntimeConfig`) y
-  `health` (`buildHealthStatus`).
+  `@/platform/health` y `@/platform/version`. Importa `config` (`readRuntimeConfig`) y `health`
+  (`buildHealthStatus`). No usa `web` ni ninguna guarda: es la excepción cerrada del principio V.
+- **Las rutas de producto** (`login.ts`, `index.ts`, `account/password.ts` y las tres acciones
+  de `api/`) importan `@/platform/web` y se declaran con una de sus cuatro guardas:
+  - `entryPage` y `entryAction`, para el formulario de entrada y su envío, que son lo único
+    accesible sin sesión y no conceden acceso a nada más;
+  - `protectedPage` y `protectedAction`, que exigen sesión y, si se indica, un perfil,
+    comprobados en el servidor con denegación por defecto.
+
+  Las páginas escriben la respuesta completa desde `getServerSideProps`, con una plantilla
+  propia que escapa todo valor interpolado. El HTML no carga recursos externos ni scripts del
+  framework, lleva una política de contenido por huellas y es idéntico en desarrollo y en
+  producción. Las acciones exigen además el origen público configurado y el testigo de su
+  sesión, y responden siempre con una redirección.
+
 - **`server.mjs`** es un adaptador mínimo con `// @ts-check`. De `src/` solo importa los módulos
-  portables `config`, `logging` y `http-boundary`, por su `index.ts`. Como adaptador importa
-  además `node:http` y `next`, y usa `@next/env` a través de `src/platform/config`. Esas
-  importaciones no son de capas de dominio y no contradicen la matriz.
+  portables `config`, `logging`, `http-boundary` y `persistence`, por su `index.ts`. Aplica las
+  migraciones pendientes antes de cargar Next.js y de escuchar. Como adaptador importa además
+  `node:http` y `next`, y usa `@next/env` a través de `src/platform/config`.
 
 ## Áreas de `src/platform`
 
-| Área            | Responsabilidad                                                                                                     | Módulo portable |
-| --------------- | ------------------------------------------------------------------------------------------------------------------- | --------------- |
-| `config`        | Esquema Zod de la configuración y sus tres operaciones: `validateConfig`, `loadConfig` y `readRuntimeConfig`        | Sí              |
-| `logging`       | Registros JSON con Pino y redacción de campos sensibles: `createLogger`, `logStartupCompleted` y `logConfigInvalid` | Sí              |
-| `http-boundary` | Decisión de la frontera HTTP y estado transitorio de cada conexión: `createHttpBoundary`                            | Sí              |
-| `health`        | Composición del estado público `{ status, version }`: `buildHealthStatus`                                           | No              |
-| `version`       | Lectura y validación de la versión SemVer básica de `package.json`: `getVersion`                                    | No              |
+| Área            | Responsabilidad                                                                                                      | Módulo portable |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- | --------------- |
+| `config`        | Esquema Zod de la configuración y sus tres operaciones: `validateConfig`, `loadConfig` y `readRuntimeConfig`         | Sí              |
+| `logging`       | Registros JSON con Pino y redacción de campos sensibles: `createLogger`, `logStartupCompleted` y `logConfigInvalid`  | Sí              |
+| `http-boundary` | Decisión de la frontera HTTP y estado transitorio de cada conexión: `createHttpBoundary`                             | Sí              |
+| `health`        | Composición del estado público `{ status, version }`: `buildHealthStatus`                                            | No              |
+| `version`       | Lectura y validación de la versión SemVer básica de `package.json`: `getVersion`                                     | No              |
+| `persistence`   | Base de datos SQLite (`node:sqlite`), migraciones numeradas y almacén de ficheros por huella SHA-256                 | Sí              |
+| `audit`         | Registro de auditoría de solo inserción: `createAudit`, con `record` y `list`                                        | Sí              |
+| `identity`      | Cuentas, contraseñas con `scrypt`, sesiones, intentos repetidos, comprobación de origen y permisos: `createIdentity` | Sí              |
+| `web`           | Servicios del proceso, cookies, documento HTML y guardas de acceso de las rutas de producto                          | No              |
 
 Cada área expone su API pública en su `index.ts`. `platform` no depende de ninguna capa de
 dominio.
 
 ### Módulos portables
 
-`src/platform/config/index.ts`, `src/platform/logging/index.ts` y
-`src/platform/http-boundary/index.ts` los cargan directamente con Node.js `scripts/preflight.mjs`
-y `server.mjs`, sin compilarlos. Por eso:
+Los índices de `config`, `logging`, `http-boundary`, `persistence`, `audit` e `identity` los
+cargan directamente con Node.js `scripts/preflight.mjs`, `server.mjs` o
+`scripts/admin/users.mjs`, sin compilarlos. Por eso:
 
-- solo importan paquetes npm, sin importaciones relativas ni alias `@/`;
+- solo importan paquetes npm o módulos incluidos en Node.js, sin importaciones relativas ni
+  alias `@/`; lo que necesitan de otra área lo reciben como argumento;
 - `http-boundary` no importa nada en ejecución: de `node:http` y `node:stream` solo toma tipos;
 - usan solo sintaxis TypeScript borrable, sin `enum` ni `namespace` (`erasableSyntaxOnly`).
 
@@ -125,8 +154,8 @@ y `server.mjs`, sin compilarlos. Por eso:
 - En `src/`, solo `src/platform/config` lee `process.env`. El resto recibe la configuración
   validada.
 - `server.mjs` solo lee `process.env.NODE_ENV`, para pedir el modo a `loadConfig`.
-- La API Route no lee `process.env` ni llama a `loadConfig`: usa `readRuntimeConfig()` dentro de
-  cada manejo.
+- Las rutas no leen `process.env` ni llaman a `loadConfig`: la de estado usa
+  `readRuntimeConfig()` dentro de cada manejo y las de producto, a través de `web`.
 
 ## Frontera HTTP
 
@@ -136,20 +165,33 @@ Next.js. La frontera evalúa en este orden, y la primera regla incumplida decide
 
 **versión → `Host` → destino → método → cuerpo**
 
-| Paso    | Regla                                                                                                                   | Si se incumple |
-| ------- | ----------------------------------------------------------------------------------------------------------------------- | -------------- |
-| Versión | Solo HTTP/1.0 y HTTP/1.1                                                                                                | 505            |
-| `Host`  | En HTTP/1.1, exactamente uno, no vacío, sin comas ni caracteres de control; en HTTP/1.0, opcional con las mismas reglas | 400            |
-| Destino | El destino crudo es exactamente `/api/health`, byte a byte, sin normalizar ni decodificar                               | 404            |
-| Método  | `GET`, `HEAD` u `OPTIONS`                                                                                               | 405            |
-| Cuerpo  | Sin `Transfer-Encoding` y con `Content-Length` ausente o igual a 0                                                      | 400            |
+| Paso    | Regla                                                                                                                                                                     | Si se incumple |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| Versión | Solo HTTP/1.0 y HTTP/1.1                                                                                                                                                  | 505            |
+| `Host`  | En HTTP/1.1, exactamente uno, no vacío, sin comas ni caracteres de control; en HTTP/1.0, opcional con las mismas reglas                                                   | 400            |
+| Destino | El destino crudo es exactamente uno de la lista cerrada `ROUTES`, byte a byte, sin normalizar ni decodificar                                                              | 404            |
+| Método  | Uno de los métodos de esa ruta                                                                                                                                            | 405            |
+| Cuerpo  | Sin `Transfer-Encoding`. Si la ruta no admite cuerpo, `Content-Length` ausente o igual a 0; si lo admite, exactamente un `Content-Length` decimal que no supere su máximo | 400            |
 
 Las entradas malformadas que el analizador HTTP de Node.js rechaza antes de la frontera reciben
 el mismo 400 cerrado. `CONNECT` y las peticiones con `Upgrade` se rechazan de forma cerrada: 404
-si el destino no es `/api/health` y 405 si lo es.
+si el destino no está en la lista y 405 si lo está.
 
-Solo `GET`, `HEAD` y `OPTIONS` sobre el destino exacto se delegan en Next.js, con una única
-llamada a `handle(req, res)`. La API Route responde:
+La lista cerrada es:
+
+| Destino                 | Métodos                  | Cuerpo máximo | Acceso                                          |
+| ----------------------- | ------------------------ | ------------- | ----------------------------------------------- |
+| `/api/health`           | `GET`, `HEAD`, `OPTIONS` | 0             | Sin sesión (excepción cerrada)                  |
+| `/login`                | `GET`                    | 0             | Sin sesión; no concede nada más                 |
+| `/api/session/sign-in`  | `POST`                   | 4096 bytes    | Sin sesión; exige la sesión previa y su testigo |
+| `/`                     | `GET`                    | 0             | Sesión                                          |
+| `/account/password`     | `GET`                    | 0             | Sesión                                          |
+| `/api/session/sign-out` | `POST`                   | 4096 bytes    | Sesión y su testigo                             |
+| `/api/account/password` | `POST`                   | 4096 bytes    | Sesión y su testigo                             |
+
+La frontera no comprueba la sesión ni los permisos: decide solo sobre la forma de la petición.
+El acceso lo comprueba cada ruta de producto con su guarda. Lo delegado llega a Next.js con una
+única llamada a `handle(req, res)`. La API Route de estado responde:
 
 - `GET` y `HEAD`: 200 con `Content-Type: application/json`, `Cache-Control: no-store` y el cuerpo
   exacto `{ "status": "ok", "version": "<X.Y.Z>" }` (sin cuerpo en `HEAD`);
@@ -209,20 +251,23 @@ defecto, distinto del de desarrollo, y la prueba de humo comprueba el mismo cont
 modos.
 
 `next dev`, `next start` y `node server.mjs` directos no están admitidos: los dos primeros eluden
-la frontera HTTP y el tercero, el preflight. Ningún registro se emite por petición, rechazo o
-respuesta, en ninguno de los dos modos.
+la frontera HTTP y el tercero, el preflight. La frontera y la comprobación de estado no registran
+nada. Las rutas de producto registran una lista cerrada de eventos, cada uno solo con su nombre y
+el identificador de correlación de la petición, y auditan en la base de datos las entradas, las
+salidas, los cambios de cuenta y las denegaciones.
 
 ## Cómo se imponen los límites
 
-| Mecanismo                                                                            | Qué impone                                                                                                                                                                         | Control                                                   |
-| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| ESLint (`eslint.config.mjs`), regla `no-restricted-imports`                          | Matriz de dependencias, solo API pública, importaciones relativas que cruzan límites, módulos portables sin alias ni relativas, lectura de `process.env` y límites de `server.mjs` | `npm run check:lint` (controles `lint` y `macos-quality`) |
-| ESLint: `no-restricted-properties`, `no-restricted-globals` y `no-restricted-syntax` | `process.env` fuera de `src/platform/config`, `fetch` y otros accesos de red en `src/`, y en `server.mjs` cualquier lectura del entorno distinta de `NODE_ENV`                     | `npm run check:lint`                                      |
-| `tests/architecture/import-boundaries.test.ts`                                       | Cada dependencia prohibida de la matriz da error y cada dependencia permitida no                                                                                                   | `npm run check:test` (controles `test` y `macos-quality`) |
-| `tests/architecture/public-routes.test.ts`                                           | Una única ruta pública: ningún otro fichero en `src/pages` ni en `src/app`, ni otro destino o método en la frontera                                                                | `npm run check:test`                                      |
-| `tests/architecture/entry-points.test.ts`                                            | Solo `npm run dev` y `npm start` como entradas; sin `rewrites`, `headers`, `redirects`, middleware, `proxy` ni `instrumentation.ts`                                                | `npm run check:test`                                      |
-| `tests/architecture/no-domain-specifics.test.ts`                                     | Ningún código de certificado en `src/`, `tests/`, `scripts/` ni en los ficheros operativos de la raíz (FR-024)                                                                     | `npm run check:test`                                      |
-| `tests/setup/no-network.ts`                                                          | Las pruebas no pueden abrir conexiones externas                                                                                                                                    | `npm run check:test`                                      |
+| Mecanismo                                                                            | Qué impone                                                                                                                                                                                           | Control                                                   |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| ESLint (`eslint.config.mjs`), regla `no-restricted-imports`                          | Matriz de dependencias, solo API pública, importaciones relativas que cruzan límites, módulos portables sin alias ni relativas, lectura de `process.env` y límites de `server.mjs`                   | `npm run check:lint` (controles `lint` y `macos-quality`) |
+| ESLint: `no-restricted-properties`, `no-restricted-globals` y `no-restricted-syntax` | `process.env` fuera de `src/platform/config`, `fetch` y otros accesos de red en `src/`, y en `server.mjs` cualquier lectura del entorno distinta de `NODE_ENV`                                       | `npm run check:lint`                                      |
+| `tests/architecture/import-boundaries.test.ts`                                       | Cada dependencia prohibida de la matriz da error y cada dependencia permitida no                                                                                                                     | `npm run check:test` (controles `test` y `macos-quality`) |
+| `tests/architecture/public-routes.test.ts`                                           | Lista cerrada de rutas: `src/pages`, `ROUTES` de la frontera y la lista de la prueba coinciden; cada ruta de producto se declara con su guarda; solo la entrada y su envío son accesibles sin sesión | `npm run check:test`                                      |
+| `tests/contract/session.contract.test.ts` y `audit-immutability.contract.test.ts`    | Entrada, sesión, CSRF, permisos en el servidor, caducidad y revocación; y que ninguna operación del producto modifica ni borra un evento de auditoría                                                | `npm run check:test`                                      |
+| `tests/architecture/entry-points.test.ts`                                            | Solo `npm run dev` y `npm start` como entradas; sin `rewrites`, `headers`, `redirects`, middleware, `proxy` ni `instrumentation.ts`                                                                  | `npm run check:test`                                      |
+| `tests/architecture/no-domain-specifics.test.ts`                                     | Ningún código de certificado en `src/`, `tests/`, `scripts/` ni en los ficheros operativos de la raíz (FR-024)                                                                                       | `npm run check:test`                                      |
+| `tests/setup/no-network.ts`                                                          | Las pruebas no pueden abrir conexiones externas                                                                                                                                                      | `npm run check:test`                                      |
 
 La lista completa de controles y sus comandos está en
 [`quality-controls.md`](quality-controls.md).

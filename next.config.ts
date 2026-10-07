@@ -9,8 +9,9 @@ const nextConfig: NextConfig = {
   // Sin optimizador de imágenes en `/_next/image`: no hace falta y es superficie
   // de ataque.
   images: { unoptimized: true },
-  // Sin registro automático de la única URL que delega la frontera (FR-008).
-  logging: { incomingRequests: { ignore: [/^\/api\/health$/] } },
+  // Sin registro automático de peticiones en ninguna ruta (FR-008): los únicos
+  // registros son los de `src/platform/logging`.
+  logging: { incomingRequests: false },
 };
 
 export default nextConfig;

@@ -74,32 +74,34 @@ autenticada. Sin funciones de producto.
 
 ### Persistencia y auditoría
 
-- [ ] T013 Añadir a `src/platform/config/` las claves nuevas del esquema Zod (directorio de datos, origen público, caducidad de sesión por inactividad y máxima, límites de tamaño de petición, máximo de coste por operación) y actualizar `.env.example` sin valores reales, con pruebas en `tests/unit/platform/config.test.ts`
-- [ ] T014 Crear `src/platform/persistence/` con la conexión `node:sqlite` en modo WAL, el ejecutor de migraciones numeradas (`src/platform/persistence/migrations/`) y un `index.ts` público, con pruebas en `tests/unit/platform/persistence.test.ts`
-- [ ] T015 [P] Añadir a `src/platform/persistence/` el almacén de ficheros por SHA-256 (publicación antes de referenciar: fichero temporal en el mismo directorio, sincronización a disco, renombrado a su huella y sincronización del directorio; sin sobrescritura ni borrado; verificación de huella al leer), con pruebas en `tests/unit/platform/blob-store.test.ts`
-- [ ] T016 Crear `src/platform/audit/` con `AuditEvent` de solo inserción, impuesto por disparadores, y campos `at`, `actor_id`, `action`, `target_kind`, `target_id`, `result`, `correlation_id`, `details`; pruebas en `tests/unit/platform/audit.test.ts` que demuestren que `UPDATE` y `DELETE` fallan; y una prueba de contrato en `tests/contract/audit-immutability.contract.test.ts` que, tras ejercitar todas las operaciones de la superficie con todos los perfiles, compruebe que los eventos anteriores conservan su contenido, que ninguno desaparece y que una corrección es un evento nuevo (SC-043)
-- [ ] T017 [P] Añadir a `src/platform/logging/` el identificador de correlación por petición y los eventos de producto, sin secretos ni contenido, con pruebas en `tests/unit/platform/logging.test.ts`
+- [X] T013 Añadir a `src/platform/config/` las claves nuevas del esquema Zod (directorio de datos, origen público y caducidad de sesión por inactividad y máxima) y actualizar `.env.example` sin valores reales, con pruebas en `tests/unit/platform/config.test.ts`. Los límites de tamaño de petición no son configuración: son parte de la lista cerrada de rutas de la frontera (T024). El máximo de coste por operación se añade con el presupuesto, en T049
+- [X] T014 Crear `src/platform/persistence/` con la conexión `node:sqlite` en modo WAL, el ejecutor de migraciones numeradas y un `index.ts` público, con pruebas en `tests/unit/platform/persistence.test.ts`. Las migraciones son entradas numeradas del propio módulo, no ficheros aparte: el módulo es portable y no puede leer ficheros relativos cuando lo empaqueta Next.js
+- [X] T015 [P] Añadir a `src/platform/persistence/` el almacén de ficheros por SHA-256 (publicación antes de referenciar: fichero temporal en el mismo directorio, sincronización a disco, renombrado a su huella y sincronización del directorio; sin sobrescritura ni borrado; verificación de huella al leer), con pruebas en `tests/unit/platform/persistence.test.ts`
+- [X] T016 Crear `src/platform/audit/` con `AuditEvent` de solo inserción, impuesto por disparadores, y campos `at`, `actor_id`, `action`, `target_kind`, `target_id`, `result`, `correlation_id`, `details`; pruebas en `tests/unit/platform/audit.test.ts` que demuestren que `UPDATE` y `DELETE` fallan; y una prueba de contrato en `tests/contract/audit-immutability.contract.test.ts` que, tras ejercitar todas las operaciones de la superficie con todos los perfiles, compruebe que los eventos anteriores conservan su contenido, que ninguno desaparece y que una corrección es un evento nuevo (SC-043)
+- [X] T017 [P] Añadir a `src/platform/logging/` el identificador de correlación por petición y los eventos de producto, sin secretos ni contenido, con pruebas en `tests/unit/platform/logging.test.ts`
 
 ### Identidad
 
-- [ ] T018 Crear `src/platform/identity/passwords.ts`: derivación `scrypt` de `node:crypto` con sal de 16 bytes y parámetros guardados con la huella (partida N = 2^17, r = 8, p = 1), `timingSafeEqual`, derivación también para usuarios inexistentes, longitud mínima de 12; pruebas en `tests/unit/platform/identity-passwords.test.ts`
-- [ ] T019 Crear `src/platform/identity/sessions.ts`: identificador de 256 bits con `randomBytes`, guardado como SHA-256; caducidad tras 30 minutos de inactividad y 12 horas de duración máxima, configurables; revocación al cerrar sesión, al cambiar la contraseña, al desactivar la cuenta y al cambiar sus permisos; renovación del identificador al autenticar; pruebas en `tests/unit/platform/identity-sessions.test.ts`
-- [ ] T020 [P] Crear `src/platform/identity/throttle.ts` con `SignInThrottle`: retraso creciente y bloqueo temporal por cuenta más un límite global, con contadores en la base; pruebas en `tests/unit/platform/identity-throttle.test.ts`
-- [ ] T021 [P] Crear `src/platform/identity/csrf.ts`: comprobación de `Origin` y `Sec-Fetch-Site` contra el origen público, y testigo aleatorio por sesión, incluida la sesión previa anónima de la entrada; pruebas en `tests/unit/platform/identity-csrf.test.ts`
-- [ ] T022 Crear `src/platform/identity/authorization.ts` y el `index.ts` público: perfiles `admin` y `teacher` leídos de `User` en cada petición, denegación por defecto y auditoría de cada denegación; pruebas en `tests/unit/platform/identity-authorization.test.ts`
-- [ ] T023 [P] Crear `scripts/admin/users.mjs` para dar de alta cuentas, asignar perfiles, forzar el cambio de contraseña y revocar sesiones, sin imprimir contraseñas ni huellas
+- [X] T018 Crear en `src/platform/identity/index.ts` las contraseñas: derivación `scrypt` de `node:crypto` con sal de 16 bytes y parámetros guardados con la huella (partida N = 2^17, r = 8, p = 1), `timingSafeEqual`, derivación también para usuarios inexistentes, longitud mínima de 12; pruebas en `tests/unit/platform/identity.test.ts`. Toda la identidad está en un único `index.ts` porque es un módulo portable, sin importaciones relativas
+- [X] T019 Crear en `src/platform/identity/index.ts` las sesiones: identificador de 256 bits con `randomBytes`, guardado como SHA-256; caducidad tras 30 minutos de inactividad y 12 horas de duración máxima, configurables; revocación al cerrar sesión, al cambiar la contraseña, al desactivar la cuenta y al cambiar sus permisos; renovación del identificador al autenticar; pruebas en `tests/unit/platform/identity.test.ts`
+- [X] T020 [P] Crear en `src/platform/identity/index.ts` el control de intentos con `SignInThrottle`: retraso creciente y bloqueo temporal por cuenta, hasta 15 minutos, más un límite global, con contadores en la base; pruebas en `tests/unit/platform/identity.test.ts`
+- [X] T021 [P] Crear en `src/platform/identity/index.ts` la comprobación de `Origin` y `Sec-Fetch-Site` contra el origen público, y el testigo aleatorio por sesión, incluida la sesión previa anónima de la entrada; pruebas en `tests/unit/platform/identity.test.ts` y `tests/contract/session.contract.test.ts`
+- [X] T022 Crear en `src/platform/identity/index.ts` la autorización: perfiles `admin` y `teacher` leídos de `User` en cada petición, denegación por defecto y auditoría de cada denegación; pruebas en `tests/unit/platform/identity.test.ts`
+- [X] T023 [P] Crear `scripts/admin/users.mjs` para dar de alta cuentas, asignar perfiles, asignar contraseñas iniciales, desactivar y reactivar cuentas y revocar sesiones, sin imprimir contraseñas ni huellas; pruebas en `tests/unit/tools/admin-users.test.ts`
 
 ### Frontera HTTP y entrada
 
-- [ ] T024 Ampliar `src/platform/http-boundary/` para delegar una lista cerrada de rutas con sus métodos y su tamaño máximo de cuerpo, manteniendo sin cambios la precedencia, los rechazos cerrados y el trato de `/api/health`; ampliar `tests/unit/platform/http-boundary*.test.ts`
-- [ ] T025 Sustituir en `tests/architecture/public-routes.test.ts` la comprobación de ruta única por una que compare las rutas reales de `src/pages/` con la lista cerrada y falle ante una ruta no declarada o sin control de acceso; ajustar `tests/architecture/entry-points.test.ts` y `import-boundaries.test.ts` para que la capa de entrega pueda importar las cuatro capas
-- [ ] T026 Añadir la alteración correspondiente en `scripts/negative-checks.mjs` (una ruta de producto sin declarar debe fallar) y describirla en `docs/engineering/quality-controls.md`
-- [ ] T027 Crear `src/pages/login.tsx` y `src/pages/api/session/sign-in.ts` y `sign-out.ts`: formulario accesible, sesión previa con testigo, mensaje único de error, cookie `__Host-` con `Secure`, `HttpOnly` y `SameSite=Strict`; la página no depende de recursos que exijan sesión
-- [ ] T028 Crear `src/pages/index.tsx` (inicio autenticado, con el nombre de usuario, sus perfiles y cerrar sesión), `src/pages/account/password.tsx` con su API Route, y un componente de diseño común en `src/pages/_components/Layout.tsx` con encabezados, foco visible y navegación por teclado
-- [ ] T029 Escribir `tests/contract/session.contract.test.ts`: entrada correcta e incorrecta, envío sin testigo o con otro origen, intentos repetidos, sesión caducada por inactividad y por duración máxima, sesión revocada por cada una de sus causas, cambio de identificador al autenticar, mensaje de error que no revela si la cuenta existe (SC-039), y que ninguna ruta sin sesión devuelve datos de producto
-- [ ] T030 Comprobar que `tests/contract/health.contract.test.ts` y `scripts/smoke-test.mjs` siguen pasando sin cambios en el contrato de `/api/health`, y ampliar la prueba de humo con la entrada
+- [X] T024 Ampliar `src/platform/http-boundary/` para delegar una lista cerrada de rutas con sus métodos y su tamaño máximo de cuerpo, manteniendo sin cambios la precedencia, los rechazos cerrados y el trato de `/api/health`; ampliar `tests/unit/platform/http-boundary*.test.ts`
+- [X] T025 Sustituir en `tests/architecture/public-routes.test.ts` la comprobación de ruta única por una que compare las rutas reales de `src/pages/` con la lista cerrada y con `ROUTES`, y falle ante una ruta no declarada o sin su guarda de acceso; ajustar `tests/architecture/entry-points.test.ts` y ampliar `import-boundaries.test.ts` con las áreas nuevas. La entrega sigue sin poder importar capas de dominio: se abrirá en T038, con la primera ruta que las necesite
+- [X] T026 Añadir la alteración correspondiente en `scripts/negative-checks.mjs` (una ruta de producto sin declarar debe fallar) y describirla en `docs/engineering/quality-controls.md`
+- [X] T027 Crear `src/pages/login.ts` y `src/pages/api/session/sign-in.ts` y `sign-out.ts`: formulario accesible, sesión previa con testigo, mensaje único de error, cookie `HttpOnly` y `SameSite=Strict`, con el prefijo `__Host-` y `Secure` cuando el origen público es HTTPS; la página no depende de recursos que exijan sesión
+- [X] T028 Crear `src/pages/index.ts` (inicio autenticado, con el nombre de usuario, sus perfiles y cerrar sesión), `src/pages/account/password.ts` con su API Route, y el documento común en `src/platform/web/` (no en `src/pages/`, donde todo fichero es una ruta), con encabezados, foco visible y navegación por teclado
+- [X] T029 Escribir `tests/contract/session.contract.test.ts`: entrada correcta e incorrecta, envío sin testigo o con otro origen, intentos repetidos, sesión caducada por inactividad y por duración máxima, sesión revocada por cada una de sus causas, cambio de identificador al autenticar, mensaje de error que no revela si la cuenta existe (SC-039), y que ninguna ruta sin sesión devuelve datos de producto
+- [X] T030 Comprobar que `tests/contract/health.contract.test.ts` y `scripts/smoke-test.mjs` siguen pasando sin cambios en el contrato de `/api/health`, y ampliar la prueba de humo con la entrada
 
-**Checkpoint**: entrar, ver la página de inicio y salir. Primera interfaz visible.
+**Checkpoint**: entrar, ver la página de inicio y salir. Primera interfaz visible. Verificado
+con pruebas automáticas y con un navegador real: ver
+[foundations-check.md](./foundations-check.md).
 
 ---
 
@@ -117,7 +119,7 @@ página de origen de varios elementos, corrige uno y valida.
 - [ ] T035 [P] [US1] Crear `src/platform/generation/` con la interfaz `GenerationProvider`, el adaptador determinista con respuestas grabadas en `tests/fixtures/generation/`, `GenerationRun` y `GenerationCall`, y el prompt versionado `prompts/interpretation/v1.md`; pruebas de contrato en `tests/contract/generation-provider.contract.test.ts` (salida inválida rechazada y registrada; texto con instrucciones incrustadas tratado como dato; ninguna identidad ni registro de usuarios en la entrada enviada)
 - [ ] T036 [US1] Implementar en `src/modules/structured-interpretation/` la obtención de la interpretación con su esquema Zod versionado y las comprobaciones posteriores (la página existe, la cita aparece en el texto de su página); pruebas en `tests/unit/structured-interpretation/interpret.test.ts`
 - [ ] T037 [US1] Implementar correcciones con control de revisión y la validación (exige todas las páginas sin texto resueltas y la confirmación de la revisión del inventario); el rechazo con motivo obligatorio (`Rejection`), que conserva el contenido y permite volver a revisión; la vigencia se deriva de `interpretation_revision`; pruebas en `tests/unit/structured-interpretation/validation.test.ts`
-- [ ] T038 [US1] Crear las páginas `src/pages/documents/` (subida con cuerpo `application/pdf`, registro con huella y procedencia, páginas sin texto y su resolución) y la ruta que sirve el PDF autorizado en su página con `nosniff` y política de contenido restrictiva
+- [ ] T038 [US1] Abrir la regla de la entrega para que las rutas de producto importen las capas `normative-source` y `structured-interpretation` (ESLint y `import-boundaries.test.ts`), y crear las páginas `src/pages/documents/` (subida con cuerpo `application/pdf`, registro con huella y procedencia, páginas sin texto y su resolución) y la ruta que sirve el PDF autorizado en su página con `nosniff` y política de contenido restrictiva
 - [ ] T039 [US1] Crear las páginas `src/pages/interpretation/` (inventario con jerarquía, duración como metadato, acceso a la página de origen junto al texto extraído, corrección, validación con confirmación expresa)
 - [ ] T040 [US1] Implementar el documento sustituto (FR-067): interpretación nueva sin validación ni aprobaciones, sin mezclar páginas ni reasignar referencias, sin iniciar generación; pruebas en `tests/integration/substitute-document.test.ts`
 - [ ] T041 [US1] Escribir `tests/integration/us1-document-interpretation.test.ts` con los escenarios de aceptación 1 a 10 de la historia 1 y las denegaciones por perfil
@@ -263,7 +265,7 @@ documental antes de empezar la fase indicada.
 Ninguno impide la fase 3.
 
 - **Fase 1** no depende de ninguna otra tarea. **Fase 2** puede hacerse a la vez.
-- **Fase 3** depende de las fases 1 y 2, ya completadas.
+- **Fase 3**, completada, dependía de las fases 1 y 2.
 - **Fases 4 → 5 → 6 → 7** van en ese orden: cada historia usa lo aprobado en la anterior.
 - **T058** se apoya en T040 y condiciona la aprobación de T046 y T054 tras un sustituto.
 - **Fase 8**: T070 a T073 dependen de T014 a T016; T072 necesita además T050 y T066.
@@ -278,14 +280,14 @@ bloqueada.
 
 | Estado                                        | Tareas                                                                 |
 | --------------------------------------------- | ---------------------------------------------------------------------- |
-| Completadas                                   | T001–T012                                                              |
-| Ejecutables, en este orden                    | T013–T073, T078, T082–T087                                             |
+| Completadas                                   | T001–T030                                                              |
+| Ejecutables, en este orden                    | T031–T073, T078, T082–T087                                             |
 | Bloqueada por el dominio y el servidor        | T074                                                                   |
 | Bloqueadas por el proveedor de generación     | T075; y por depender de ella, T076 y T077                              |
 | Bloqueadas por el Moodle de pruebas           | T079; y por depender de ella, T080                                     |
 | Bloqueada por las tres anteriores             | T081, que depende de T074, T077 y T079                                 |
 
-De las 87 tareas, 12 están completadas (T001 a T012), 68 son ejecutables y 7 están
+De las 87 tareas, 30 están completadas (T001 a T030), 50 son ejecutables y 7 están
 bloqueadas. T086 no cierra la aceptación mientras quede alguna bloqueada. Ninguna evidencia
 de las tareas bloqueadas se simula: el recorrido con respuestas deterministas se registra
 como ensayo.
