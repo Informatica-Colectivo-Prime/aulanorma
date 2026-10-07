@@ -201,8 +201,9 @@ Un único PR sin lógica nueva, que cambia a la vez:
 
 Comprobación: `npm run check` y `npm run verify:negative` en verde, y ninguna aparición de
 `moodle-publication` fuera de `specs/001-engineering-baseline/` y del historial de los ADR.
-La evidencia de 001 no se modifica. La aceptación del ADR 0003 y la nota de revisión del ADR
-0001 son un cambio documental posterior, cuando lo decida el mantenedor.
+La evidencia de 001 no se modifica. Por decisión del mantenedor, este mismo cambio acepta el
+ADR 0003 y añade al ADR 0001 la nota de su sustitución parcial. La aceptación registra la
+decisión arquitectónica; no indica que la exportación esté implementada.
 
 ### ADR 0004
 

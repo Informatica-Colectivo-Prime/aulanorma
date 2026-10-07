@@ -20,7 +20,7 @@ datos de ningún certificado.
 
 El único punto de acceso a esta capa es su `index.ts` (`@/modules/didactic-content`). Importar
 sus rutas internas (`@/modules/didactic-content/<interno>`) está prohibido. Según la matriz de
-dependencias, solo `moodle-publication` puede importarla; ni `platform` ni la entrega HTTP
+dependencias, solo `content-export` puede importarla; ni `platform` ni la entrega HTTP
 (`server.mjs` y `src/pages/api/health.ts`) pueden hacerlo.
 
 ## Cómo se imponen los límites

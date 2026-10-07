@@ -28,8 +28,8 @@ sesión, con los nueve controles en verde, y termina con algo que se puede ver o
   la fila del ADR 0004 en el índice de `docs/adr/README.md`.
 - Los seis puntos abiertos de `checklists/pilot-readiness.md` se resuelven antes de la fase
   que indica la tabla "Puntos abiertos de la lista de calidad".
-- Ninguna tarea de esta lista acepta un ADR ni modifica uno aceptado, ni toca
-  `specs/001-engineering-baseline/`.
+- Ninguna tarea de esta lista toca `specs/001-engineering-baseline/`. La única aceptación de
+  un ADR es la del 0003, en T005, con su nota en el ADR 0001; el ADR 0004 sigue Propuesto.
 
 ---
 
@@ -38,12 +38,12 @@ sesión, con los nueve controles en verde, y termina con algo que se puede ver o
 **Purpose**: renombrar la cuarta capa antes de escribir código en ella. Un único PR, sin
 lógica nueva.
 
-- [ ] T001 Mover `src/modules/moodle-publication/` a `src/modules/content-export/` con `git mv`, conservando `index.ts` (`export {};`) y actualizando su `README.md` para retirar el carácter transitorio
-- [ ] T002 Actualizar las reglas `no-restricted-imports` de `eslint.config.mjs` para que nombren `content-export` en lugar de `moodle-publication`
-- [ ] T003 Actualizar `tests/architecture/import-boundaries.test.ts` y cualquier otra prueba de `tests/architecture/` que nombre el módulo
-- [ ] T004 Actualizar la alteración de `lint` de `scripts/negative-checks.mjs`, que importa `@/modules/moodle-publication`, y su descripción en `docs/engineering/quality-controls.md`
-- [ ] T005 [P] Actualizar `docs/engineering/architecture.md` y los `README.md` de `src/modules/normative-source/`, `structured-interpretation/` y `didactic-content/` que mencionan el nombre anterior
-- [ ] T006 Ejecutar `npm run check` y `npm run verify:negative`, y comprobar que `moodle-publication` solo aparece en `specs/001-engineering-baseline/` y en el historial de `docs/adr/`
+- [X] T001 Mover `src/modules/moodle-publication/` a `src/modules/content-export/` con `git mv`, conservando `index.ts` (`export {};`) y actualizando su `README.md` para retirar el carácter transitorio
+- [X] T002 Actualizar las reglas `no-restricted-imports` de `eslint.config.mjs` para que nombren `content-export` en lugar de `moodle-publication`
+- [X] T003 Actualizar `tests/architecture/import-boundaries.test.ts` y cualquier otra prueba de `tests/architecture/` que nombre el módulo
+- [X] T004 Actualizar la alteración de `lint` de `scripts/negative-checks.mjs`, que importa `@/modules/moodle-publication`, y su descripción en `docs/engineering/quality-controls.md`
+- [X] T005 [P] Actualizar `docs/engineering/architecture.md` y los `README.md` de `src/modules/normative-source/`, `structured-interpretation/` y `didactic-content/` que mencionan el nombre anterior; aceptar el ADR 0003 en `docs/adr/`, actualizar su índice y añadir al ADR 0001 la nota de sustitución parcial, sin cambiar el resto de su decisión
+- [X] T006 Ejecutar `npm run check` y `npm run verify:negative`, y comprobar que `moodle-publication` solo aparece en `specs/001-engineering-baseline/`, en el historial de `docs/adr/` y en la descripción de esta migración en `specs/002-boe-scorm-export/` y en los documentos que cuentan el origen del módulo
 
 **Checkpoint**: los nueve controles en verde, sin cambio de comportamiento.
 

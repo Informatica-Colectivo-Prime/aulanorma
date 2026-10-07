@@ -23,7 +23,7 @@ src/
     ├── normative-source/
     ├── structured-interpretation/
     ├── didactic-content/
-    └── moodle-publication/
+    └── content-export/
 ```
 
 No existen `src/app`, `middleware.ts`, `proxy.ts` ni `instrumentation.ts`.
@@ -39,7 +39,7 @@ público y un `README.md` que describe su responsabilidad.
 | Fuente normativa            | `src/modules/normative-source`          | PDF original inmutable y texto extraído por página  |
 | Interpretación estructurada | `src/modules/structured-interpretation` | Representación validada del certificado             |
 | Contenido didáctico         | `src/modules/didactic-content`          | Materiales, actividades y evaluaciones generados    |
-| Exportación                 | `src/modules/moodle-publication`        | Paquete descargable a partir del contenido aprobado |
+| Exportación                 | `src/modules/content-export`            | Paquete descargable a partir del contenido aprobado |
 
 Además, según la constitución:
 
@@ -51,9 +51,8 @@ Además, según la constitución:
 Hasta la versión 1.1.0 de la constitución, la cuarta capa era la publicación automática en
 Moodle. El
 [ADR 0003](../adr/0003-scorm-export-instead-of-automatic-moodle-publication.md) la sustituye por
-la exportación de un paquete que el usuario incorpora manualmente a Moodle. La ubicación
-objetivo del módulo es `src/modules/content-export`; hasta completar esa migración, pendiente
-según ese ADR, conserva el nombre `moodle-publication`.
+la exportación de un paquete que el usuario incorpora manualmente a Moodle. Con ese cambio, el
+módulo pasó de llamarse `moodle-publication` a `src/modules/content-export`.
 
 **Estado actual**: las cuatro capas están vacías. Cada `index.ts` solo contiene `export {};`, y
 no hay lógica de producto ni nada específico de ningún certificado (FR-024).
@@ -64,14 +63,14 @@ Cada celda indica si el módulo de la fila puede importar al de la columna, siem
 su API pública (`index.ts`). Es la matriz de
 [`data-model.md`](../../specs/001-engineering-baseline/data-model.md#matriz-de-dependencias-entre-capas).
 
-| Importa →                                         | `platform`               | `normative-source` | `structured-interpretation` | `didactic-content` | `moodle-publication` |
-| ------------------------------------------------- | ------------------------ | ------------------ | --------------------------- | ------------------ | -------------------- |
-| `platform`                                        | —                        | No                 | No                          | No                 | No                   |
-| `normative-source`                                | Sí                       | —                  | No                          | No                 | No                   |
-| `structured-interpretation`                       | Sí                       | Sí                 | —                           | No                 | No                   |
-| `didactic-content`                                | Sí                       | No                 | Sí                          | —                  | No                   |
-| `moodle-publication`                              | Sí                       | No                 | No                          | Sí                 | —                    |
-| Entrega: `server.mjs` y `src/pages/api/health.ts` | **Sí, solo API pública** | **No**             | **No**                      | **No**             | **No**               |
+| Importa →                                         | `platform`               | `normative-source` | `structured-interpretation` | `didactic-content` | `content-export` |
+| ------------------------------------------------- | ------------------------ | ------------------ | --------------------------- | ------------------ | ---------------- |
+| `platform`                                        | —                        | No                 | No                          | No                 | No               |
+| `normative-source`                                | Sí                       | —                  | No                          | No                 | No               |
+| `structured-interpretation`                       | Sí                       | Sí                 | —                           | No                 | No               |
+| `didactic-content`                                | Sí                       | No                 | Sí                          | —                  | No               |
+| `content-export`                                  | Sí                       | No                 | No                          | Sí                 | —                |
+| Entrega: `server.mjs` y `src/pages/api/health.ts` | **Sí, solo API pública** | **No**             | **No**                      | **No**             | **No**           |
 
 Reglas:
 
