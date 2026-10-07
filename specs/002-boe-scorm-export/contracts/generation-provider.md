@@ -22,15 +22,16 @@ Una única operación: generar una salida estructurada.
 | ----------------------- | ------------------------------------------------------------------------ |
 | `ok` con `output`       | Salida que cumple el esquema                                             |
 | `invalid_output`        | El proveedor respondió, pero la salida no cumple el esquema              |
-| `provider_error`        | Fallo del proveedor o de la red, tras los reintentos acotados            |
+| `provider_error`        | Fallo del proveedor o de la red; en el piloto, sin reintentos automáticos |
 | `usage`                 | Proveedor, modelo, tokens de entrada y de salida, y latencia; siempre    |
 
 ## Reglas
 
 - El adaptador no decide nada del dominio: no calcula la cobertura, no aprueba y no escribe
   en el almacenamiento.
-- Una salida inválida nunca se repara: se rechaza, se registra y, como mucho, se reintenta un
-  número acotado de veces (FR-019).
+- Una salida inválida nunca se repara: se rechaza y se registra. En el piloto no hay
+  reintentos automáticos: otro intento lo pide expresamente un usuario autorizado, con su
+  propia reserva (FR-019, FR-066).
 - El texto del documento y cualquier salida anterior se envían como datos, separados de las
   instrucciones (FR-004).
 - No se envían datos personales: ni identidades ni registros de usuarios (FR-029).
@@ -61,7 +62,10 @@ acepta en silencio (SC-004).
 4. Una generación del temario procesa los temas uno a uno; los terminados quedan como
    borradores aunque los siguientes no se generen (FR-021).
 5. Reanudar es una operación explícita que solo procesa los temas `pending` o `failed`
-   (FR-066).
+   (FR-066). Un tema es `failed` si su operación terminó con error o su propuesta no superó
+   el esquema y las comprobaciones del dominio; el resultado inválido no se guarda ni
+   sustituye un borrador válido. Un tema cuya operación quedó `uncertain` es `failed`, y esa
+   operación no se reenvía: se concilia.
 6. Modificar el límite solo cambia el límite (FR-066).
 
 Los precios por modelo y el máximo por operación son configuración.

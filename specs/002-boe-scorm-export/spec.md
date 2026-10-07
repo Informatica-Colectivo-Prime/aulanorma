@@ -169,6 +169,13 @@ del mantenedor, recibidas ese mismo día sin pregunta previa.
   de proveedor y el registro de cada generación (FR-055) y la ausencia de comportamiento
   específico del piloto (FR-056) reciben un criterio de éxito propio; el envío de datos de
   usuarios al servicio de generación (FR-029) queda cubierto por SC-015, que ya lo incluye.
+- Decisión del mantenedor (tema fallido): un tema es fallido cuando la operación termina con
+  error o la propuesta no supera el esquema y las comprobaciones obligatorias. El resultado
+  inválido no sustituye un borrador válido ni puede aprobarse. En el piloto no hay
+  reintentos automáticos: un usuario autorizado puede pedir expresamente otro intento, para
+  el que se comprueba y se reserva presupuesto de nuevo; los temas terminados no se repiten
+  por sí solos, y una operación incierta conserva su reserva, no se reenvía automáticamente
+  y sigue el procedimiento de conciliación.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -559,7 +566,13 @@ las instrucciones, se recorre con un alumno de prueba, se abandona, se reanuda y
   puede desarrollar varios requisitos; NO se exige duplicar textos ni un tema por requisito.
 - **FR-019**: Toda propuesta de índice o de temario DEBE cumplir un formato definido y
   validarse antes de guardarse. Una propuesta que no lo cumpla se rechaza y se registra; no se
-  corrige en silencio.
+  corrige en silencio. Un tema es **fallido** cuando la operación que lo genera termina con
+  error, o cuando su propuesta no supera el esquema o alguna de las comprobaciones
+  obligatorias sobre sus referencias. El resultado inválido NO DEBE guardarse como contenido
+  del tema, NO DEBE sustituir un borrador válido que el tema ya tuviera y NO DEBE poder
+  aprobarse. El docente DEBE ver qué temas son fallidos, distinguidos de los pendientes, y
+  el motivo: error de la operación, formato inválido o referencias no admitidas. En este
+  piloto NO DEBE haber reintentos automáticos de generación.
 - **FR-020**: El contenido de cada tema DEBE sanearse antes de mostrarse o exportarse.
 - **FR-021**: Antes de cada solicitud de generación de pago, incluidas la reanudación y
   cualquier nueva generación de un elemento ya generado, el sistema DEBE mostrar la
@@ -577,7 +590,11 @@ las instrucciones, se recorre con un alumno de prueba, se abandona, se reanuda y
 - **FR-066**: Reanudar una generación incompleta DEBE exigir una acción explícita de un
   usuario autorizado y presupuesto disponible, y DEBE generar solo los temas pendientes o
   fallidos. El sistema NO DEBE ampliar el límite ni repetir temas terminados por sí solo, y
-  modificar el límite NO DEBE iniciar ni reanudar ninguna generación.
+  modificar el límite NO DEBE iniciar ni reanudar ninguna generación. Un nuevo intento de un
+  tema fallido es esa misma acción explícita: para cada operación nueva se comprueba y se
+  reserva presupuesto, como para la primera. Una operación de resultado incierto conserva su
+  reserva, NO DEBE reenviarse automáticamente y se resuelve por el procedimiento de
+  conciliación; su tema queda como fallido mientras tanto.
 
 **Revisión y aprobación**
 
@@ -760,7 +777,8 @@ Esta funcionalidad los necesita; su elección técnica corresponde al plan.
 - **Generación**: una operación de desarrollo del temario, con su coste y su estado, que puede
   quedar incompleta, con temas pendientes o fallidos.
 - **Tema**: una unidad del temario, formada por bloques de requisito y bloques de desarrollo
-  didáctico.
+  didáctico. Antes de tener contenido está pendiente; es fallido si su generación terminó con
+  error o con una propuesta inválida (FR-019).
 - **Versión del temario**: el conjunto de temas y el índice en un momento dado; es lo que se
   aprueba y lo que se exporta.
 - **Aprobación**: quién aprobó qué y cuándo. Hay aprobación del índice, de cada tema y de la
@@ -796,7 +814,11 @@ Esta funcionalidad los necesita; su elección técnica corresponde al plan.
 - **SC-004**: En el 100 % de los bloques identificados como requisito del BOE, la página
   indicada existe y la cita coincide con el texto de esa página.
 - **SC-005**: El 100 % de las propuestas que no cumplen el formato exigido se rechazan y
-  quedan registradas, sin guardarse.
+  quedan registradas, sin guardarse. En una prueba preparada con operaciones que terminan
+  con error, con formato inválido y con referencias no admitidas, el 100 % de esos temas
+  figuran como fallidos con su motivo, ninguno conserva el resultado inválido, ninguno puede
+  aprobarse, un borrador válido anterior sigue intacto y el servicio de generación recibe
+  exactamente una operación por tema: ningún reintento automático.
 - **SC-044**: El 100 % de las generaciones registradas indican el proveedor, el modelo, la
   versión del prompt, el coste estimado y si el resultado fue válido. Todos los adaptadores
   de generación disponibles superan el mismo conjunto de pruebas de contrato, y sustituir
@@ -811,7 +833,9 @@ Esta funcionalidad los necesita; su elección técnica corresponde al plan.
 - **SC-032**: Al alcanzar el límite de coste en una prueba preparada, no se inicia ninguna
   operación de generación más, los temas terminados siguen disponibles como borradores, los
   pendientes o fallidos están identificados y la versión no puede aprobarse ni exportarse. Al
-  reanudar de forma explícita con presupuesto disponible, no se repite ningún tema terminado.
+  reanudar de forma explícita con presupuesto disponible, no se repite ningún tema terminado,
+  cada operación nueva tiene su propia reserva y ninguna operación de resultado incierto se
+  reenvía: sigue contando hasta su conciliación.
   Antes del 100 % de las solicitudes de generación se muestran la estimación y el presupuesto
   disponible, y ninguna operación se envía sin una reserva dentro de los límites.
 - **SC-039**: Una sesión deja de servir en el 100 % de los casos tras el periodo de

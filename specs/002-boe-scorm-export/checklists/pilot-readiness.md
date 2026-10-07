@@ -53,7 +53,7 @@ requisitos, no si el sistema funciona.
 - [x] CHK029 ¿Están definidos todos los estados de una operación respecto al presupuesto, incluido el resultado incierto y su conciliación? [Completeness, Spec §FR-021, Research §R6]
 - [x] CHK030 ¿Son coherentes el límite acumulado, el máximo por operación y el periodo entre la especificación, el plan y la constitución enmendada? [Consistency, Spec §FR-021, Plan §Constitution Check]
 - [x] CHK031 ¿Está especificado qué acredita y qué no acredita una ejecución con respuestas simuladas? [Clarity, Spec §SC-024, Contracts §generation-provider]
-- [ ] CHK032 ¿Están definidos los requisitos para un tema «fallido»: cuándo lo es, cuántos reintentos y qué ve el docente? [Gap, Spec §FR-019, §FR-021]
+- [x] CHK032 ¿Están definidos los requisitos para un tema «fallido»: cuándo lo es, cuántos reintentos y qué ve el docente? [Gap, Spec §FR-019, §FR-021]
 - [x] CHK033 ¿Queda claro en los requisitos que el proveedor real no está seleccionado y qué tareas dependen de ello? [Assumption, Spec §Assumptions]
 
 ## Exportación SCORM y Moodle
@@ -194,4 +194,30 @@ Las dos marcas acreditan que la redacción y la forma de verificar están defini
 acreditan ninguna prueba del producto.**
 
 Sigue abierto uno: CHK032 (antes de la fase 6).
+
+## Revisión documental antes de la fase 6 (2026-10-07)
+
+**CHK032 pasa a satisfecho**, por decisión expresa del mantenedor. FR-019 define ahora cuándo
+un tema es fallido: la operación termina con error, o la propuesta no supera el esquema o las
+comprobaciones obligatorias. El resultado inválido no se guarda, no sustituye un borrador
+válido y no puede aprobarse, y el docente ve los temas fallidos, distinguidos de los
+pendientes, con su motivo. En el piloto no hay reintentos automáticos. FR-066 fija que otro
+intento es una acción explícita de un usuario autorizado, con comprobación y reserva de
+presupuesto para cada operación nueva, sin repetir temas terminados, y que una operación
+incierta conserva su reserva, no se reenvía y sigue la conciliación.
+
+| Pregunta de CHK032 | Requisito                         | Criterio | Tarea que lo comprueba |
+| ------------------ | --------------------------------- | -------- | ---------------------- |
+| Cuándo es fallido  | FR-019                            | SC-005   | T053                   |
+| Cuántos reintentos | FR-019 (ninguno automático), FR-066 | SC-005, SC-032 | T053, T059       |
+| Qué ve el docente  | FR-019, FR-021                    | SC-005, SC-032 | T056, T059       |
+
+No se ha añadido ningún requisito ni criterio nuevo: se han completado FR-019, FR-066, SC-005
+y SC-032, y se ha retirado de `contracts/generation-provider.md` y de `research.md` la mención
+a «reintentos acotados», que contradecía esta decisión.
+
+La marca acredita que la redacción y la forma de verificar están definidas. **No acredita
+ninguna prueba del producto**: el comportamiento se implementa y se comprueba en la fase 6.
+
+No queda ningún punto abierto en esta lista.
 

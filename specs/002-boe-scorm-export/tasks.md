@@ -167,7 +167,7 @@ los temas, aprueba la versión y comprueba la invalidación al editar el índice
 
 - [ ] T051 [P] [US3] Crear la migración y el repositorio de `Topic` (`status`: `pending`, `failed`, `draft`, `in_review`, `approved`, `rejected`), `TopicBlock` (`kind`: `requirement`, `development`), `BlockRequirement`, `TopicApproval`, `SyllabusVersion`, `SyllabusVersionTopic` y `ReferenceCheck` en `src/modules/didactic-content/`
 - [ ] T052 [US3] Definir el esquema Zod de los bloques estructurados y el renderizador que escapa todo el texto en `src/modules/didactic-content/render/`, con etiqueta de texto para distinguir norma y desarrollo; pruebas en `tests/unit/didactic-content/render.test.ts` con texto hostil (SC-046)
-- [ ] T053 [US3] Implementar la generación del temario tema a tema con `prompts/topic/v1.md`: estimación y presupuesto disponible mostrados antes de cada solicitud, incluida la reanudación; estimación separada del coste máximo reservado; ninguna operación enviada sin una reserva dentro de los límites; reserva por tema, temas terminados como borradores, pendientes o fallidos identificados, estado `incomplete`, y reanudación explícita que solo procesa pendientes o fallidos; pruebas en `tests/unit/didactic-content/syllabus-generation.test.ts`
+- [ ] T053 [US3] Implementar la generación del temario tema a tema con `prompts/topic/v1.md`: estimación y presupuesto disponible mostrados antes de cada solicitud, incluida la reanudación; estimación separada del coste máximo reservado; ninguna operación enviada sin una reserva dentro de los límites; reserva por tema, temas terminados como borradores, pendientes o fallidos identificados, estado `incomplete`, y reanudación explícita que solo procesa pendientes o fallidos; pruebas en `tests/unit/didactic-content/syllabus-generation.test.ts`; un tema es `failed` si la operación termina con error o la propuesta no supera el esquema y las comprobaciones (FR-019): el resultado inválido no se guarda ni sustituye un borrador válido, no hay reintentos automáticos, cada nuevo intento explícito reserva de nuevo y una operación incierta no se reenvía (SC-005)
 - [ ] T054 [US3] Implementar la edición de temas con control de revisión y conflicto 409 que conserva lo enviado, y la aprobación de cada tema (exige índice aprobado y vigente) y su rechazo con motivo obligatorio, sin borrar ni regenerar; la vigencia de `TopicApproval` se deriva de `topic_revision` y de su `OutlineApproval`; pruebas en `tests/unit/didactic-content/topic-approval.test.ts`
 - [ ] T055 [US3] Implementar la aprobación de la versión: exige índice aprobado y vigente, todos los temas desarrollados y aprobados, y cada requisito del inventario citado por un bloque `requirement` y desarrollado por al menos un bloque `development`; guarda una instantánea inmutable con `content_sha256`; pruebas en `tests/unit/didactic-content/syllabus-version.test.ts`
 - [ ] T056 [US3] Crear las páginas `src/pages/syllabus/` (estimación y lanzamiento, progreso y estado incompleto, reanudar, tema junto a su fuente normativa, edición, conflicto con ambas versiones, aprobación de tema y de versión con pendientes)
@@ -262,18 +262,12 @@ lista `checklists/pilot-readiness.md` revisada.
 
 ### Puntos abiertos de la lista de calidad
 
-Son huecos de la especificación, no tareas de código. Cada uno se cierra con una corrección
-documental antes de empezar la fase indicada.
-
-| Punto  | Qué falta definir                                                              | Antes de |
-| ------ | ------------------------------------------------------------------------------ | -------- |
-| CHK032 | Cuándo un tema es «fallido», cuántos reintentos hay y qué ve el docente        | Fase 6   |
-
-CHK007 (conflicto de edición: FR-063 y SC-033) y CHK047 (criterios SC-044, SC-045 y SC-046, y
-SC-015 para FR-029) se cerraron antes de la fase 4; ver la revisión de
-`checklists/pilot-readiness.md`.
-
-No impidió las fases 4 ni 5. **Sigue abierto y debe cerrarse antes de empezar la fase 6.**
+Ninguno. Eran huecos de la especificación, no tareas de código, y cada uno se cerró con una
+corrección documental antes de la fase que lo necesitaba: CHK007 (conflicto de edición: FR-063
+y SC-033) y CHK047 (criterios SC-044, SC-045 y SC-046, y SC-015 para FR-029), antes de la
+fase 4; y CHK032 (tema fallido, sin reintentos automáticos y nuevo intento explícito: FR-019,
+FR-066, SC-005 y SC-032), antes de la fase 6. Ver las revisiones de
+`checklists/pilot-readiness.md`. Cerrar un punto acredita su redacción, no una prueba.
 
 - **Fase 1** no depende de ninguna otra tarea. **Fase 2** puede hacerse a la vez.
 - **Fase 3**, completada, dependía de las fases 1 y 2.
