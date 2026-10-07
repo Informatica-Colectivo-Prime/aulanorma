@@ -34,19 +34,26 @@ La constitución (principio II) separa cuatro capas, cada una con su modelo y un
 explícito con la anterior. Cada capa tiene un directorio en `src/modules/`, con un `index.ts`
 público y un `README.md` que describe su responsabilidad.
 
-| Capa                        | Ubicación                               | Responsabilidad                                      |
-| --------------------------- | --------------------------------------- | ---------------------------------------------------- |
-| Fuente normativa            | `src/modules/normative-source`          | PDF original inmutable y texto extraído por página   |
-| Interpretación estructurada | `src/modules/structured-interpretation` | Representación validada del certificado              |
-| Contenido didáctico         | `src/modules/didactic-content`          | Materiales, actividades y evaluaciones generados     |
-| Publicación en Moodle       | `src/modules/moodle-publication`        | Correspondencia entre el contenido aprobado y Moodle |
+| Capa                        | Ubicación                               | Responsabilidad                                     |
+| --------------------------- | --------------------------------------- | --------------------------------------------------- |
+| Fuente normativa            | `src/modules/normative-source`          | PDF original inmutable y texto extraído por página  |
+| Interpretación estructurada | `src/modules/structured-interpretation` | Representación validada del certificado             |
+| Contenido didáctico         | `src/modules/didactic-content`          | Materiales, actividades y evaluaciones generados    |
+| Exportación                 | `src/modules/moodle-publication`        | Paquete descargable a partir del contenido aprobado |
 
 Además, según la constitución:
 
 - la fuente normativa no se modifica: las correcciones de interpretación se registran como
   anotaciones trazables en la capa de interpretación estructurada;
-- la publicación en Moodle no genera ni altera contenido didáctico: solo transforma contenido
-  aprobado al formato de Moodle.
+- la exportación no genera ni altera contenido didáctico: solo transforma contenido aprobado al
+  formato de exportación, que es SCORM 1.2.
+
+Hasta la versión 1.1.0 de la constitución, la cuarta capa era la publicación automática en
+Moodle. El
+[ADR 0003](../adr/0003-scorm-export-instead-of-automatic-moodle-publication.md) la sustituye por
+la exportación de un paquete que el usuario incorpora manualmente a Moodle. La ubicación
+objetivo del módulo es `src/modules/content-export`; hasta completar esa migración, pendiente
+según ese ADR, conserva el nombre `moodle-publication`.
 
 **Estado actual**: las cuatro capas están vacías. Cada `index.ts` solo contiene `export {};`, y
 no hay lógica de producto ni nada específico de ningún certificado (FR-024).

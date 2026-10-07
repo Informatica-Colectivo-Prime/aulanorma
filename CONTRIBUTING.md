@@ -25,7 +25,7 @@ difieren, prevalece la constitución.
 GitHub Spec Kit es el flujo oficial de desarrollo.
 
 - **Funcionalidades críticas**: las que afectan a trazabilidad normativa, interpretación
-  estructurada, aprobación docente, publicación en Moodle, esquemas, seguridad o permisos, o
+  estructurada, aprobación docente, exportación, esquemas, seguridad o permisos, o
   integración con IA. Siguen la secuencia completa:
 
   `specify` → `clarify` → `plan` → `checklist` → `tasks` → `analyze` → `implement` → `converge`
@@ -42,8 +42,9 @@ Los artefactos de cada funcionalidad se guardan en `specs/<rama>/`.
   necesarias y produce un resultado verificable por un docente.
 - El primer alcance es la unidad formativa **UF0517** del certificado de profesionalidad
   **ADGG0408**. No se amplía al certificado ADGG0408 completo hasta que el flujo extremo a
-  extremo de UF0517 (ingesta, interpretación, generación, revisión y publicación en un Moodle
-  de pruebas) funcione y haya sido validado por un docente.
+  extremo de UF0517 (ingesta, interpretación, índice propuesto, generación, revisión,
+  exportación del paquete e importación manual verificada en un Moodle de pruebas) funcione y
+  haya sido validado por un docente.
 - El código no contiene lógica específica de UF0517 ni de ADGG0408: la especificidad reside en
   los datos y en las pruebas, no en el código.
 
@@ -73,18 +74,21 @@ documenta en la **descripción del pull request** con la **lista de comprobació
 constitucional**, que responde las doce puertas de verificación de la constitución con su
 evidencia:
 
-1. Procedencia normativa: documento, sección y página de origen (I).
+1. Procedencia normativa: documento, sección y página de origen, y cobertura visible de los
+   requisitos obligatorios (I).
 2. Cuatro capas y sus contratos (II).
-3. Publicación solo con aprobación docente explícita y vigente (III).
+3. Exportación y descarga solo con aprobación docente explícita y vigente, del índice y del
+   contenido (III).
 4. Salidas críticas validadas contra esquemas versionados (IV).
 5. Mínimo privilegio, secretos, validación de archivos, control de acceso y auditoría, y las
    condiciones de la excepción pública de estado si existe (V).
-6. Publicación idempotente, reanudable y sin duplicados (VI).
+6. Paquete autónomo, íntegro, con su versión aprobada identificable y validado antes de la
+   descarga, sin compatibilidades declaradas sin verificar (VI).
 7. Porción vertical pequeña dentro del alcance vigente (VII).
 8. Pruebas obligatorias (VIII).
 9. Acceso a IA mediante adaptadores, con límites de coste y registro de uso (IX).
 10. Accesibilidad y lenguaje claro (X).
-11. Registro de generaciones, revisiones, publicaciones y decisiones (XI).
+11. Registro de generaciones, revisiones, exportaciones y decisiones (XI).
 12. Complejidad evitada o justificada en un ADR (XII).
 
 Una puerta que no aplica se marca como tal, con su motivo. Una excepción de secretos o de
