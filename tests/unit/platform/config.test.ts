@@ -66,6 +66,7 @@ interface Config {
   readonly sessionMaxHours: number;
   readonly pdfMaxMib: number;
   readonly pdfMaxPages: number;
+  readonly generationMaxOperationCost: number;
 }
 type ConfigResult =
   | { readonly ok: true; readonly config: Config }
@@ -110,6 +111,7 @@ const SESSION_IDLE_MINUTES = "AULANORMA_SESSION_IDLE_MINUTES";
 const SESSION_MAX_HOURS = "AULANORMA_SESSION_MAX_HOURS";
 const PDF_MAX_MIB = "AULANORMA_PDF_MAX_MIB";
 const PDF_MAX_PAGES = "AULANORMA_PDF_MAX_PAGES";
+const GENERATION_MAX_OPERATION_COST = "AULANORMA_GENERATION_MAX_OPERATION_COST";
 const ALL_KEYS = [
   LOG_LEVEL,
   ENVIRONMENT,
@@ -119,6 +121,7 @@ const ALL_KEYS = [
   SESSION_MAX_HOURS,
   PDF_MAX_MIB,
   PDF_MAX_PAGES,
+  GENERATION_MAX_OPERATION_COST,
 ] as const;
 
 const VALID_SOURCE: ConfigSource = {
@@ -130,8 +133,9 @@ const VALID_SOURCE: ConfigSource = {
   [SESSION_MAX_HOURS]: "12",
   [PDF_MAX_MIB]: "32",
   [PDF_MAX_PAGES]: "600",
+  [GENERATION_MAX_OPERATION_COST]: "1000000",
 };
-// Las seis claves añadidas con el producto, válidas: las
+// Las siete claves añadidas con el producto, válidas: las
 // usan los casos que solo tratan del nivel de registro y del entorno.
 const PRODUCT_SOURCE = {
   [DATA_DIR]: "/var/lib/aulanorma-datos",
@@ -140,6 +144,7 @@ const PRODUCT_SOURCE = {
   [SESSION_MAX_HOURS]: "12",
   [PDF_MAX_MIB]: "32",
   [PDF_MAX_PAGES]: "600",
+  [GENERATION_MAX_OPERATION_COST]: "1000000",
 } as const;
 const PRODUCT_CONFIG = {
   dataDir: "/var/lib/aulanorma-datos",
@@ -148,6 +153,7 @@ const PRODUCT_CONFIG = {
   sessionMaxHours: 12,
   pdfMaxMib: 32,
   pdfMaxPages: 600,
+  generationMaxOperationCost: 1_000_000,
 } as const;
 function setProductVariables(): void {
   for (const [key, value] of Object.entries(PRODUCT_SOURCE)) {
@@ -164,6 +170,7 @@ const VALID_CONFIG: Config = {
   sessionMaxHours: 12,
   pdfMaxMib: 32,
   pdfMaxPages: 600,
+  generationMaxOperationCost: 1_000_000,
 };
 
 // Datos sintéticos únicos en cada ejecución. Nunca se imprimen.
@@ -273,7 +280,7 @@ function sortProblems(
   );
 }
 
-// Unión discriminada exacta: solo `ok` y `config`, con las ocho claves del
+// Unión discriminada exacta: solo `ok` y `config`, con las nueve claves del
 // esquema.
 function expectSuccess(result: ConfigResult, expected: Config): void {
   expectNoLeaks("resultado", result);
@@ -285,6 +292,7 @@ function expectSuccess(result: ConfigResult, expected: Config): void {
   expect(Object.keys(result.config).sort()).toEqual([
     "dataDir",
     "environment",
+    "generationMaxOperationCost",
     "logLevel",
     "pdfMaxMib",
     "pdfMaxPages",
@@ -500,7 +508,7 @@ describe("validateConfig(source)", () => {
     expectFailure(config.validateConfig(source), [{ key, problem: "missing" }]);
   });
 
-  test("una fuente vacía produce missing para las seis variables", () => {
+  test("una fuente vacía produce missing para todas las variables", () => {
     expectFailure(
       config.validateConfig({}),
       ALL_KEYS.map((key) => ({ key, problem: "missing" as const })),
@@ -601,6 +609,18 @@ describe("validateConfig(source)", () => {
     { key: PDF_MAX_MIB, value: "1", field: "pdfMaxMib", expected: 1 },
     { key: PDF_MAX_MIB, value: "64", field: "pdfMaxMib", expected: 64 },
     { key: PDF_MAX_PAGES, value: "2000", field: "pdfMaxPages", expected: 2000 },
+    {
+      key: GENERATION_MAX_OPERATION_COST,
+      value: "0",
+      field: "generationMaxOperationCost",
+      expected: 0,
+    },
+    {
+      key: GENERATION_MAX_OPERATION_COST,
+      value: "1000000000",
+      field: "generationMaxOperationCost",
+      expected: 1_000_000_000,
+    },
   ] as const)(
     "acepta $key=$value como número",
     ({ key, value, field, expected }) => {
@@ -629,6 +649,11 @@ describe("validateConfig(source)", () => {
     { key: PDF_MAX_MIB, value: "32.5" },
     { key: PDF_MAX_PAGES, value: "2001" },
     { key: PDF_MAX_PAGES, value: "0600" },
+    { key: GENERATION_MAX_OPERATION_COST, value: "1000000001" },
+    { key: GENERATION_MAX_OPERATION_COST, value: "-1" },
+    { key: GENERATION_MAX_OPERATION_COST, value: "01" },
+    { key: GENERATION_MAX_OPERATION_COST, value: "1.5" },
+    { key: GENERATION_MAX_OPERATION_COST, value: "1e6" },
   ])("rechaza con invalid_value $key=$value", ({ key, value }) => {
     expectFailure(config.validateConfig({ ...VALID_SOURCE, [key]: value }), [
       { key, problem: "invalid_value" },
@@ -642,6 +667,7 @@ describe("validateConfig(source)", () => {
     SESSION_MAX_HOURS,
     PDF_MAX_MIB,
     PDF_MAX_PAGES,
+    GENERATION_MAX_OPERATION_COST,
   ])("rechaza con missing: %s ausente o vacía", (key) => {
     const absent: Record<string, string | undefined> = { ...VALID_SOURCE };
     Reflect.deleteProperty(absent, key);

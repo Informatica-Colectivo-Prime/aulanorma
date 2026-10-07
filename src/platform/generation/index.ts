@@ -9,12 +9,31 @@
 //
 // El único adaptador que existe es el determinista, con respuestas grabadas.
 // El proveedor real no está seleccionado: no hay ningún SDK instalado ni se
-// hace ninguna llamada de pago. El presupuesto y sus reservas llegan con la
-// generación del temario.
+// hace ninguna llamada de pago.
+//
+// Presupuesto: ninguna operación se envía sin una reserva de su coste máximo
+// dentro de los límites (`./budget`). El envío se anota antes de llamar al
+// proveedor; con el consumo confirmado la reserva se liquida, y si no puede
+// confirmarse (sin datos de consumo, tiempo agotado o fallo) queda incierta y
+// sigue contando.
 import { createHash, randomBytes } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { z } from "zod";
 import type { Database } from "@/platform/persistence";
+import type { Budget, ReserveRefusal } from "./budget";
+
+export { createBudget, MAX_AMOUNT } from "./budget";
+export type {
+  Budget,
+  BudgetChange,
+  BudgetChangeResult,
+  BudgetStatus,
+  ReconcileResult,
+  Reservation,
+  ReservationState,
+  ReserveRefusal,
+  ReserveResult,
+} from "./budget";
 
 export type GenerationTask = "interpretation" | "outline" | "topic";
 export type GenerationRunKind = "interpretation" | "outline" | "syllabus";
@@ -40,15 +59,30 @@ export interface Usage {
   readonly tokensOut: number;
 }
 
+// `cost` es el consumo confirmado de la operación, en millonésimas de la
+// moneda; `null` si el proveedor no lo confirma.
 export type ProviderReply =
-  | { readonly ok: true; readonly output: unknown; readonly usage: Usage }
-  | { readonly ok: false; readonly usage: Usage };
+  | {
+      readonly ok: true;
+      readonly output: unknown;
+      readonly usage: Usage;
+      readonly cost: number | null;
+    }
+  | { readonly ok: false; readonly usage: Usage; readonly cost: number | null };
 
 export interface GenerationProvider {
   readonly name: string;
-  // Coste máximo estimado de la operación, en millonésimas de la moneda.
+  // Estimación orientativa del coste de la operación, en millonésimas de la
+  // moneda. Es lo que se muestra; no es lo que se reserva.
   estimateCost(request: ProviderRequest): number;
+  // Coste máximo de la operación: lo que se reserva antes de enviarla.
+  maxCost(request: ProviderRequest): number;
   generate(request: ProviderRequest): Promise<ProviderReply>;
+}
+
+export interface CostEstimate {
+  readonly estimatedCost: number;
+  readonly maxCost: number;
 }
 
 export interface GenerationRequest<Output> extends ProviderRequest {
@@ -64,7 +98,9 @@ export type GenerationResult<Output> =
   | {
       readonly status:
         "invalid_output" | "provider_error" | "rejected_by_domain";
-    };
+    }
+  // No había una reserva posible dentro de los límites: no se envió nada.
+  | { readonly status: "budget_exceeded"; readonly reason: ReserveRefusal };
 
 export interface GenerationCall {
   readonly id: string;
@@ -94,6 +130,9 @@ export interface GenerationRun {
 
 export interface Generation {
   readonly provider: string;
+  readonly budget: Budget;
+  // Estimación y coste máximo de una operación, sin enviarla ni reservar.
+  estimate(request: ProviderRequest): CostEstimate;
   startRun(input: {
     readonly kind: GenerationRunKind;
     readonly targetId: string;
@@ -137,16 +176,45 @@ const VALIDATIONS: readonly CallValidation[] = [
   "rejected_by_domain",
 ];
 
+// Tiempo máximo de espera de una operación, por defecto.
+export const DEFAULT_CALL_TIMEOUT_MS = 120_000;
+
 export function createGeneration({
   db,
   provider,
+  budget,
   now,
+  callTimeoutMs = DEFAULT_CALL_TIMEOUT_MS,
 }: {
   readonly db: Database;
   readonly provider: GenerationProvider;
+  readonly budget: Budget;
   readonly now: () => number;
+  readonly callTimeoutMs?: number;
 }): Generation {
+  // La respuesta del proveedor, o `null` si falla o agota el tiempo.
+  const ask = async (
+    request: ProviderRequest,
+  ): Promise<ProviderReply | null> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        provider.generate(request),
+        new Promise<null>((resolve) => {
+          timer = setTimeout(() => {
+            resolve(null);
+          }, callTimeoutMs);
+        }),
+      ]);
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   const recordCall = (
+    callId: string,
     runId: string,
     request: ProviderRequest,
     usage: Usage,
@@ -159,7 +227,7 @@ export function createGeneration({
         "prompt_version, tokens_in, tokens_out, latency_ms, estimated_cost, " +
         "validation_result) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ).run(
-      randomBytes(16).toString("hex"),
+      callId,
       runId,
       now(),
       request.task,
@@ -180,6 +248,14 @@ export function createGeneration({
 
   return {
     provider: provider.name,
+    budget,
+
+    estimate(request) {
+      return {
+        estimatedCost: provider.estimateCost(request),
+        maxCost: provider.maxCost(request),
+      };
+    },
 
     startRun({ kind, targetId, requestedBy }) {
       const id = randomBytes(16).toString("hex");
@@ -193,28 +269,41 @@ export function createGeneration({
     async call(runId, request) {
       const { outputSchema, accept, ...providerRequest } = request;
       const estimatedCost = provider.estimateCost(providerRequest);
-      const startedAt = now();
-      let reply: ProviderReply;
-      try {
-        reply = await provider.generate(providerRequest);
-      } catch {
-        reply = {
-          ok: false,
-          usage: { model: "unknown", tokensIn: 0, tokensOut: 0 },
-        };
+      // Sin reserva dentro de los límites, la operación no se envía.
+      const reservation = budget.reserve({
+        runId,
+        task: request.task,
+        maxCost: provider.maxCost(providerRequest),
+      });
+      if (!reservation.ok) {
+        return { status: "budget_exceeded", reason: reservation.reason };
       }
+      const { reservationId } = reservation;
+      // El envío se anota antes de llamar: si el proceso cae después, la
+      // reserva consta como enviada y sigue contando.
+      budget.markSent(reservationId);
+      const startedAt = now();
+      const reply = await ask(providerRequest);
       const latencyMs = Math.max(0, now() - startedAt);
+      const callId = randomBytes(16).toString("hex");
+      if (reply?.cost === null || reply === null) {
+        budget.markUncertain(reservationId, callId);
+      } else if (!budget.settle(reservationId, reply.cost, callId)) {
+        // Un consumo que no es un importe válido tampoco está confirmado.
+        budget.markUncertain(reservationId, callId);
+      }
       const record = (validation: CallValidation): void => {
         recordCall(
+          callId,
           runId,
           providerRequest,
-          reply.usage,
+          reply?.usage ?? { model: "unknown", tokensIn: 0, tokensOut: 0 },
           latencyMs,
           estimatedCost,
           validation,
         );
       };
-      if (!reply.ok) {
+      if (!reply?.ok) {
         record("provider_error");
         return { status: "provider_error" };
       }
@@ -324,8 +413,9 @@ export const DETERMINISTIC_MODEL = "recorded";
 
 // Adaptador con respuestas fijas y grabadas. Responde solo a la entrada
 // exacta de una grabación; ante cualquier otra, falla como un proveedor que
-// no responde. No usa red, no cuesta nada y no acredita la calidad de una
-// generación real.
+// no responde. No usa red y no cuesta nada: su estimación, su coste máximo y
+// su consumo son cero, y no son precios de ningún proveedor. No acredita la
+// calidad ni el coste de una generación real.
 export function createDeterministicProvider(
   recordings: readonly Recording[],
 ): GenerationProvider {
@@ -337,6 +427,7 @@ export function createDeterministicProvider(
   return {
     name: DETERMINISTIC_PROVIDER,
     estimateCost: () => 0,
+    maxCost: () => 0,
     generate(request) {
       const digest = inputDigest(request.input);
       const recording = recordings.find(
@@ -347,8 +438,8 @@ export function createDeterministicProvider(
       );
       return Promise.resolve(
         recording === undefined
-          ? { ok: false, usage }
-          : { ok: true, output: recording.output, usage },
+          ? { ok: false, usage, cost: 0 }
+          : { ok: true, output: recording.output, usage, cost: 0 },
       );
     },
   };

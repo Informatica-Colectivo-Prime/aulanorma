@@ -51,6 +51,7 @@ const PORTABLE_MODULES = [
 const DELIVERY_LAYERS: readonly Layer[] = [
   "normative-source",
   "structured-interpretation",
+  "didactic-content",
 ];
 const VIEWS = "src/views/index.ts";
 const PRODUCT_PAGE = "src/pages/login.ts";

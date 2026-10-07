@@ -6,3 +6,6 @@ documento real.
 
 - `interpretation-synthetic-unit.json`: interpretación de la unidad sintética `UX9001` a
   partir de las páginas 1 a 3 de `tests/fixtures/pdf/synthetic/five-pages.pdf`.
+- `outline-synthetic-unit.json`: propuesta de índice para el inventario de esa misma
+  interpretación, tal como se guarda sin corregirla. Cubre sus cinco requisitos con tres
+  entradas, una de ellas apoyada en varios, y añade una entrada sin respaldo normativo.

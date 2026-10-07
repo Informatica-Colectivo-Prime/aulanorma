@@ -66,6 +66,18 @@ acepta en silencio (SC-004).
 
 Los precios por modelo y el máximo por operación son configuración.
 
+**Implementación (fase 5)**. El máximo por operación es
+`AULANORMA_GENERATION_MAX_OPERATION_COST`, en millonésimas de la moneda. Un adaptador declara
+dos importes por operación: `estimateCost`, la estimación orientativa que se muestra, y
+`maxCost`, lo que se reserva. Su respuesta lleva `cost`, el consumo confirmado, o `null` si no
+lo confirma; sin él, con el tiempo agotado (120 s por defecto) o con un fallo, la reserva
+queda `uncertain`. Una operación sin reserva posible devuelve `budget_exceeded` sin llamar al
+adaptador. Al arrancar, lo que constaba como enviado y sin liquidar pasa a `uncertain`, y lo
+reservado sin enviar se libera. El presupuesto nace con límite cero y moneda `XXX`, sin
+fijar; una operación de coste cero cabe en un saldo cero, pero no en uno negativo. Las
+páginas de consulta, de modificación del límite y de conciliación son de la historia 3: hoy
+el límite solo se cambia por la interfaz del módulo, que usan las pruebas.
+
 ## Adaptadores
 
 - **Determinista**: respuestas fijas y grabadas; es el único que usan las pruebas y la
@@ -86,5 +98,6 @@ recorrido (SC-024).
   en curso (SC-032, SC-037).
 - Dos operaciones simultáneas sobre el mismo saldo: solo una reserva. Respuesta sin datos de
   uso, tiempo agotado y caída entre el envío y la liquidación: la reserva queda incierta y
-  sigue contando.
+  sigue contando. Hechas en `tests/unit/platform/budget.test.ts` y
+  `budget-lifecycle.test.ts`, con proveedores y consumos simulados.
 - Texto del documento con instrucciones incrustadas: no cambia el comportamiento.

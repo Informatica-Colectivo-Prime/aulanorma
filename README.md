@@ -229,6 +229,49 @@ Para ver un conflicto de edición, abre el formulario de un requisito en dos pes
 en una y después en la otra: la segunda no guarda nada, muestra la versión más reciente junto
 a tu cambio y te deja reenviarlo o descartarlo.
 
+### 3 quater. Proponer, revisar y aprobar el índice
+
+Necesitas una interpretación **validada** (apartado anterior). El índice se pide desde la
+página de la interpretación, en «Índice del temario», que muestra antes la estimación del
+coste, el máximo que se reserva y el presupuesto disponible. Con el adaptador determinista
+todo es cero y la moneda no está fijada: no son precios de ningún proveedor.
+
+**Con el documento del piloto**, copia también la propuesta grabada:
+
+```bash
+cp specs/002-boe-scorm-export/pilot/outline-recording.json \
+  /tmp/aulanorma-desarrollo/generation-recordings/
+```
+
+Esa propuesta responde solo al inventario del piloto **tal como sale de su respuesta
+grabada**. Si al revisar la interpretación corriges, añades o retiras algún requisito, o
+cambias la denominación de la unidad, el inventario ya no es el mismo y el producto dirá que
+no hay propuesta. Para ensayar el índice, valida la interpretación sin cambiarla; para probar
+las correcciones, hazlas después de pedir el índice.
+
+Después:
+
+1. Pulsa «Pedir la propuesta de índice». Verás sus entradas, cada una con los requisitos en
+   los que se apoya y su página, y la cobertura de cada requisito con su referencia
+   normativa.
+2. Quita una entrada: la cobertura pasa a incompleta y aparecen los requisitos sin cubrir.
+   Puedes seguir editando y abrir la «Vista previa», marcada como borrador no entregable,
+   pero al aprobar el producto lo impide y enumera los pendientes.
+3. Añade una entrada y marca los requisitos que cubre. Marcar un elemento no marca los que
+   dependen de él. Sin ninguno marcado, queda «sin respaldo normativo» y no cuenta.
+4. Sube, baja o renombra entradas. Cada cambio crea una versión nueva.
+5. Rechaza el índice con un motivo y devuélvelo a revisión, o apruébalo cuando la cobertura
+   esté completa.
+6. Cambia algo después de aprobar, aunque sea el orden: el índice vuelve a revisión y su
+   aprobación queda en el registro como «sin vigencia». Lo mismo ocurre si corriges la
+   interpretación.
+
+Para ver un conflicto, abre el formulario de una entrada en dos pestañas y guarda en las dos.
+
+La propuesta grabada del piloto es una transcripción mecánica del inventario: una entrada por
+capacidad y otra por contenido. No es una generación ni una propuesta didáctica. Qué acredita
+y qué no está en [`us2-check.md`](specs/002-boe-scorm-export/us2-check.md).
+
 Detén el servidor con `Ctrl+C`.
 
 La configuración solo se valida al arrancar. Cualquier cambio en los ficheros `.env*` exige

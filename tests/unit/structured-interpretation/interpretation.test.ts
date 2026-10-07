@@ -21,6 +21,7 @@ import type {
 import { createAudit } from "@/platform/audit";
 import type { Audit } from "@/platform/audit";
 import {
+  createBudget,
   createDeterministicProvider,
   createGeneration,
   inputDigest,
@@ -153,11 +154,18 @@ beforeEach(() => {
   clock = Date.UTC(2026, 9, 7);
   generation = createGeneration({
     db,
+    budget: createBudget({
+      db,
+      audit,
+      now: () => (clock += 1000),
+      maxOperationCost: 0,
+    }),
     now: () => (clock += 1000),
     // Responde `recorded` a la entrada que le llegue, y la anota.
     provider: {
       name: "deterministic",
       estimateCost: () => 0,
+      maxCost: () => 0,
       generate: (request) => {
         sent.push(request);
         return createDeterministicProvider([

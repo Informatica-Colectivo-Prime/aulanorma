@@ -31,6 +31,7 @@ import type { Audit } from "@/platform/audit";
 import { readRuntimeConfig } from "@/platform/config";
 import type { Config } from "@/platform/config";
 import {
+  createBudget,
   createDeterministicProvider,
   createGeneration,
   DETERMINISTIC_PROVIDER,
@@ -98,6 +99,15 @@ export function getRuntime(): Runtime {
   const db = openDatabase(config.dataDir);
   const audit = createAudit(db);
   const recordings = `${config.dataDir}/${RECORDINGS_DIRECTORY}`;
+  const budget = createBudget({
+    db,
+    audit,
+    now: () => Date.now(),
+    maxOperationCost: config.generationMaxOperationCost,
+  });
+  // Al arrancar, una operación que constaba como enviada y no se liquidó
+  // queda como incierta y sigue contando contra el presupuesto.
+  budget.recoverInterrupted();
   const runtime: Runtime = {
     config,
     db,
@@ -105,11 +115,13 @@ export function getRuntime(): Runtime {
     projectRoot: process.cwd(),
     generation: createGeneration({
       db,
+      budget,
       // Las grabaciones se leen en cada operación: añadir una no exige
-      // reiniciar.
+      // reiniciar. El adaptador determinista no cuesta nada.
       provider: {
         name: DETERMINISTIC_PROVIDER,
         estimateCost: () => 0,
+        maxCost: () => 0,
         generate: (request) =>
           createDeterministicProvider(loadRecordings(recordings)).generate(
             request,
@@ -174,6 +186,12 @@ const NOTICE_CODES = [
   "interpretation_rejected",
   "interpretation_resubmitted",
   "interpretation_blocked",
+  "outline_created",
+  "outline_refused",
+  "outline_edited",
+  "outline_approved",
+  "outline_rejected",
+  "outline_resubmitted",
 ] as const;
 
 export type NoticeCode = (typeof NOTICE_CODES)[number];
@@ -356,6 +374,11 @@ ul.tree li{border-bottom:1px solid var(--line);padding:.6rem 0}
 .d2{margin-left:3rem}
 .d3{margin-left:4.5rem}
 .d4{margin-left:6rem}
+ol.entries{margin:0 0 1rem;padding:0 0 0 1.75rem}
+ol.entries>li{border-bottom:1px solid var(--line);padding:.75rem 0}
+ol.entries ul{margin:.25rem 0 .5rem;padding-left:1.1rem}
+.banner{border:2px dashed var(--bad);color:var(--bad);font-weight:700;padding:.6rem 1rem;margin:0 0 1.25rem;border-radius:.3rem}
+label.check.d1,label.check.d2,label.check.d3,label.check.d4{max-width:none}
 .gone{text-decoration:line-through;color:var(--muted)}
 .lines{white-space:pre-line}
 .cols{display:grid;gap:1.5rem;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr))}

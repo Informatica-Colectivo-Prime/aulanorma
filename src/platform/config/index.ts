@@ -30,6 +30,9 @@ export interface Config {
   readonly sessionMaxHours: number;
   readonly pdfMaxMib: number;
   readonly pdfMaxPages: number;
+  // Coste máximo de una operación de generación, en millonésimas de la
+  // moneda del presupuesto.
+  readonly generationMaxOperationCost: number;
 }
 
 export type ConfigResult =
@@ -104,6 +107,12 @@ const SESSION_MAX_HOURS = boundedInteger(168);
 // puede superar el máximo de cuerpo que la frontera HTTP admite en la subida.
 const PDF_MAX_MIB = boundedInteger(64);
 const PDF_MAX_PAGES = boundedInteger(2000);
+// De 0 a 1 000 000 000 millonésimas: mil unidades de la moneda.
+const GENERATION_MAX_OPERATION_COST = z
+  .string()
+  .regex(/^(?:0|[1-9]\d{0,9})$/)
+  .transform(Number)
+  .refine((value) => value <= 1_000_000_000);
 
 // Esquema: cada variable de entorno con los valores que admite.
 const SCHEMA = {
@@ -115,6 +124,7 @@ const SCHEMA = {
   AULANORMA_SESSION_MAX_HOURS: SESSION_MAX_HOURS,
   AULANORMA_PDF_MAX_MIB: PDF_MAX_MIB,
   AULANORMA_PDF_MAX_PAGES: PDF_MAX_PAGES,
+  AULANORMA_GENERATION_MAX_OPERATION_COST: GENERATION_MAX_OPERATION_COST,
 } as const;
 
 const PREFIX = "AULANORMA_";
@@ -158,6 +168,10 @@ export function validateConfig(source: ConfigSource): ConfigResult {
   const pdfMaxPages = SCHEMA.AULANORMA_PDF_MAX_PAGES.safeParse(
     source.AULANORMA_PDF_MAX_PAGES,
   );
+  const generationMaxOperationCost =
+    SCHEMA.AULANORMA_GENERATION_MAX_OPERATION_COST.safeParse(
+      source.AULANORMA_GENERATION_MAX_OPERATION_COST,
+    );
   for (const [key, parsed] of [
     ["AULANORMA_LOG_LEVEL", logLevel],
     ["AULANORMA_ENVIRONMENT", environment],
@@ -167,6 +181,7 @@ export function validateConfig(source: ConfigSource): ConfigResult {
     ["AULANORMA_SESSION_MAX_HOURS", sessionMaxHours],
     ["AULANORMA_PDF_MAX_MIB", pdfMaxMib],
     ["AULANORMA_PDF_MAX_PAGES", pdfMaxPages],
+    ["AULANORMA_GENERATION_MAX_OPERATION_COST", generationMaxOperationCost],
   ] as const) {
     const value = source[key];
     if (value === undefined || value === "") {
@@ -189,6 +204,7 @@ export function validateConfig(source: ConfigSource): ConfigResult {
     !sessionMaxHours.success ||
     !pdfMaxMib.success ||
     !pdfMaxPages.success ||
+    !generationMaxOperationCost.success ||
     problems.length > 0
   ) {
     return failure(problems);
@@ -204,6 +220,7 @@ export function validateConfig(source: ConfigSource): ConfigResult {
       sessionMaxHours: sessionMaxHours.data,
       pdfMaxMib: pdfMaxMib.data,
       pdfMaxPages: pdfMaxPages.data,
+      generationMaxOperationCost: generationMaxOperationCost.data,
     }),
   };
 }

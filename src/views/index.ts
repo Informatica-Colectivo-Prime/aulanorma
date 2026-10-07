@@ -1,5 +1,6 @@
 // Vistas de la historia «documento e interpretación» (specs/002-boe-scorm-
-// export: US1; contracts/http-surface.md). Las comparten las páginas y las
+// export: US1; contracts/http-surface.md). Las de la historia del índice
+// están en `./outline` y se exportan desde aquí. Las comparten las páginas y las
 // acciones de `src/pages`: una acción que no puede guardar (un conflicto, un
 // bloqueo o un dato inválido) responde con la misma vista que la página, con
 // lo que el usuario envió.
@@ -25,17 +26,26 @@ import {
   INVENTORY_REVIEW_STATEMENT,
   MAX_SECTION_PAGES,
 } from "@/modules/structured-interpretation";
-import { html, layout, noticeBox } from "@/platform/web";
+import { html, noticeBox } from "@/platform/web";
 import type { Html, Notice, PageReply, SessionContext } from "@/platform/web";
+import {
+  budgetNote,
+  KIND_NAMES,
+  moment,
+  pageLink,
+  pageLinks,
+  pagesLabel,
+  reply,
+  who,
+} from "./shared";
+import type { BudgetFigures, Names } from "./shared";
+
+import { outlineNotice } from "./outline";
+
+export * from "./outline";
+export type { BudgetFigures, CostFigures, Names } from "./shared";
 
 // --- Textos ---
-
-const KIND_NAMES: Readonly<Record<RequirementKind, string>> = {
-  capability: "Capacidad",
-  criterion: "Criterio de evaluación",
-  content: "Contenido",
-  subcontent: "Subapartado",
-};
 
 const STATUS_NAMES: Readonly<Record<Interpretation["status"], string>> = {
   in_review: "En revisión",
@@ -108,6 +118,8 @@ const REQUEST_REFUSALS: Readonly<Record<string, string>> = {
     "La respuesta del servicio de generación no cumple el formato exigido. Se ha rechazado y registrado, y no se ha guardado nada.",
   rejected_by_domain:
     "La respuesta del servicio de generación cita páginas o textos que no están en el documento. Se ha rechazado y registrado, y no se ha guardado nada.",
+  budget_exceeded:
+    "No hay presupuesto de generación disponible para esta operación, o supera el máximo por operación. No se ha enviado ni guardado nada.",
 };
 
 const CHANGE_PROBLEMS: Readonly<Record<ChangeRejection, string>> = {
@@ -204,45 +216,9 @@ function noticeOf(notice: Notice | undefined, limits?: PdfLimits): Html | null {
     );
   }
   const known = NOTICES[notice.code];
-  return known === undefined ? null : noticeBox(known[0], known[1]);
-}
-
-// Fecha y hora en UTC, sin depender de la configuración regional.
-function moment(at: number): string {
-  return `${new Date(at).toISOString().slice(0, 16).replace("T", " ")} UTC`;
-}
-
-export type Names = ReadonlyMap<string, string>;
-
-function who(names: Names, id: string): string {
-  return names.get(id) ?? "cuenta desconocida";
-}
-
-function pagesLabel(from: number, to: number): string {
-  return from === to
-    ? `página ${String(from)}`
-    : `páginas ${String(from)} a ${String(to)}`;
-}
-
-function pageLink(documentId: string, number: number): Html {
-  return html`<a href="/documents/${documentId}/pages/${number}"
-    >página ${number}</a
-  >`;
-}
-
-function pageLinks(documentId: string, from: number, to: number): Html {
-  return to === from
-    ? pageLink(documentId, from)
-    : html`${pageLink(documentId, from)} a ${pageLink(documentId, to)}`;
-}
-
-function reply(
-  status: number,
-  title: string,
-  session: SessionContext,
-  content: Html,
-): PageReply {
-  return { status, page: layout({ title, session, content }) };
+  return known === undefined
+    ? outlineNotice(notice)
+    : noticeBox(known[0], known[1]);
 }
 
 // --- Documentos ---
@@ -438,6 +414,9 @@ export function documentView(input: {
   readonly pages: readonly PageSummary[];
   readonly interpretations: readonly Interpretation[];
   readonly names: Names;
+  readonly budget: BudgetFigures;
+  // Nombre del adaptador de generación en uso.
+  readonly provider: string;
 }): PageReply {
   const { session, document, pages, interpretations, substitutes } = input;
   const withoutText = pages.filter((page) => !page.hasExtractableText);
@@ -617,6 +596,15 @@ export function documentView(input: {
                   Páginas del PDF, no del boletín. Solo se envía al servicio de
                   generación el texto de esas páginas, sin ningún dato de
                   usuarios.
+                </p>
+                ${budgetNote({
+                  budget: input.budget,
+                  cost: undefined,
+                  provider: input.provider,
+                })}
+                <p class="hint">
+                  El coste máximo de esta operación depende de las páginas que
+                  indiques: se calcula y se reserva al enviarla.
                 </p>
                 <button type="submit" data-busy="Obteniendo la interpretación…">
                   Pedir la interpretación
@@ -806,6 +794,8 @@ export function interpretationView(input: {
   // Motivo escrito en un rechazo que no llegó a guardarse.
   readonly reason?: string;
   readonly problem?: string;
+  // Apartado del índice de esta interpretación (`outlineSection`).
+  readonly outlineSection?: Html | null;
 }): PageReply {
   const { session, interpretation, document, history, names } = input;
   const { id, revision } = interpretation;
@@ -1039,6 +1029,7 @@ ${input.reason ?? ""}</textarea>
               }`
           : null
       }
+      ${input.outlineSection ?? null}
 
       <h2>Registro</h2>
       ${

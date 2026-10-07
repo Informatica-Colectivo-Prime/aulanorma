@@ -131,7 +131,9 @@ export type RequestRejection =
   | "already_exists"
   | "provider_error"
   | "invalid_output"
-  | "rejected_by_domain";
+  | "rejected_by_domain"
+  // No había presupuesto para reservar la operación: no se envió nada.
+  | "budget_exceeded";
 
 export type RequestResult =
   | { readonly ok: true; readonly interpretationId: string }
@@ -187,6 +189,12 @@ export interface StructuredInterpretation {
   listForDocument(documentId: string): readonly Interpretation[];
   get(id: string): Interpretation | undefined;
   history(id: string): History;
+  // La validación vigente: la de la revisión actual de una interpretación
+  // validada. `undefined` si no la hay.
+  currentValidation(id: string): Validation | undefined;
+  // `true` si el documento de la interpretación tiene un sustituto: la
+  // interpretación es histórico y ya no se corrige ni se valida.
+  isHistorical(id: string): boolean;
   editRequirement(
     input: Target & {
       readonly requirementId: string;
@@ -723,7 +731,10 @@ export function createStructuredInterpretation({
         },
       });
       if (result.status !== "ok") {
-        generation.finishRun(runId, "failed");
+        generation.finishRun(
+          runId,
+          result.status === "budget_exceeded" ? "incomplete" : "failed",
+        );
         return refuse(result.status);
       }
 
@@ -856,6 +867,18 @@ export function createStructuredInterpretation({
             reason: text(row.reason),
           })),
       };
+    },
+
+    currentValidation(id) {
+      return this.history(id).validations.find((item) => item.current);
+    },
+
+    isHistorical(id) {
+      const current = get(id);
+      return (
+        current !== undefined &&
+        source.substitutesOf(current.documentId).length > 0
+      );
     },
 
     editRequirement(input) {

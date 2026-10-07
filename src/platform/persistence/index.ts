@@ -131,7 +131,8 @@ export function migrate(
 // módulos portables. Cada tabla pertenece a un único módulo, que es el único
 // que la consulta: `audit_event`, a `audit`; las de `0002`, a `identity`; las
 // de `0003`, a la capa `normative-source`; las de `0004`, a
-// `structured-interpretation`; y las de `0005`, a `generation`.
+// `structured-interpretation`; las de `0005` y `0006`, a `generation`; y las
+// de `0007`, a la capa `didactic-content`.
 
 const AUDIT_EVENT = `
 CREATE TABLE audit_event (
@@ -361,6 +362,148 @@ CREATE TABLE generation_call (
 ${appendOnly("generation_call", "id = NEW.id")}
 `;
 
+// Presupuesto de generación (data-model.md; contracts/generation-provider.md).
+// Una única fila de presupuesto, con el límite acumulado del proyecto. Cada
+// operación reserva su coste máximo antes de enviarse. Los disparadores
+// imponen el ciclo de una reserva: una liquidada o liberada no cambia más, una
+// enviada o incierta nunca se libera, y su importe reservado no se modifica.
+// La moneda `XXX` (ISO 4217, «sin moneda») indica que aún no está fijada: no
+// hay proveedor seleccionado.
+const BUDGET = `
+CREATE TABLE budget (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  project_limit INTEGER NOT NULL CHECK (project_limit >= 0),
+  currency TEXT NOT NULL,
+  revision INTEGER NOT NULL CHECK (revision >= 1)
+) STRICT;
+INSERT INTO budget (id, project_limit, currency, revision)
+VALUES (1, 0, 'XXX', 1);
+CREATE TRIGGER budget_no_delete BEFORE DELETE ON budget
+BEGIN SELECT RAISE(ABORT, 'budget cannot be deleted'); END;
+CREATE TABLE budget_change (
+  id TEXT PRIMARY KEY,
+  actor_id TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  previous_limit INTEGER NOT NULL,
+  new_limit INTEGER NOT NULL CHECK (new_limit >= 0)
+) STRICT;
+CREATE TABLE budget_reservation (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES generation_run (id),
+  call_id TEXT,
+  task TEXT NOT NULL,
+  reserved_cost INTEGER NOT NULL CHECK (reserved_cost >= 0),
+  settled_cost INTEGER CHECK (settled_cost IS NULL OR settled_cost >= 0),
+  state TEXT NOT NULL
+    CHECK (state IN ('reserved', 'sent', 'settled', 'released', 'uncertain')),
+  created_at INTEGER NOT NULL,
+  sent_at INTEGER,
+  closed_at INTEGER,
+  CHECK ((state = 'settled') = (settled_cost IS NOT NULL))
+) STRICT;
+CREATE INDEX budget_reservation_state ON budget_reservation (state);
+CREATE TRIGGER budget_reservation_no_delete BEFORE DELETE ON budget_reservation
+BEGIN SELECT RAISE(ABORT, 'budget_reservation cannot be deleted'); END;
+CREATE TRIGGER budget_reservation_transition BEFORE UPDATE ON budget_reservation
+WHEN OLD.state IN ('settled', 'released')
+  OR NEW.reserved_cost <> OLD.reserved_cost
+  OR NEW.id <> OLD.id
+  OR NEW.run_id <> OLD.run_id
+  OR (OLD.state = 'reserved' AND NEW.state NOT IN ('sent', 'released'))
+  OR (OLD.state = 'sent' AND NEW.state NOT IN ('settled', 'uncertain'))
+  OR (OLD.state = 'uncertain' AND NEW.state <> 'settled')
+BEGIN SELECT RAISE(ABORT, 'budget_reservation transition not allowed'); END;
+CREATE TABLE reconciliation (
+  id TEXT PRIMARY KEY,
+  reservation_id TEXT NOT NULL UNIQUE REFERENCES budget_reservation (id),
+  actor_id TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  confirmed_cost INTEGER NOT NULL CHECK (confirmed_cost >= 0),
+  note TEXT NOT NULL
+) STRICT;
+${appendOnly("budget_change", "id = NEW.id")}
+${appendOnly("reconciliation", "id = NEW.id OR reservation_id = NEW.reservation_id")}
+`;
+
+// Índice del temario (data-model.md, «Contenido didáctico»). El índice y sus
+// entradas se editan con control de revisión; los cambios, las aprobaciones y
+// los rechazos solo se insertan. Nada se borra: una entrada quitada queda
+// marcada. Los vínculos entre una entrada y sus requisitos sí se sustituyen al
+// editarla, y cada cambio conserva el antes y el después. Sin claves ajenas
+// hacia tablas de otra capa.
+const OUTLINE = `
+CREATE TABLE outline (
+  id TEXT PRIMARY KEY,
+  interpretation_id TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL
+    CHECK (status IN ('proposed', 'in_review', 'approved', 'rejected')),
+  revision INTEGER NOT NULL CHECK (revision >= 1),
+  generation_run_id TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+) STRICT;
+CREATE TRIGGER outline_no_delete BEFORE DELETE ON outline
+BEGIN SELECT RAISE(ABORT, 'outline cannot be deleted'); END;
+CREATE TABLE outline_entry (
+  id TEXT PRIMARY KEY,
+  outline_id TEXT NOT NULL REFERENCES outline (id),
+  position INTEGER NOT NULL,
+  title TEXT NOT NULL CHECK (length(trim(title)) > 0),
+  unsupported INTEGER NOT NULL CHECK (unsupported IN (0, 1)),
+  removed INTEGER NOT NULL CHECK (removed IN (0, 1))
+) STRICT;
+CREATE INDEX outline_entry_outline ON outline_entry (outline_id);
+CREATE TRIGGER outline_entry_no_delete BEFORE DELETE ON outline_entry
+BEGIN SELECT RAISE(ABORT, 'outline_entry cannot be deleted'); END;
+CREATE TABLE entry_requirement (
+  outline_entry_id TEXT NOT NULL REFERENCES outline_entry (id),
+  requirement_id TEXT NOT NULL,
+  PRIMARY KEY (outline_entry_id, requirement_id)
+) STRICT;
+CREATE TRIGGER entry_requirement_supported BEFORE INSERT ON entry_requirement
+WHEN EXISTS (
+  SELECT 1 FROM outline_entry
+  WHERE id = NEW.outline_entry_id AND unsupported = 1
+)
+BEGIN SELECT RAISE(ABORT, 'an unsupported entry has no requirements'); END;
+CREATE TRIGGER outline_entry_unsupported BEFORE UPDATE ON outline_entry
+WHEN NEW.unsupported = 1 AND EXISTS (
+  SELECT 1 FROM entry_requirement WHERE outline_entry_id = NEW.id
+)
+BEGIN SELECT RAISE(ABORT, 'an unsupported entry has no requirements'); END;
+CREATE TABLE outline_change (
+  id TEXT PRIMARY KEY,
+  outline_id TEXT NOT NULL REFERENCES outline (id),
+  entry_id TEXT NOT NULL REFERENCES outline_entry (id),
+  kind TEXT NOT NULL CHECK (kind IN ('add', 'edit', 'move', 'remove')),
+  author TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  before TEXT NOT NULL,
+  after TEXT NOT NULL,
+  resulting_revision INTEGER NOT NULL
+) STRICT;
+CREATE TABLE outline_approval (
+  id TEXT PRIMARY KEY,
+  outline_id TEXT NOT NULL REFERENCES outline (id),
+  outline_revision INTEGER NOT NULL,
+  interpretation_validation_id TEXT NOT NULL,
+  approved_by TEXT NOT NULL,
+  approved_at INTEGER NOT NULL
+) STRICT;
+CREATE TABLE rejection (
+  id TEXT PRIMARY KEY,
+  target_kind TEXT NOT NULL CHECK (target_kind IN ('outline', 'topic')),
+  target_id TEXT NOT NULL,
+  target_revision INTEGER NOT NULL,
+  rejected_by TEXT NOT NULL,
+  rejected_at INTEGER NOT NULL,
+  reason TEXT NOT NULL CHECK (length(trim(reason)) > 0)
+) STRICT;
+${appendOnly("outline_change", "id = NEW.id")}
+${appendOnly("outline_approval", "id = NEW.id")}
+${appendOnly("rejection", "id = NEW.id")}
+`;
+
 export const PLATFORM_MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ id: "0001_audit_event", sql: AUDIT_EVENT }),
   Object.freeze({ id: "0002_identity", sql: IDENTITY }),
@@ -370,6 +513,8 @@ export const PLATFORM_MIGRATIONS: readonly Migration[] = Object.freeze([
     sql: STRUCTURED_INTERPRETATION,
   }),
   Object.freeze({ id: "0005_generation", sql: GENERATION }),
+  Object.freeze({ id: "0006_budget", sql: BUDGET }),
+  Object.freeze({ id: "0007_outline", sql: OUTLINE }),
 ]);
 
 // --- Almacén de ficheros direccionado por huella ---

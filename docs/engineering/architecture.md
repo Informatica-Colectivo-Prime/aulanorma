@@ -36,7 +36,7 @@ src/
 └── modules/               # Las cuatro capas de la constitución
     ├── normative-source/          # Documentos, páginas y tratamiento del PDF (pdf/)
     ├── structured-interpretation/ # Inventario, correcciones, validación y rechazo
-    ├── didactic-content/          # Todavía vacía
+    ├── didactic-content/          # Índice, cobertura y aprobación
     └── content-export/            # Todavía vacía
 prompts/                   # Prompts versionados de la generación
 ```
@@ -70,8 +70,39 @@ la exportación de un paquete que el usuario incorpora manualmente a Moodle. Con
 módulo pasó de llamarse `moodle-publication` a `src/modules/content-export`.
 
 **Estado actual**: `normative-source` y `structured-interpretation` están implementadas;
-`didactic-content` y `content-export` siguen vacías, con `export {};` en su `index.ts`. Nada es
+`didactic-content` contiene el índice del temario, su cobertura y su aprobación, y todavía no
+los temas; `content-export` sigue vacía, con `export {};` en su `index.ts`. Nada es
 específico de ningún certificado (FR-024): el código de la unidad es un dato.
+
+### Índice, cobertura y aprobación
+
+`src/modules/didactic-content` guarda el índice de una interpretación y las entradas en las
+que se organiza. Cada entrada se apoya en uno o varios requisitos del inventario, por vínculos
+explícitos, o queda marcada «sin respaldo normativo».
+
+- **La cobertura se calcula, nunca se almacena ni se declara** (`coverage.ts`): un requisito
+  está cubierto solo si una entrada vigente lo vincula directamente. No hay herencia entre un
+  elemento y los que dependen de él, en ningún sentido, y lo que afirme una propuesta sobre la
+  cobertura se ignora.
+- **Aprobar exige cobertura completa** y una interpretación validada y vigente. No existe
+  ningún parámetro, perfil ni ruta que lo evite.
+- **La vigencia de una aprobación se deriva**: vale mientras su revisión del índice es la
+  actual y la validación de la interpretación en la que se apoyó sigue vigente. Cualquier
+  cambio del índice, o de su interpretación, la deja sin vigencia sin borrar nada.
+- **Nada se borra**: una entrada quitada queda marcada, y cada cambio, aprobación y rechazo
+  queda en tablas de solo inserción.
+
+### Presupuesto de generación
+
+`src/platform/generation` no envía ninguna operación sin una reserva de su coste máximo, hecha
+en una transacción que comprueba el máximo por operación (configuración) y el límite acumulado
+del proyecto. El envío se anota antes de llamar al proveedor; con el consumo confirmado la
+reserva se liquida; sin él (sin datos de consumo, tiempo agotado, fallo o caída del proceso)
+queda incierta y sigue contando hasta que un administrador la concilia. Solo se libera lo que
+consta que no se envió, y los disparadores de la base de datos imponen esas transiciones.
+
+El único adaptador es el determinista, que no cuesta nada: sus importes no son precios de
+ningún proveedor, y la moneda del presupuesto no está fijada (`XXX`).
 
 ### Tratamiento de un PDF
 
@@ -103,7 +134,7 @@ su API pública (`index.ts`). Es la matriz de
 | `structured-interpretation`              | Sí                       | Sí                 | —                           | No                 | No               |
 | `didactic-content`                       | Sí                       | No                 | Sí                          | —                  | No               |
 | `content-export`                         | Sí                       | No                 | No                          | Sí                 | —                |
-| Entrega: rutas de producto y `src/views` | **Sí, solo API pública** | **Sí**             | **Sí**                      | **No**             | **No**           |
+| Entrega: rutas de producto y `src/views` | **Sí, solo API pública** | **Sí**             | **Sí**                      | **Sí**             | **No**           |
 | Entrega: `server.mjs` y `/api/health`    | **Sí, solo API pública** | **No**             | **No**                      | **No**             | **No**           |
 
 Reglas:
@@ -114,13 +145,13 @@ Reglas:
 - **Capas de dominio**: cada una solo depende de `platform` y de la capa inmediatamente anterior,
   en la dirección que fija el principio II.
 - **`platform`** no depende de ninguna capa de dominio.
-- **Entrega abierta capa a capa**: las rutas de producto importan `normative-source` y
-  `structured-interpretation`, por su API pública, desde la historia que las usa. Las otras dos
-  capas siguen cerradas a la entrega hasta que una ruta las necesite. `server.mjs` y la
-  comprobación de estado no importan ninguna.
+- **Entrega abierta capa a capa**: las rutas de producto importan `normative-source`,
+  `structured-interpretation` y, desde la historia del índice, `didactic-content`, por su API
+  pública. `content-export` sigue cerrada a la entrega hasta que una ruta la necesite.
+  `server.mjs` y la comprobación de estado no importan ninguna.
 - **Vistas**: `src/views` reúne el HTML que comparten una página y la acción que, ante un
   conflicto o un bloqueo, responde con ese mismo formulario. Solo importa `@/platform/web` y
-  esas dos capas; no alcanza la persistencia, la identidad, la auditoría ni la generación.
+  esas tres capas; no alcanza la persistencia, la identidad, la auditoría ni la generación.
 - **Rutas de producto solo a través de `web`**: las páginas y las acciones importan
   `@/platform/web`, donde están las guardas de acceso, y no importan directamente `identity`,
   `persistence` ni `audit`.

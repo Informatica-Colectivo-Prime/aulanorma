@@ -31,6 +31,7 @@ const ENVIRONMENT: Readonly<Record<string, string>> = {
   AULANORMA_SESSION_MAX_HOURS: "12",
   AULANORMA_PDF_MAX_MIB: "32",
   AULANORMA_PDF_MAX_PAGES: "600",
+  AULANORMA_GENERATION_MAX_OPERATION_COST: "1000000",
 };
 
 export interface Reply {
