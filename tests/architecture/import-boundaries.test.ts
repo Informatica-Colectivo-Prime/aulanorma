@@ -44,7 +44,12 @@ const PORTABLE_MODULES = [
   "src/platform/config/index.ts",
   "src/platform/logging/index.ts",
   "src/platform/http-boundary/index.ts",
+  "src/platform/persistence/index.ts",
+  "src/platform/audit/index.ts",
+  "src/platform/identity/index.ts",
 ] as const;
+const PRODUCT_PAGE = "src/pages/login.ts";
+const PRODUCT_ACTION = "src/pages/api/session/sign-in.ts";
 const NETWORK_MODULES = [
   "node:http",
   "node:https",
@@ -285,6 +290,107 @@ forbidden.push({
   file: "src/platform/http-boundary/index.ts",
   code: importOf("node:http"),
 });
+
+// Cimientos del producto (specs/002-boe-scorm-export; ADR 0004).
+//
+// Entrega: las rutas de producto solo alcanzan los servicios a través de
+// `@/platform/web`, que es donde están las guardas de acceso.
+for (const file of [PRODUCT_PAGE, PRODUCT_ACTION]) {
+  allowed.push({
+    name: `${file} → @/platform/web`,
+    file,
+    code: importOf("@/platform/web"),
+  });
+  for (const area of ["identity", "persistence", "audit", "http-boundary"]) {
+    forbidden.push({
+      name: `${file} → @/platform/${area}`,
+      file,
+      code: importOf(`@/platform/${area}`),
+    });
+  }
+  for (const layer of LAYERS) {
+    forbidden.push({
+      name: `${file} → @/modules/${layer}`,
+      file,
+      code: importOf(`@/modules/${layer}`),
+    });
+  }
+  forbidden.push(
+    {
+      name: `${file} → @/platform/web/<interno>`,
+      file,
+      code: importOf("@/platform/web/internal"),
+    },
+    {
+      name: `process.env en ${file}`,
+      file,
+      code: "export const value = process.env.AULANORMA_DATA_DIR;\n",
+    },
+    {
+      name: `${file} usa fetch`,
+      file,
+      code: "export const reference = fetch;\n",
+    },
+  );
+}
+
+// `web` no es portable: usa las demás áreas por su alias y nunca una capa de
+// dominio ni el entorno del proceso.
+for (const area of ["config", "logging", "persistence", "audit", "identity"]) {
+  allowed.push({
+    name: `src/platform/web/index.ts → @/platform/${area}`,
+    file: "src/platform/web/index.ts",
+    code: importOf(`@/platform/${area}`),
+  });
+}
+forbidden.push(
+  {
+    name: "src/platform/web/index.ts → @/modules/didactic-content",
+    file: "src/platform/web/index.ts",
+    code: importOf("@/modules/didactic-content"),
+  },
+  {
+    name: "src/platform/web/index.ts → ../identity/index.ts",
+    file: "src/platform/web/index.ts",
+    code: importOf("../identity/index.ts"),
+  },
+);
+for (const area of ["web", "persistence", "audit", "identity"]) {
+  forbidden.push({
+    name: `process.env en src/platform/${area}/index.ts`,
+    file: `src/platform/${area}/index.ts`,
+    code: "export const value = process.env.AULANORMA_DATA_DIR;\n",
+  });
+}
+
+// Módulos portables nuevos: solo módulos incluidos en Node.js.
+allowed.push(
+  {
+    name: "src/platform/persistence/index.ts → node:sqlite",
+    file: "src/platform/persistence/index.ts",
+    code: importOf("node:sqlite"),
+  },
+  {
+    name: "src/platform/identity/index.ts → node:crypto",
+    file: "src/platform/identity/index.ts",
+    code: importOf("node:crypto"),
+  },
+);
+
+// `server.mjs` aplica las migraciones: de `platform` solo añade
+// `persistence`; no carga la identidad, la auditoría ni la entrega web.
+allowed.push({
+  name: `${SERVER} → ./src/platform/persistence/index.ts`,
+  file: SERVER,
+  code: importOf("./src/platform/persistence/index.ts"),
+});
+for (const area of ["identity", "audit", "web", "health", "version"]) {
+  forbidden.push({
+    name: `${SERVER} → ./src/platform/${area}/index.ts`,
+    file: SERVER,
+    code: importOf(`./src/platform/${area}/index.ts`),
+  });
+}
 
 let eslint: ESLint;
 

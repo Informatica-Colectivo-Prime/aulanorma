@@ -93,9 +93,24 @@ const PRODUCTION_ENV_FILES = [
 ];
 
 const SENTINEL = `centinela-${randomUUID()}`;
+// Claves de los cimientos del producto (ADR 0004), válidas. El directorio de
+// datos lo añade `caseEnvironment`, dentro del temporal de la ejecución. El
+// origen público es HTTPS: `npm start` no admite otro. El origen HTTP local
+// solo vale con `npm run dev` (`DEVELOPMENT_CONFIG`).
+const LOCAL_HTTP_ORIGIN = `http://${HOST}:${String(PORT)}`;
+const PRODUCT_CONFIG = {
+  AULANORMA_PUBLIC_ORIGIN: "https://aulanorma.example",
+  AULANORMA_SESSION_IDLE_MINUTES: "30",
+  AULANORMA_SESSION_MAX_HOURS: "12",
+};
 const VALID_CONFIG = {
   AULANORMA_LOG_LEVEL: "info",
   AULANORMA_ENVIRONMENT: "ci",
+  ...PRODUCT_CONFIG,
+};
+const DEVELOPMENT_CONFIG = {
+  ...VALID_CONFIG,
+  AULANORMA_PUBLIC_ORIGIN: LOCAL_HTTP_ORIGIN,
 };
 // Arranques satisfactorios auditados (T031): script de npm y entorno esperado
 // en `startup.completed`, el de la configuración válida en ambos modos.
@@ -544,6 +559,7 @@ function isolatedEnvironment(npmCache) {
 function caseEnvironment(variables) {
   return {
     ...isolatedEnvironment(path.join(sandbox, "npm-cache")),
+    AULANORMA_DATA_DIR: path.join(sandbox, "datos"),
     ...variables,
   };
 }
@@ -1064,8 +1080,219 @@ async function checkContract() {
   return problems;
 }
 
+// Rutas de producto sin sesión (ADR 0004;
+// specs/002-boe-scorm-export/contracts/http-surface.md). Las páginas llevan a
+// la entrada sin devolver nada; la entrada es HTML completo, sin recursos
+// externos ni rastro del framework; un envío sin origen se rechaza; y las
+// acciones no admiten otro método ni un cuerpo sin longitud.
+const PRODUCT_LIMIT_MS = 30_000;
+const FORM_HEADERS = [
+  "Content-Type: application/x-www-form-urlencoded",
+  "Content-Length: 0",
+];
+
+function headerValues(response, name) {
+  return response.headers
+    .filter(([header]) => header.toLowerCase() === name)
+    .map(([, value]) => value);
+}
+
+function frameworkHeaderProblems(response) {
+  return response.headers
+    .map(([header]) => header.toLowerCase())
+    .filter(
+      (header) => header === "x-powered-by" || header.startsWith("x-nextjs"),
+    )
+    .map((header) => `revela el framework con ${header}`);
+}
+
+// `secure` indica si el origen público es HTTPS: entonces las cookies llevan
+// el prefijo `__Host-` y `Secure`; con el origen HTTP local del modo
+// desarrollo, ninguno de los dos.
+async function checkProductSurface(secure) {
+  const entryCookie = secure
+    ? /^__Host-aulanorma-entry=[\w-]{43}; Path=\/; HttpOnly; SameSite=Strict; Secure$/
+    : /^aulanorma-entry=[\w-]{43}; Path=\/; HttpOnly; SameSite=Strict$/;
+  const problems = [];
+  const expectStatus = (name, response, status) => {
+    if (!response.responded || response.status !== status) {
+      problems.push(
+        `${name}: estado ${String(response.status)} en lugar de ${String(status)}`,
+      );
+      return false;
+    }
+    problems.push(
+      ...frameworkHeaderProblems(response).map(
+        (problem) => `${name}: ${problem}`,
+      ),
+    );
+    return true;
+  };
+
+  for (const target of ["/", "/account/password"]) {
+    const name = `GET ${target} sin sesión`;
+    const response = await rawRequest("GET", target, {
+      limitMs: PRODUCT_LIMIT_MS,
+    });
+    if (expectStatus(name, response, 303)) {
+      if (headerValues(response, "location").join() !== "/login") {
+        problems.push(`${name}: no lleva a /login`);
+      }
+      if (headerValues(response, "cache-control").join() !== "no-store") {
+        problems.push(`${name}: sin Cache-Control: no-store`);
+      }
+      if (response.body.length > 0) {
+        problems.push(`${name}: la redirección tiene cuerpo`);
+      }
+    }
+  }
+
+  const login = await rawRequest("GET", "/login", {
+    limitMs: PRODUCT_LIMIT_MS,
+  });
+  if (expectStatus("GET /login", login, 200)) {
+    const body = login.body.toString("utf8");
+    const policy = headerValues(login, "content-security-policy").join();
+    const cookies = headerValues(login, "set-cookie");
+    const checks = [
+      [
+        headerValues(login, "content-type").join() ===
+          "text/html; charset=utf-8",
+        "tipo de contenido inesperado",
+      ],
+      [
+        headerValues(login, "cache-control").join() === "no-store",
+        "sin Cache-Control: no-store",
+      ],
+      [
+        headerValues(login, "x-content-type-options").join() === "nosniff",
+        "sin X-Content-Type-Options: nosniff",
+      ],
+      [
+        policy.includes("default-src 'none'") && !policy.includes("unsafe"),
+        "política de contenido ausente o permisiva",
+      ],
+      [body.startsWith("<!doctype html>"), "no es un documento HTML completo"],
+      ...["style", "script"].map((tag) => {
+        const element = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(body);
+        const digest = createHash("sha256")
+          .update(element?.[1] ?? "")
+          .digest("base64");
+        return [
+          element !== null && policy.includes(`'sha256-${digest}'`),
+          `la política de contenido no lleva la huella de su <${tag}>`,
+        ];
+      }),
+      [
+        headerValues(login, "referrer-policy").join() === "same-origin",
+        "Referrer-Policy distinta de same-origin",
+      ],
+      [
+        !body.includes("_next") && !body.includes("__NEXT_DATA__"),
+        "el HTML contiene rastro del framework",
+      ],
+      [
+        !/(?:src|href)="(?:https?:)?\/\//.test(body),
+        "el HTML carga un recurso externo",
+      ],
+      [
+        cookies.length === 1 && entryCookie.test(cookies[0] ?? ""),
+        "la cookie de la sesión previa no es la esperada",
+      ],
+    ];
+    for (const [passed, problem] of checks) {
+      if (!passed) {
+        problems.push(`GET /login: ${problem}`);
+      }
+    }
+  }
+
+  const noOrigin = await rawRequest("POST", "/api/session/sign-in", {
+    headers: FORM_HEADERS,
+    limitMs: PRODUCT_LIMIT_MS,
+  });
+  if (expectStatus("POST de entrada sin Origin", noOrigin, 403)) {
+    if (
+      noOrigin.body.length > 0 ||
+      headerValues(noOrigin, "set-cookie").length > 0
+    ) {
+      problems.push("POST de entrada sin Origin: devuelve cuerpo o cookies");
+    }
+  }
+
+  for (const target of [
+    "/api/session/sign-in",
+    "/api/session/sign-out",
+    "/api/account/password",
+  ]) {
+    const noLength = await rawRequest("POST", target, { persistent: true });
+    problems.push(
+      ...rejectionProblems(noLength, 400).map(
+        (problem) => `POST ${target} sin Content-Length: ${problem}`,
+      ),
+    );
+    const get = await rawRequest("GET", target, { persistent: true });
+    if (
+      !get.responded ||
+      get.status !== 405 ||
+      headerValues(get, "allow").join() !== "POST" ||
+      get.body.length > 0
+    ) {
+      problems.push(`GET ${target}: no es un 405 cerrado con Allow: POST`);
+    }
+  }
+
+  // El origen exigido es el público de la configuración, no el de la conexión
+  // ni el que digan las cabeceras de un proxy.
+  const origin = secure
+    ? PRODUCT_CONFIG.AULANORMA_PUBLIC_ORIGIN
+    : LOCAL_HTTP_ORIGIN;
+  if (secure) {
+    const local = await rawRequest("POST", "/api/session/sign-out", {
+      headers: [
+        ...FORM_HEADERS,
+        `Origin: ${LOCAL_HTTP_ORIGIN}`,
+        "X-Forwarded-Proto: http",
+        `X-Forwarded-Host: ${HOST}:${String(PORT)}`,
+      ],
+      limitMs: PRODUCT_LIMIT_MS,
+    });
+    if (expectStatus("POST con el origen HTTP local", local, 403)) {
+      if (
+        local.body.length > 0 ||
+        headerValues(local, "set-cookie").length > 0
+      ) {
+        problems.push(
+          "POST con el origen HTTP local: devuelve cuerpo o cookies",
+        );
+      }
+    }
+  }
+  for (const target of ["/api/session/sign-out", "/api/account/password"]) {
+    const response = await rawRequest("POST", target, {
+      headers: [...FORM_HEADERS, `Origin: ${origin}`],
+      limitMs: PRODUCT_LIMIT_MS,
+    });
+    const name = `POST ${target} sin sesión`;
+    if (expectStatus(name, response, 303)) {
+      if (
+        headerValues(response, "location").join() !== "/login" ||
+        response.body.length > 0
+      ) {
+        problems.push(`${name}: no lleva a /login sin cuerpo`);
+      }
+    }
+  }
+  return problems;
+}
+
 const NON_EXACT_TARGETS = [
-  "/",
+  "//",
+  "/index",
+  "/login/",
+  "/login?next=/",
+  "/account",
+  "/api/session",
   "/foo",
   "/api",
   "/api/health/",
@@ -1699,8 +1926,8 @@ const WIRE_CASES = [
   ),
   wireCase(
     "Upgrade",
-    "h2c hacia /",
-    wire("GET / HTTP/1.1", [
+    "h2c hacia un destino que no se delega",
+    wire("GET /foo HTTP/1.1", [
       WIRE_HOST,
       "Connection: Upgrade, HTTP2-Settings",
       "Upgrade: h2c",
@@ -2151,6 +2378,7 @@ async function validStart(variables, full) {
       const mark = proc.output().length;
       if (full) {
         problems.push(...(await checkContract()));
+        problems.push(...(await checkProductSurface(true)));
       } else {
         problems.push(...getProblems(await rawRequest("GET", TARGET)));
       }
@@ -2200,7 +2428,8 @@ async function wireStart() {
 
 // Modo desarrollo (T026), en la copia temporal.
 const DEVELOPMENT_TARGETS = [
-  "/",
+  "/index",
+  "/login/",
   "/api/health/",
   "/_next/static/chunks/main.js",
   "/__nextjs_original-stack-frame",
@@ -2440,7 +2669,7 @@ async function developmentInvalidStart(fileVariables, variables, key, problem) {
 // destinos no exactos y el `Upgrade` de recarga de desarrollo.
 async function developmentStart(variables, full) {
   await ensurePortFree();
-  writeDevelopmentConfig(VALID_CONFIG);
+  writeDevelopmentConfig(DEVELOPMENT_CONFIG);
   const proc = launch(
     NPM,
     ["run", "dev"],
@@ -2484,6 +2713,7 @@ async function developmentStart(variables, full) {
             (problem) => `Upgrade ${DEVELOPMENT_RELOAD}: ${problem}`,
           ),
         );
+        problems.push(...(await checkProductSurface(false)));
       }
     }
     problems.push(...startupLogProblems(proc.output(), DEVELOPMENT_STARTUP));
@@ -2587,7 +2817,11 @@ const DEVELOPMENT_CASES = [
     "npm run dev inválido: AULANORMA_LOG_LEVEL fuera de la lista en el fichero",
     () =>
       developmentInvalidStart(
-        { AULANORMA_LOG_LEVEL: SENTINEL, AULANORMA_ENVIRONMENT: "ci" },
+        {
+          ...PRODUCT_CONFIG,
+          AULANORMA_LOG_LEVEL: SENTINEL,
+          AULANORMA_ENVIRONMENT: "ci",
+        },
         {},
         "AULANORMA_LOG_LEVEL",
         "invalid_value",
@@ -2597,7 +2831,7 @@ const DEVELOPMENT_CASES = [
     "npm run dev inválido: AULANORMA_LOG_LEVEL ausente del fichero",
     () =>
       developmentInvalidStart(
-        { AULANORMA_ENVIRONMENT: "ci" },
+        { ...PRODUCT_CONFIG, AULANORMA_ENVIRONMENT: "ci" },
         {},
         "AULANORMA_LOG_LEVEL",
         "missing",
@@ -2658,7 +2892,7 @@ const CASES = [
     "npm start inválido: AULANORMA_LOG_LEVEL ausente",
     () =>
       invalidStart(
-        { AULANORMA_ENVIRONMENT: "ci" },
+        { ...PRODUCT_CONFIG, AULANORMA_ENVIRONMENT: "ci" },
         "AULANORMA_LOG_LEVEL",
         "missing",
       ),
@@ -2667,7 +2901,11 @@ const CASES = [
     "npm start inválido: AULANORMA_LOG_LEVEL vacía",
     () =>
       invalidStart(
-        { AULANORMA_LOG_LEVEL: "", AULANORMA_ENVIRONMENT: "ci" },
+        {
+          ...PRODUCT_CONFIG,
+          AULANORMA_LOG_LEVEL: "",
+          AULANORMA_ENVIRONMENT: "ci",
+        },
         "AULANORMA_LOG_LEVEL",
         "missing",
       ),
@@ -2676,8 +2914,44 @@ const CASES = [
     "npm start inválido: AULANORMA_LOG_LEVEL con un valor fuera de la lista",
     () =>
       invalidStart(
-        { AULANORMA_LOG_LEVEL: SENTINEL, AULANORMA_ENVIRONMENT: "ci" },
+        {
+          ...PRODUCT_CONFIG,
+          AULANORMA_LOG_LEVEL: SENTINEL,
+          AULANORMA_ENVIRONMENT: "ci",
+        },
         "AULANORMA_LOG_LEVEL",
+        "invalid_value",
+      ),
+  ],
+  [
+    "npm start inválido: AULANORMA_PUBLIC_ORIGIN ausente",
+    () =>
+      invalidStart(
+        {
+          AULANORMA_LOG_LEVEL: "info",
+          AULANORMA_ENVIRONMENT: "ci",
+          AULANORMA_SESSION_IDLE_MINUTES: "30",
+          AULANORMA_SESSION_MAX_HOURS: "12",
+        },
+        "AULANORMA_PUBLIC_ORIGIN",
+        "missing",
+      ),
+  ],
+  [
+    "npm start inválido: AULANORMA_PUBLIC_ORIGIN con el origen HTTP local",
+    () =>
+      invalidStart(
+        { ...VALID_CONFIG, AULANORMA_PUBLIC_ORIGIN: LOCAL_HTTP_ORIGIN },
+        "AULANORMA_PUBLIC_ORIGIN",
+        "invalid_value",
+      ),
+  ],
+  [
+    "npm start inválido: AULANORMA_DATA_DIR con una ruta relativa",
+    () =>
+      invalidStart(
+        { ...VALID_CONFIG, AULANORMA_DATA_DIR: "datos" },
+        "AULANORMA_DATA_DIR",
         "invalid_value",
       ),
   ],

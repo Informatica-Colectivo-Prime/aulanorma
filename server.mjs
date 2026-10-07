@@ -3,8 +3,9 @@
 // HTTP»; ADR 0001). Lo ejecutan `npm run dev` y `npm start` después del
 // preflight; `node server.mjs` directo no es una entrada admitida.
 //
-// Valida la configuración antes de cargar Next.js y de escuchar, decide cada
-// petición con la frontera HTTP y solo delega en Next.js lo que ella admite.
+// Valida la configuración y aplica las migraciones de la base de datos antes
+// de cargar Next.js y de escuchar, decide cada petición con la frontera HTTP y
+// solo delega en Next.js lo que ella admite.
 // Escucha en 127.0.0.1:3000, fijos. Solo lee `process.env.NODE_ENV` y no
 // registra nada por petición: sus únicos eventos son `startup.config_invalid`
 // y `startup.completed`.
@@ -16,6 +17,11 @@ import {
   logConfigInvalid,
   logStartupCompleted,
 } from "./src/platform/logging/index.ts";
+import {
+  migrate,
+  openDatabase,
+  PLATFORM_MIGRATIONS,
+} from "./src/platform/persistence/index.ts";
 
 const HOSTNAME = "127.0.0.1";
 const PORT = 3000;
@@ -45,6 +51,13 @@ async function main() {
     environment: result.config.environment,
     level: result.config.logLevel,
   });
+
+  // Aplica las migraciones pendientes antes de cargar Next.js y de escuchar.
+  // Si la base de datos no puede abrirse o migrarse, el arranque termina con
+  // código 1 sin abrir el puerto.
+  const database = openDatabase(result.config.dataDir);
+  migrate(database, PLATFORM_MIGRATIONS);
+  database.close();
 
   const { default: next } = await import("next");
   // En desarrollo se selecciona Webpack de forma explícita: sin la opción,

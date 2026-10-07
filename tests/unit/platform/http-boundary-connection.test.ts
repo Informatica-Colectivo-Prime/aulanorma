@@ -791,7 +791,10 @@ describe("interfaz", () => {
     const { handle } = controlledHandle();
     const boundary = await boundaryFor(handle);
     const namespace = await loadNamespace();
-    expect(Object.keys(namespace)).toEqual(["createHttpBoundary"]);
+    expect(Object.keys(namespace).sort()).toEqual([
+      "ROUTES",
+      "createHttpBoundary",
+    ]);
 
     const first = connection();
     const connectResult = boundary.connect(

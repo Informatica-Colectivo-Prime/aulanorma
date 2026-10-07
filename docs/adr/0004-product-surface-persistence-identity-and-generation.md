@@ -1,6 +1,14 @@
 # ADR 0004: Superficie de producto, persistencia, identidad y generación
 
-**Estado**: Propuesto
+**Estado**: Aceptado. Estuvo Propuesto desde el 2026-10-07; se acepta con el cambio que
+implementa los cimientos del producto (fase 3 de `002-boe-scorm-export`). La aceptación
+confirma lo implementado y verificado en ese cambio: las decisiones 1 a 5, la parte de la
+decisión 7 que corresponde a la aplicación y, de la decisión 9, las áreas `persistence`,
+`identity`, `audit` y `web`. **No están implementadas**, y quedan registradas como la
+dirección acordada, la decisión 6 (generación), la decisión 8 (tratamiento de los PDF), el
+despliegue real de la decisión 7 y, de la decisión 9, el área `generation` y la apertura de la
+entrega a las capas de dominio. Si su implementación las desmiente, se sustituirán con un ADR
+nuevo.
 
 **Fecha**: 2026-10-07
 
@@ -26,12 +34,15 @@ La constitución exige un monolito modular, sin infraestructura adicional sin ne
 
 ## Decisión
 
-1. **Superficie de producto**. La interfaz docente son páginas del Pages Router renderizadas
-   en el servidor, y las mutaciones son API Routes. Todas siguen detrás de la frontera HTTP
-   de `server.mjs`, que pasa de admitir un único destino a admitir una **lista cerrada** de
-   rutas de producto, definida en
+1. **Superficie de producto**. La interfaz docente son páginas del Pages Router que escriben
+   la respuesta completa en el servidor, desde `getServerSideProps`, con una plantilla propia
+   que escapa todo valor interpolado; las mutaciones son API Routes que responden con una
+   redirección. El HTML no carga recursos externos ni scripts del framework y lleva una
+   política de contenido por huellas, así que es idéntico en desarrollo y en producción. Todas
+   las rutas siguen detrás de la frontera HTTP de `server.mjs`, que pasa de admitir un único
+   destino a admitir una **lista cerrada** de rutas de producto, definida en
    [`contracts/http-surface.md`](../../specs/002-boe-scorm-export/contracts/http-surface.md).
-   Cualquier otro destino recibe el mismo rechazo cerrado que hoy.
+   Cualquier otro destino recibe el mismo rechazo cerrado que antes.
 2. **Cuerpos de petición**. La frontera admite cuerpos solo en las rutas de producto que los
    necesitan, con un tamaño máximo por ruta. La subida del PDF es un cuerpo `application/pdf`,
    sin `multipart`.
@@ -52,14 +63,16 @@ La constitución exige un monolito modular, sin infraestructura adicional sin ne
    sigue contando hasta que un administrador la concilia.
 7. **Despliegue**. El proceso sigue escuchando en `127.0.0.1:3000`, detrás de un proxy
    inverso que termina TLS. La aplicación conoce su origen público por configuración y no
-   confía en cabeceras reenviadas. Un único servidor y una única instancia.
+   confía en cabeceras reenviadas. Fuera del modo desarrollo, ese origen debe ser HTTPS: con
+   otro, el servidor no arranca. Un único servidor y una única instancia.
 8. **Tratamiento de los PDF**. El texto se extrae con `pdfjs-dist`. La estructura se
    inspecciona con `qpdf`, una herramienta externa que se instala como binario verificado,
    y una política propia decide sobre esa estructura. Ninguna de las dos acredita que un PDF
    sea seguro.
-9. **Estructura**. `src/platform` gana las áreas `persistence`, `identity`, `audit` y
-   `generation`. La capa de entrega puede importar la API pública de las cuatro capas de
-   dominio.
+9. **Estructura**. `src/platform` gana las áreas `persistence`, `identity`, `audit`, `web` y
+   `generation`. `web` reúne las guardas de acceso, las cookies y el documento HTML; las rutas
+   de producto solo alcanzan los servicios a través de ella. La capa de entrega puede importar
+   la API pública de las cuatro capas de dominio.
 
 ## Relación con los ADR aceptados
 
@@ -81,7 +94,12 @@ Este ADR **sustituye parcialmente al ADR 0001**. Sustituye exactamente esto:
 - **Decisión 5, capa de entrega**: "solo puede importar las API públicas de `src/platform` y
   ninguna capa de dominio" pasa a permitir también la API pública de las cuatro capas.
 - **Decisión 7, eventos de registro**: a `startup.completed` y `startup.config_invalid` se
-  añaden los eventos de producto, con identificador de correlación por petición.
+  añade una lista cerrada de eventos de producto, cada uno con el identificador de correlación
+  de su petición. La frontera y la comprobación de estado siguen sin registrar nada.
+- **Decisión 8, `logging.incomingRequests.ignore`**: el registro automático de peticiones de
+  Next.js se desactiva por completo, en lugar de ignorar solo `/api/health`.
+- **Decisión 5, importaciones de `server.mjs`**: a `config`, `logging` y `http-boundary` se
+  añade `persistence`, para aplicar las migraciones antes de escuchar.
 
 **No sustituye** nada más del ADR 0001. Siguen vigentes, en particular: el runtime, el
 lenguaje y el gestor de paquetes; la frontera HTTP como único punto de entrada, con su
@@ -90,8 +108,8 @@ precedencia, sus rechazos cerrados y su estado de conexión; la escucha fija en
 de Next.js; el esquema único de configuración; y la excepción cerrada de `/api/health`, que
 no se amplía.
 
-El ADR 0001 no se modifica mientras este ADR esté Propuesto. Cuando se acepte, recibirá una
-nota de revisión que remita aquí. El ADR 0002 no cambia: los nueve controles siguen siendo
+Con la aceptación de este ADR, el ADR 0001 recibe una nota de revisión que remite aquí; el
+resto de su texto no se modifica. El ADR 0002 no cambia: los nueve controles siguen siendo
 los mismos. El ADR 0003 es independiente y trata de la cuarta capa.
 
 ## Alternativas consideradas
@@ -142,4 +160,6 @@ los mismos. El ADR 0003 es independiente y trata de la cuarta capa.
   integración continua.
 - Origen de referencia y redistribución de los esquemas oficiales de SCORM 1.2 (research R8).
 
-Mientras este ADR está Propuesto, puede corregirse con lo que la implementación descubra.
+**Nota de revisión (aceptación)**: antes de aceptarlo se corrigió la decisión 1, para
+recoger que las páginas escriben su respuesta con una plantilla propia, y se añadieron el área
+`web` y tres puntos a la lista de sustituciones del ADR 0001. Lo descubrió la implementación.

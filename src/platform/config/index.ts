@@ -24,6 +24,10 @@ export interface ConfigProblem {
 export interface Config {
   readonly logLevel: LogLevel;
   readonly environment: Environment;
+  readonly dataDir: string;
+  readonly publicOrigin: string;
+  readonly sessionIdleMinutes: number;
+  readonly sessionMaxHours: number;
 }
 
 export type ConfigResult =
@@ -46,10 +50,63 @@ const ENVIRONMENT = z.enum(["development", "test", "ci"]);
 export type LogLevel = z.infer<typeof LOG_LEVEL>;
 export type Environment = z.infer<typeof ENVIRONMENT>;
 
+// Ruta absoluta del directorio de datos (base de datos y almacén de ficheros).
+const DATA_DIR = z.string().regex(/^\/[^\0]+$/);
+
+// Origen público exacto de la aplicación, sin ruta: `https://…` o
+// `http://127.0.0.1:…` o `http://localhost:…`. El origen HTTP solo vale en
+// modo desarrollo (`NODE_ENV=development`, el de `npm run dev`): en cualquier
+// otro modo, incluido el de `npm start`, el origen debe ser HTTPS. De él
+// dependen el prefijo `__Host-` y el atributo `Secure` de las cookies, que
+// ninguna cabecera de una petición puede cambiar.
+function parseOrigin(value: string): URL | undefined {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return undefined;
+  }
+  return url.origin === value ? url : undefined;
+}
+
+function isPublicOrigin(value: string): boolean {
+  const url = parseOrigin(value);
+  if (url === undefined) {
+    return false;
+  }
+  if (url.protocol === "https:") {
+    return true;
+  }
+  return (
+    url.protocol === "http:" &&
+    (url.hostname === "127.0.0.1" || url.hostname === "localhost")
+  );
+}
+const PUBLIC_ORIGIN = z.string().refine(isPublicOrigin);
+
+function originAllowedInMode(origin: string, nodeEnv: string | undefined) {
+  return origin.startsWith("https:") || nodeEnv === "development";
+}
+
+// Entero positivo escrito en decimal, sin signo ni ceros iniciales.
+function boundedInteger(maximum: number) {
+  return z
+    .string()
+    .regex(/^[1-9]\d{0,3}$/)
+    .transform(Number)
+    .refine((value) => value <= maximum);
+}
+const SESSION_IDLE_MINUTES = boundedInteger(1440);
+const SESSION_MAX_HOURS = boundedInteger(168);
+
 // Esquema: cada variable de entorno con los valores que admite.
 const SCHEMA = {
   AULANORMA_LOG_LEVEL: LOG_LEVEL,
   AULANORMA_ENVIRONMENT: ENVIRONMENT,
+  AULANORMA_DATA_DIR: DATA_DIR,
+  AULANORMA_PUBLIC_ORIGIN: PUBLIC_ORIGIN,
+  AULANORMA_SESSION_IDLE_MINUTES: SESSION_IDLE_MINUTES,
+  AULANORMA_SESSION_MAX_HOURS: SESSION_MAX_HOURS,
 } as const;
 
 const PREFIX = "AULANORMA_";
@@ -61,7 +118,8 @@ function failure(problems: readonly ConfigProblem[]): ConfigResult {
 // Valida una fuente inyectada. Es pura: no lee `process.env`, no modifica la
 // fuente y devuelve todos los problemas a la vez, sin ningún valor. Las
 // claves sin el prefijo `AULANORMA_`, incluido `__NEXT_PROCESSED_ENV`, no
-// pertenecen al esquema y se ignoran.
+// pertenecen al esquema y se ignoran, salvo `NODE_ENV`, que solo decide si se
+// admite un origen público HTTP.
 export function validateConfig(source: ConfigSource): ConfigResult {
   const problems: ConfigProblem[] = [];
   const logLevel = SCHEMA.AULANORMA_LOG_LEVEL.safeParse(
@@ -70,9 +128,29 @@ export function validateConfig(source: ConfigSource): ConfigResult {
   const environment = SCHEMA.AULANORMA_ENVIRONMENT.safeParse(
     source.AULANORMA_ENVIRONMENT,
   );
+  const dataDir = SCHEMA.AULANORMA_DATA_DIR.safeParse(
+    source.AULANORMA_DATA_DIR,
+  );
+  const anyOrigin = SCHEMA.AULANORMA_PUBLIC_ORIGIN.safeParse(
+    source.AULANORMA_PUBLIC_ORIGIN,
+  );
+  const publicOrigin =
+    anyOrigin.success && !originAllowedInMode(anyOrigin.data, source.NODE_ENV)
+      ? ({ success: false } as const)
+      : anyOrigin;
+  const sessionIdleMinutes = SCHEMA.AULANORMA_SESSION_IDLE_MINUTES.safeParse(
+    source.AULANORMA_SESSION_IDLE_MINUTES,
+  );
+  const sessionMaxHours = SCHEMA.AULANORMA_SESSION_MAX_HOURS.safeParse(
+    source.AULANORMA_SESSION_MAX_HOURS,
+  );
   for (const [key, parsed] of [
     ["AULANORMA_LOG_LEVEL", logLevel],
     ["AULANORMA_ENVIRONMENT", environment],
+    ["AULANORMA_DATA_DIR", dataDir],
+    ["AULANORMA_PUBLIC_ORIGIN", publicOrigin],
+    ["AULANORMA_SESSION_IDLE_MINUTES", sessionIdleMinutes],
+    ["AULANORMA_SESSION_MAX_HOURS", sessionMaxHours],
   ] as const) {
     const value = source[key];
     if (value === undefined || value === "") {
@@ -86,7 +164,15 @@ export function validateConfig(source: ConfigSource): ConfigResult {
       problems.push({ key, problem: "unknown_key" });
     }
   }
-  if (!logLevel.success || !environment.success || problems.length > 0) {
+  if (
+    !logLevel.success ||
+    !environment.success ||
+    !dataDir.success ||
+    !publicOrigin.success ||
+    !sessionIdleMinutes.success ||
+    !sessionMaxHours.success ||
+    problems.length > 0
+  ) {
     return failure(problems);
   }
   return {
@@ -94,6 +180,10 @@ export function validateConfig(source: ConfigSource): ConfigResult {
     config: Object.freeze({
       logLevel: logLevel.data,
       environment: environment.data,
+      dataDir: dataDir.data,
+      publicOrigin: publicOrigin.data,
+      sessionIdleMinutes: sessionIdleMinutes.data,
+      sessionMaxHours: sessionMaxHours.data,
     }),
   };
 }

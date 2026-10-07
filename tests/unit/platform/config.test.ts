@@ -60,6 +60,10 @@ interface ConfigProblem {
 interface Config {
   readonly logLevel: string;
   readonly environment: string;
+  readonly dataDir: string;
+  readonly publicOrigin: string;
+  readonly sessionIdleMinutes: number;
+  readonly sessionMaxHours: number;
 }
 type ConfigResult =
   | { readonly ok: true; readonly config: Config }
@@ -98,11 +102,55 @@ const LOG_LEVELS = [
 const ENVIRONMENTS = ["development", "test", "ci"] as const;
 const MODES: readonly Mode[] = ["development", "production"];
 
+const DATA_DIR = "AULANORMA_DATA_DIR";
+const PUBLIC_ORIGIN = "AULANORMA_PUBLIC_ORIGIN";
+const SESSION_IDLE_MINUTES = "AULANORMA_SESSION_IDLE_MINUTES";
+const SESSION_MAX_HOURS = "AULANORMA_SESSION_MAX_HOURS";
+const ALL_KEYS = [
+  LOG_LEVEL,
+  ENVIRONMENT,
+  DATA_DIR,
+  PUBLIC_ORIGIN,
+  SESSION_IDLE_MINUTES,
+  SESSION_MAX_HOURS,
+] as const;
+
 const VALID_SOURCE: ConfigSource = {
   [LOG_LEVEL]: "info",
   [ENVIRONMENT]: "development",
+  [DATA_DIR]: "/var/lib/aulanorma-datos",
+  [PUBLIC_ORIGIN]: "https://aulanorma.example",
+  [SESSION_IDLE_MINUTES]: "30",
+  [SESSION_MAX_HOURS]: "12",
 };
-const VALID_CONFIG: Config = { logLevel: "info", environment: "development" };
+// Las cuatro claves añadidas con los cimientos del producto, válidas: las
+// usan los casos que solo tratan del nivel de registro y del entorno.
+const PRODUCT_SOURCE = {
+  [DATA_DIR]: "/var/lib/aulanorma-datos",
+  [PUBLIC_ORIGIN]: "https://aulanorma.example",
+  [SESSION_IDLE_MINUTES]: "30",
+  [SESSION_MAX_HOURS]: "12",
+} as const;
+const PRODUCT_CONFIG = {
+  dataDir: "/var/lib/aulanorma-datos",
+  publicOrigin: "https://aulanorma.example",
+  sessionIdleMinutes: 30,
+  sessionMaxHours: 12,
+} as const;
+function setProductVariables(): void {
+  for (const [key, value] of Object.entries(PRODUCT_SOURCE)) {
+    setVariable(key, value);
+  }
+}
+
+const VALID_CONFIG: Config = {
+  logLevel: "info",
+  environment: "development",
+  dataDir: "/var/lib/aulanorma-datos",
+  publicOrigin: "https://aulanorma.example",
+  sessionIdleMinutes: 30,
+  sessionMaxHours: 12,
+};
 
 // Datos sintéticos únicos en cada ejecución. Nunca se imprimen.
 const RUN = randomUUID();
@@ -211,7 +259,7 @@ function sortProblems(
   );
 }
 
-// Unión discriminada exacta: solo `ok` y `config`, con las dos claves del
+// Unión discriminada exacta: solo `ok` y `config`, con las seis claves del
 // esquema.
 function expectSuccess(result: ConfigResult, expected: Config): void {
   expectNoLeaks("resultado", result);
@@ -221,8 +269,12 @@ function expectSuccess(result: ConfigResult, expected: Config): void {
   }
   expect(result.ok).toBe(true);
   expect(Object.keys(result.config).sort()).toEqual([
+    "dataDir",
     "environment",
     "logLevel",
+    "publicOrigin",
+    "sessionIdleMinutes",
+    "sessionMaxHours",
   ]);
   expect(result.config).toEqual(expected);
 }
@@ -432,12 +484,146 @@ describe("validateConfig(source)", () => {
     expectFailure(config.validateConfig(source), [{ key, problem: "missing" }]);
   });
 
-  test("una fuente vacía produce missing para las dos variables", () => {
-    expectFailure(config.validateConfig({}), [
-      { key: LOG_LEVEL, problem: "missing" },
-      { key: ENVIRONMENT, problem: "missing" },
+  test("una fuente vacía produce missing para las seis variables", () => {
+    expectFailure(
+      config.validateConfig({}),
+      ALL_KEYS.map((key) => ({ key, problem: "missing" as const })),
+    );
+  });
+
+  test.each([
+    { key: DATA_DIR, value: "/srv/aulanorma", field: "dataDir" },
+    {
+      key: PUBLIC_ORIGIN,
+      value: "https://aula.example:8443",
+      field: "publicOrigin",
+    },
+  ] as const)("acepta $key=$value", ({ key, value, field }) => {
+    const result = config.validateConfig({ ...VALID_SOURCE, [key]: value });
+    expectSuccess(result, { ...VALID_CONFIG, [field]: value });
+  });
+
+  // El origen HTTP, siempre local, solo vale en modo desarrollo. En cualquier
+  // otro modo, incluido el de `npm start`, el origen debe ser HTTPS: de él
+  // dependen `Secure` y el prefijo `__Host-` de las cookies.
+  describe.each(["http://127.0.0.1:3000", "http://localhost:3000"])(
+    "origen HTTP local %s",
+    (origin) => {
+      test("se acepta con NODE_ENV=development", () => {
+        expectSuccess(
+          config.validateConfig({
+            ...VALID_SOURCE,
+            [PUBLIC_ORIGIN]: origin,
+            NODE_ENV: "development",
+          }),
+          { ...VALID_CONFIG, publicOrigin: origin },
+        );
+      });
+
+      test.each([
+        { name: "production", nodeEnv: "production" },
+        { name: "test", nodeEnv: "test" },
+        { name: "vacío", nodeEnv: "" },
+        { name: "Development", nodeEnv: "Development" },
+        { name: "ausente", nodeEnv: undefined },
+      ])("se rechaza con NODE_ENV $name", ({ nodeEnv }) => {
+        expectFailure(
+          config.validateConfig({
+            ...VALID_SOURCE,
+            [PUBLIC_ORIGIN]: origin,
+            NODE_ENV: nodeEnv,
+          }),
+          [{ key: PUBLIC_ORIGIN, problem: "invalid_value" }],
+        );
+      });
+    },
+  );
+
+  test.each(["development", "production", "test", undefined])(
+    "el origen HTTPS se acepta con NODE_ENV %s",
+    (nodeEnv) => {
+      expectSuccess(
+        config.validateConfig({ ...VALID_SOURCE, NODE_ENV: nodeEnv }),
+        VALID_CONFIG,
+      );
+    },
+  );
+
+  test.each(["development", "production"])(
+    "un origen HTTP que no es local se rechaza también con NODE_ENV %s",
+    (nodeEnv) => {
+      expectFailure(
+        config.validateConfig({
+          ...VALID_SOURCE,
+          [PUBLIC_ORIGIN]: "http://aulanorma.example",
+          NODE_ENV: nodeEnv,
+        }),
+        [{ key: PUBLIC_ORIGIN, problem: "invalid_value" }],
+      );
+    },
+  );
+
+  test.each([
+    {
+      key: SESSION_IDLE_MINUTES,
+      value: "1",
+      field: "sessionIdleMinutes",
+      expected: 1,
+    },
+    {
+      key: SESSION_IDLE_MINUTES,
+      value: "1440",
+      field: "sessionIdleMinutes",
+      expected: 1440,
+    },
+    {
+      key: SESSION_MAX_HOURS,
+      value: "168",
+      field: "sessionMaxHours",
+      expected: 168,
+    },
+  ] as const)(
+    "acepta $key=$value como número",
+    ({ key, value, field, expected }) => {
+      const result = config.validateConfig({ ...VALID_SOURCE, [key]: value });
+      expectSuccess(result, { ...VALID_CONFIG, [field]: expected });
+    },
+  );
+
+  test.each([
+    { key: DATA_DIR, value: "relativo/datos" },
+    { key: DATA_DIR, value: "/" },
+    { key: PUBLIC_ORIGIN, value: "http://aulanorma.example" },
+    { key: PUBLIC_ORIGIN, value: "https://aulanorma.example/" },
+    { key: PUBLIC_ORIGIN, value: "https://aulanorma.example/ruta" },
+    { key: PUBLIC_ORIGIN, value: "aulanorma.example" },
+    { key: PUBLIC_ORIGIN, value: "ftp://aulanorma.example" },
+    { key: SESSION_IDLE_MINUTES, value: "0" },
+    { key: SESSION_IDLE_MINUTES, value: "1441" },
+    { key: SESSION_IDLE_MINUTES, value: "030" },
+    { key: SESSION_IDLE_MINUTES, value: "30.5" },
+    { key: SESSION_IDLE_MINUTES, value: "-30" },
+    { key: SESSION_MAX_HOURS, value: "169" },
+    { key: SESSION_MAX_HOURS, value: "doce" },
+  ])("rechaza con invalid_value $key=$value", ({ key, value }) => {
+    expectFailure(config.validateConfig({ ...VALID_SOURCE, [key]: value }), [
+      { key, problem: "invalid_value" },
     ]);
   });
+
+  test.each([DATA_DIR, PUBLIC_ORIGIN, SESSION_IDLE_MINUTES, SESSION_MAX_HOURS])(
+    "rechaza con missing: %s ausente o vacía",
+    (key) => {
+      const absent: Record<string, string | undefined> = { ...VALID_SOURCE };
+      Reflect.deleteProperty(absent, key);
+      expectFailure(config.validateConfig(absent), [
+        { key, problem: "missing" },
+      ]);
+      expectFailure(config.validateConfig({ ...VALID_SOURCE, [key]: "" }), [
+        { key, problem: "missing" },
+      ]);
+    },
+  );
 
   test.each([
     { key: LOG_LEVEL, value: SENTINEL },
@@ -474,6 +660,7 @@ describe("validateConfig(source)", () => {
   test("informa de todos los problemas a la vez, sin ningún valor", () => {
     const { value: result, output } = observe(() =>
       config.validateConfig({
+        ...PRODUCT_SOURCE,
         [LOG_LEVEL]: SENTINEL,
         AULANORMA_CLAVE_DESCONOCIDA: SENTINEL,
       }),
@@ -501,10 +688,11 @@ describe("validateConfig(source)", () => {
   test("no lee process.env: una fuente vacía sigue sin configuración", () => {
     setVariable(LOG_LEVEL, "debug");
     setVariable(ENVIRONMENT, "ci");
-    expectFailure(config.validateConfig({}), [
-      { key: LOG_LEVEL, problem: "missing" },
-      { key: ENVIRONMENT, problem: "missing" },
-    ]);
+    setProductVariables();
+    expectFailure(
+      config.validateConfig({}),
+      ALL_KEYS.map((key) => ({ key, problem: "missing" as const })),
+    );
   });
 
   test("no lee process.env: sus claves no alteran una fuente válida", () => {
@@ -679,7 +867,11 @@ describe("loadConfig(mode): llamada al cargador", () => {
     );
     const second = loadWithMode("development").value;
     expectSuccess(first, VALID_CONFIG);
-    expectSuccess(second, { logLevel: "warn", environment: "ci" });
+    expectSuccess(second, {
+      ...VALID_CONFIG,
+      logLevel: "warn",
+      environment: "ci",
+    });
     expect(loader).toHaveBeenCalledTimes(2);
     expect(loader.mock.calls.map((call) => call[3])).toEqual([true, true]);
   });
@@ -944,22 +1136,32 @@ describe("readRuntimeConfig()", () => {
   test("lee el process.env preparado sin llamar al cargador", () => {
     setVariable(LOG_LEVEL, "debug");
     setVariable(ENVIRONMENT, "ci");
+    setProductVariables();
     setVariable("NODE_ENV", "production");
     const { value: result, output } = observe(() => config.readRuntimeConfig());
     expectNoLeaks("salida", output);
-    expectSuccess(result, { logLevel: "debug", environment: "ci" });
+    expectSuccess(result, {
+      ...PRODUCT_CONFIG,
+      logLevel: "debug",
+      environment: "ci",
+    });
     expect(loader).not.toHaveBeenCalled();
   });
 
   test("ignora el marcador interno y las claves ajenas al esquema", () => {
     setVariable(LOG_LEVEL, "warn");
     setVariable(ENVIRONMENT, "test");
+    setProductVariables();
     setVariable(MARKER, "true");
     setVariable("OTRA_APP_LOG_LEVEL", SENTINEL);
     const { value: result, output } = observe(() => config.readRuntimeConfig());
     expect(output).not.toContain(MARKER);
     expect(serialize(result)).not.toContain(MARKER);
-    expectSuccess(result, { logLevel: "warn", environment: "test" });
+    expectSuccess(result, {
+      ...PRODUCT_CONFIG,
+      logLevel: "warn",
+      environment: "test",
+    });
     expect(loader).not.toHaveBeenCalled();
   });
 
@@ -1109,7 +1311,12 @@ async function runIsolated(
     });
     const child = spawn(process.execPath, [runner, plan], {
       cwd: repoRoot,
-      env: { ...environment } as NodeJS.ProcessEnv,
+      // Las claves de producto llegan válidas del entorno del proceso: estos
+      // casos tratan de la precedencia de los ficheros.
+      env: {
+        ...PRODUCT_SOURCE,
+        ...environment,
+      } as unknown as NodeJS.ProcessEnv,
       stdio: ["ignore", "pipe", "pipe", "ipc"],
       timeout: 15_000,
     });
@@ -1234,6 +1441,7 @@ describe("loadConfig con el cargador real en procesos separados", () => {
       ]);
       expect(results).toHaveLength(1);
       expectSuccess(results[0] ?? { ok: false, problems: [] }, {
+        ...PRODUCT_CONFIG,
         logLevel: layers[from]?.logLevel ?? "",
         environment,
       });
@@ -1255,6 +1463,7 @@ describe("loadConfig con el cargador real en procesos separados", () => {
         ],
       );
       expectSuccess(results[0] ?? { ok: false, problems: [] }, {
+        ...PRODUCT_CONFIG,
         logLevel: "silent",
         environment: PRECEDENCE[mode].environment,
       });
@@ -1358,10 +1567,12 @@ describe("loadConfig con el cargador real en procesos separados", () => {
         { op: "load", mode },
       ]);
       expectSuccess(results[0] ?? { ok: false, problems: [] }, {
+        ...PRODUCT_CONFIG,
         logLevel: "debug",
         environment: "ci",
       });
       expectSuccess(results[1] ?? { ok: false, problems: [] }, {
+        ...PRODUCT_CONFIG,
         logLevel: "warn",
         environment: "test",
       });
@@ -1382,6 +1593,7 @@ describe("loadConfig con el cargador real en procesos separados", () => {
         ],
       );
       const expected = {
+        ...PRODUCT_CONFIG,
         logLevel: PRECEDENCE[mode].layers[0]?.logLevel ?? "",
         environment: PRECEDENCE[mode].environment,
       };
@@ -1423,7 +1635,11 @@ describe("loadConfig con el cargador real en procesos separados", () => {
           { op: "runtime" },
         ],
       );
-      const expected = { logLevel: "debug", environment: "development" };
+      const expected = {
+        ...PRODUCT_CONFIG,
+        logLevel: "debug",
+        environment: "development",
+      };
       expect(results).toHaveLength(3);
       for (const result of results) {
         expectSuccess(result, expected);

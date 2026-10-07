@@ -3,11 +3,12 @@
 // cargan directamente con Node.js, así que solo importa `pino` y usa sintaxis
 // TypeScript borrable.
 //
-// Solo existen dos eventos de arranque, `startup.completed` y
-// `startup.config_invalid`. Cada llamada escribe exactamente una línea JSON,
-// con cualquiera de los siete niveles operativos, incluido `silent`: el
-// evento lo escribe un hijo de Pino con su propio nivel. No hay eventos por
-// petición ni `requestId`.
+// Hay dos eventos de arranque, `startup.completed` y `startup.config_invalid`,
+// y una lista cerrada de eventos de producto (`logProductEvent`), cada uno con
+// el identificador de correlación de su petición. Cada llamada escribe
+// exactamente una línea JSON, con cualquiera de los siete niveles operativos,
+// incluido `silent`: el evento lo escribe un hijo de Pino con su propio nivel.
+// La comprobación de estado no registra nada.
 import pino from "pino";
 import type { DestinationStream, Logger as PinoLogger } from "pino";
 
@@ -113,4 +114,27 @@ export function logConfigInvalid(
     },
     "startup.config_invalid",
   );
+}
+
+// Eventos de producto: una lista cerrada de nombres y de campos. No aceptan
+// texto libre, así que no pueden llevar contraseñas, claves, identificadores
+// de sesión ni contenido. `correlationId` identifica la petición y es el mismo
+// que el de sus eventos de auditoría. La comprobación de estado sigue sin
+// registrar nada.
+export type ProductEvent =
+  | "session.signed_in"
+  | "session.sign_in_refused"
+  | "session.signed_out"
+  | "account.password_changed"
+  | "account.password_change_refused"
+  | "access.denied"
+  | "request.failed";
+
+export function logProductEvent(
+  logger: AppLogger,
+  event: ProductEvent,
+  correlationId: string,
+): void {
+  const { pino: root, environment } = stateOf(logger);
+  root.child({ environment }, { level: "info" }).info({ correlationId }, event);
 }

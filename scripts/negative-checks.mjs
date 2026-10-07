@@ -500,6 +500,11 @@ async function appendInCopy(copy, relative, content) {
 const VERSION_MODULE = "src/platform/version/index.ts";
 const LINT_FILE = "src/modules/normative-source/violation.ts";
 const TEST_FILE = "tests/unit/negative.test.ts";
+// Ruta de producto sin declarar (specs/002-boe-scorm-export, T026; ADR 0004).
+const ROUTE_FILE = "src/pages/negative-route.ts";
+const ROUTE_TEST = "tests/architecture/public-routes.test.ts";
+const ROUTE_TEST_NAME =
+  "lista cerrada de rutas > src/pages contiene exactamente los ficheros de la lista";
 const BUILD_PAGE = "src/pages/negative-build.tsx";
 const BUILD_ROUTE = "/negative-build";
 const SECRET_FILE = "negative-secret.txt";
@@ -681,6 +686,48 @@ const CASES = {
               output,
               /^\s*FAIL\s+\S/,
               new RegExp(escapeRegExp(TEST_FILE)),
+            ),
+          ),
+        ],
+      };
+    },
+  }),
+
+  // Una página nueva que no está en la lista cerrada de la superficie: las
+  // pruebas de arquitectura deben rechazarla aunque compile y no la delegue la
+  // frontera.
+  "test-undeclared-route": () => ({
+    label: "test (b) ruta de producto sin declarar",
+    command: "check:test",
+    alter: (copy) =>
+      writeInCopy(
+        copy,
+        ROUTE_FILE,
+        "export default function NegativeRoute(): null {\n  return null;\n}\n",
+      ),
+    evaluate: ({ code, output }) => {
+      const location = new RegExp(
+        `FAIL\\s+${escapeRegExp(ROUTE_TEST)} > ${escapeRegExp(ROUTE_TEST_NAME)}`,
+      );
+      if (
+        code === 0 ||
+        !location.test(output) ||
+        !output.includes(ROUTE_FILE)
+      ) {
+        return {
+          problem: `Vitest no señala la ruta sin declarar ${ROUTE_FILE}.`,
+        };
+      }
+      return {
+        cause: `Vitest: ${ROUTE_FILE} no está en la lista cerrada de rutas`,
+        location: `${ROUTE_TEST} > ${ROUTE_TEST_NAME}`,
+        collateral: [
+          ...new Set(
+            collateral(
+              output,
+              /^\s*FAIL\s+\S/,
+              // La misma ruta la rechaza también la prueba de puntos de entrada.
+              /tests\/architecture\/(?:public-routes|entry-points)\.test\.ts/,
             ),
           ),
         ],
@@ -952,7 +999,7 @@ const CATEGORY_CASES = {
   format: ["format"],
   lint: ["lint"],
   types: ["types"],
-  test: ["test"],
+  test: ["test", "test-undeclared-route"],
   build: ["build"],
   secrets: ["secrets-history", "secrets-untracked", "secrets-ignored"],
   dependencies: ["dependencies"],

@@ -473,9 +473,12 @@ beforeEach(() => {
 });
 
 describe("interfaz", () => {
-  test("en ejecución exporta únicamente createHttpBoundary, que devuelve un request invocable", async () => {
+  test("en ejecución exporta únicamente ROUTES y createHttpBoundary, que devuelve un request invocable", async () => {
     const namespace = await loadNamespace();
-    expect(Object.keys(namespace)).toEqual(["createHttpBoundary"]);
+    expect(Object.keys(namespace).sort()).toEqual([
+      "ROUTES",
+      "createHttpBoundary",
+    ]);
     const listener = await boundaryFor(neverCalled());
     expect(typeof listener).toBe("function");
   });
@@ -510,7 +513,18 @@ describe("delegación", () => {
 
 describe("destino crudo exacto", () => {
   test.each([
-    "/",
+    "//",
+    "/index",
+    "/login/",
+    "/login?next=/",
+    "/LOGIN",
+    "/account",
+    "/account/password/",
+    "/api/session",
+    "/api/session/sign-in/",
+    "/api/session/sign-in?x=1",
+    "/api/account",
+    "/_next/data/compilacion/index.json",
     "",
     "/foo",
     "/api",
@@ -823,4 +837,170 @@ describe("cabeceras de framework", () => {
     expect(response.headersSent, "cabeceras sin enviar").toBe(false);
     expect(destroys(result), "conexión no destruida").toBe(0);
   });
+});
+
+// Rutas de producto (specs/002-boe-scorm-export, contracts/http-surface.md;
+// ADR 0004): la lista cerrada `ROUTES`, cada destino con sus métodos y su
+// tamaño máximo de cuerpo.
+describe("lista cerrada de rutas de producto", () => {
+  const FORM = ["Content-Type", "application/x-www-form-urlencoded"];
+  const PAGES = ["/", "/login", "/account/password"];
+  const ACTIONS = [
+    "/api/session/sign-in",
+    "/api/session/sign-out",
+    "/api/account/password",
+  ];
+
+  test("ROUTES es exactamente la lista del contrato, congelada", async () => {
+    const namespace = await loadNamespace();
+    const routes = Reflect.get(namespace, "ROUTES") as readonly {
+      target: string;
+      methods: readonly string[];
+      maxBody: number;
+    }[];
+    expect(Object.isFrozen(routes)).toBe(true);
+    expect(
+      routes.map(({ target, methods, maxBody }) => [target, methods, maxBody]),
+    ).toStrictEqual([
+      ["/api/health", ["GET", "HEAD", "OPTIONS"], 0],
+      ["/", ["GET"], 0],
+      ["/login", ["GET"], 0],
+      ["/account/password", ["GET"], 0],
+      ["/api/session/sign-in", ["POST"], 4096],
+      ["/api/session/sign-out", ["POST"], 4096],
+      ["/api/account/password", ["POST"], 4096],
+    ]);
+  });
+
+  test.each(PAGES)("GET %s se delega una vez", async (url) => {
+    const handle = neverCalled();
+    const result = await run(handle, { url });
+    expect(result.rejected).toBe(false);
+    expect(handle).toHaveBeenCalledTimes(1);
+    expect(result.response.calls, "la frontera no escribe").toEqual([]);
+  });
+
+  test.each(
+    PAGES.flatMap((url) =>
+      ["HEAD", "OPTIONS", "POST", "PUT", "DELETE"].map((method) => ({
+        url,
+        method,
+      })),
+    ),
+  )("$method $url recibe 405 cerrado con Allow: GET", async (options) => {
+    const handle = neverCalled();
+    const result = await run(handle, options);
+    expect(handle).not.toHaveBeenCalled();
+    expect(result.response.committedStatus).toBe(405);
+    expect(result.response.getHeaders()).toStrictEqual({
+      ...CLOSED,
+      allow: "GET",
+    });
+  });
+
+  test.each(PAGES)("GET %s con cuerpo recibe 400 cerrado", async (url) => {
+    const handle = neverCalled();
+    const result = await run(handle, {
+      url,
+      rawHeaders: [...HOST, "Content-Length", "5"],
+    });
+    expectClosedRejection(result, 400);
+    expect(handle).not.toHaveBeenCalled();
+  });
+
+  test.each(
+    ACTIONS.flatMap((url) =>
+      ["0", "1", "4096"].map((length) => ({ url, length })),
+    ),
+  )(
+    "POST $url con Content-Length $length se delega",
+    async ({ url, length }) => {
+      const handle = neverCalled();
+      const result = await run(handle, {
+        method: "POST",
+        url,
+        rawHeaders: [...HOST, ...FORM, "Content-Length", length],
+      });
+      expect(result.rejected).toBe(false);
+      expect(handle).toHaveBeenCalledTimes(1);
+      expect(result.response.calls, "la frontera no escribe").toEqual([]);
+    },
+  );
+
+  test.each(
+    ACTIONS.flatMap((url) =>
+      [
+        { name: "sin Content-Length", headers: [] },
+        { name: "por encima del máximo", headers: ["Content-Length", "4097"] },
+        {
+          name: "muy por encima del máximo",
+          headers: ["Content-Length", "99999999999"],
+        },
+        {
+          name: "Content-Length no decimal",
+          headers: ["Content-Length", "0x10"],
+        },
+        { name: "Content-Length con signo", headers: ["Content-Length", "+5"] },
+        {
+          name: "Content-Length con ceros iniciales",
+          headers: ["Content-Length", "05"],
+        },
+        {
+          name: "dos Content-Length",
+          headers: ["Content-Length", "5", "Content-Length", "5"],
+        },
+        {
+          name: "Transfer-Encoding",
+          headers: ["Transfer-Encoding", "chunked"],
+        },
+        {
+          name: "Transfer-Encoding y Content-Length",
+          headers: ["Content-Length", "5", "Transfer-Encoding", "chunked"],
+        },
+      ].map((scenario) => ({ url, ...scenario })),
+    ),
+  )(
+    "POST $url $name recibe 400 cerrado sin delegar",
+    async ({ url, headers }) => {
+      const handle = neverCalled();
+      const result = await run(handle, {
+        method: "POST",
+        url,
+        rawHeaders: [...HOST, ...FORM, ...headers],
+      });
+      expectClosedRejection(result, 400);
+      expect(handle).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(
+    ACTIONS.flatMap((url) =>
+      ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "DELETE"].map((method) => ({
+        url,
+        method,
+      })),
+    ),
+  )("$method $url recibe 405 cerrado con Allow: POST", async (options) => {
+    const handle = neverCalled();
+    const result = await run(handle, options);
+    expect(handle).not.toHaveBeenCalled();
+    expect(result.response.committedStatus).toBe(405);
+    expect(result.response.getHeaders()).toStrictEqual({
+      ...CLOSED,
+      allow: "POST",
+    });
+  });
+
+  test.each([...PAGES, ...ACTIONS])(
+    "%s con HTTP/2.0 o sin Host válido se rechaza antes de mirar el destino",
+    async (url) => {
+      const handle = neverCalled();
+      expectClosedRejection(
+        await run(handle, { url, httpVersion: "2.0" }),
+        505,
+      );
+      expectClosedRejection(await run(handle, { url, rawHeaders: [] }), 400);
+      expect(handle).not.toHaveBeenCalled();
+    },
+  );
 });

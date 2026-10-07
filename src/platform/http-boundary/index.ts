@@ -1,16 +1,19 @@
 // Frontera HTTP (FR-009; research.md, R1; plan.md, «Frontera HTTP»;
 // data-model.md, «Estado de conexión»; contracts/health.openapi.yaml,
-// `x-aulanorma-transport-boundary` y `x-aulanorma-rejection-contract`). Módulo
+// `x-aulanorma-transport-boundary` y `x-aulanorma-rejection-contract`; ADR
+// 0004 y specs/002-boe-scorm-export/contracts/http-surface.md). Módulo
 // portable: `server.mjs` lo carga directamente con Node.js, así que no importa
 // nada en ejecución (de `node:http` y `node:stream` solo toma tipos) y usa
 // sintaxis TypeScript borrable.
 //
 // Decide cada petición antes de Next.js con la precedencia versión → `Host` →
-// destino → método → cuerpo, y solo delega el destino crudo exacto
-// `/api/health` con `GET`, `HEAD` u `OPTIONS`. Lee únicamente `httpVersion`,
-// `method`, `url` y `rawHeaders`, sin normalizar ni decodificar nada, y el
-// estado imprescindible de la respuesta y del socket. No modifica la petición,
-// no consume el cuerpo y no registra nada.
+// destino → método → cuerpo, y solo delega los destinos crudos exactos de la
+// lista cerrada `ROUTES`, cada uno con sus métodos y su tamaño máximo de
+// cuerpo. Lee únicamente `httpVersion`, `method`, `url` y `rawHeaders`, sin
+// normalizar ni decodificar nada, y el estado imprescindible de la respuesta y
+// del socket. No modifica la petición, no consume el cuerpo y no registra
+// nada. No comprueba la sesión ni los permisos: eso lo hace cada ruta de
+// producto.
 //
 // El estado de cada conexión es transitorio y vive solo en memoria, asociado
 // a su socket: nunca se comparte entre sockets ni sobrevive a la conexión.
@@ -35,17 +38,49 @@ export interface HttpBoundary {
 type Headers = Readonly<Record<string, string>>;
 type Rejection = 400 | 404 | 405 | 505;
 
-const TARGET = "/api/health";
-const ALLOW = "GET, HEAD, OPTIONS";
+// Lista cerrada de rutas que se delegan. `maxBody` es el tamaño máximo del
+// cuerpo en bytes; con 0, la petición no puede llevar cuerpo. Cualquier otro
+// destino recibe el 404 cerrado.
+export interface Route {
+  readonly target: string;
+  readonly methods: readonly string[];
+  readonly maxBody: number;
+}
+
+const FORM_BODY = 4096;
+
+export const ROUTES: readonly Route[] = Object.freeze([
+  { target: "/api/health", methods: ["GET", "HEAD", "OPTIONS"], maxBody: 0 },
+  { target: "/", methods: ["GET"], maxBody: 0 },
+  { target: "/login", methods: ["GET"], maxBody: 0 },
+  { target: "/account/password", methods: ["GET"], maxBody: 0 },
+  { target: "/api/session/sign-in", methods: ["POST"], maxBody: FORM_BODY },
+  { target: "/api/session/sign-out", methods: ["POST"], maxBody: FORM_BODY },
+  { target: "/api/account/password", methods: ["POST"], maxBody: FORM_BODY },
+]);
 
 // Rechazo cerrado: cuerpo vacío y la conexión se cierra después. `Allow` solo
-// acompaña al 405.
+// acompaña al 405, con los métodos de la ruta.
 const CLOSED: Headers = {
   "Cache-Control": "no-store",
   "Content-Length": "0",
   Connection: "close",
 };
-const METHOD_NOT_ALLOWED: Headers = { ...CLOSED, Allow: ALLOW };
+
+interface Decision {
+  readonly status: Rejection;
+  readonly headers: Headers;
+}
+
+function rejection(status: Rejection, route?: Route): Decision {
+  return {
+    status,
+    headers:
+      status === 405 && route !== undefined
+        ? { ...CLOSED, Allow: route.methods.join(", ") }
+        : CLOSED,
+  };
+}
 
 const REASONS: Readonly<Record<Rejection, string>> = {
   400: "Bad Request",
@@ -62,7 +97,7 @@ const REASONS: Readonly<Record<Rejection, string>> = {
 // - `reset`: el socket ya se destruyó por `ECONNRESET`.
 interface Connection {
   pending: number;
-  deferred: Rejection | undefined;
+  deferred: Decision | undefined;
   rejected: boolean;
   reset: boolean;
 }
@@ -106,39 +141,50 @@ function hostAdmitted(rawHeaders: readonly string[], version: string): boolean {
   return hosts.length === 1 && hosts.every(validHost);
 }
 
-// Sin `Transfer-Encoding` y con un único `Content-Length: 0` o ninguno.
-function bodyAdmitted(rawHeaders: readonly string[]): boolean {
+const DECIMAL = /^(?:0|[1-9]\d{0,8})$/;
+
+// Sin `Transfer-Encoding`. Si la ruta no admite cuerpo, un único
+// `Content-Length: 0` o ninguno; si lo admite, exactamente un `Content-Length`
+// decimal que no supere su máximo.
+function bodyAdmitted(rawHeaders: readonly string[], maxBody: number): boolean {
   if (rawValues(rawHeaders, "transfer-encoding").length > 0) {
     return false;
   }
   const lengths = rawValues(rawHeaders, "content-length");
-  return lengths.length === 0 || (lengths.length === 1 && lengths[0] === "0");
+  if (maxBody === 0) {
+    return lengths.length === 0 || (lengths.length === 1 && lengths[0] === "0");
+  }
+  const length = lengths[0];
+  return (
+    lengths.length === 1 &&
+    length !== undefined &&
+    DECIMAL.test(length) &&
+    Number(length) <= maxBody
+  );
 }
 
 // La primera regla incumplida decide el rechazo; sin ninguna, se delega. Un
 // túnel (`CONNECT` o `Upgrade`) nunca se delega: pasa por la versión, `Host` y
-// el destino y, sobre el destino exacto, recibe 405.
-function decide(req: IncomingMessage, tunnel: boolean): Rejection | undefined {
+// el destino y, sobre un destino de la lista, recibe 405.
+function decide(req: IncomingMessage, tunnel: boolean): Decision | undefined {
   const version = req.httpVersion;
   if (version !== "1.0" && version !== "1.1") {
-    return 505;
+    return rejection(505);
   }
   const rawHeaders = req.rawHeaders;
   if (!hostAdmitted(rawHeaders, version)) {
-    return 400;
+    return rejection(400);
   }
-  if (req.url !== TARGET) {
-    return 404;
+  const route = ROUTES.find(({ target }) => target === req.url);
+  if (route === undefined) {
+    return rejection(404);
   }
   const method = req.method;
-  if (
-    tunnel ||
-    (method !== "GET" && method !== "HEAD" && method !== "OPTIONS")
-  ) {
-    return 405;
+  if (tunnel || method === undefined || !route.methods.includes(method)) {
+    return rejection(405, route);
   }
-  if (!bodyAdmitted(rawHeaders)) {
-    return 400;
+  if (!bodyAdmitted(rawHeaders, route.maxBody)) {
+    return rejection(400);
   }
   return undefined;
 }
@@ -178,12 +224,10 @@ function fail(res: ServerResponse): void {
 
 // Rechazo cerrado escrito directamente en el socket, cuando no hay respuesta:
 // errores de análisis, `CONNECT` y `Upgrade`.
-function rawRejection(status: Rejection): string {
+function rawRejection({ status, headers }: Decision): string {
   const lines = [
     `HTTP/1.1 ${String(status)} ${REASONS[status]}`,
-    ...Object.entries(status === 405 ? METHOD_NOT_ALLOWED : CLOSED).map(
-      ([name, value]) => `${name}: ${value}`,
-    ),
+    ...Object.entries(headers).map(([name, value]) => `${name}: ${value}`),
   ];
   return `${lines.join("\r\n")}\r\n\r\n`;
 }
@@ -215,14 +259,14 @@ export function createHttpBoundary(handle: Handle): HttpBoundary {
   function reject(
     socket: Duplex,
     connection: Connection,
-    status: Rejection,
+    decision: Decision,
   ): void {
     connection.rejected = true;
     if (socket.destroyed || !socket.writable) {
       return;
     }
     try {
-      socket.end(rawRejection(status), () => {
+      socket.end(rawRejection(decision), () => {
         socket.destroy();
       });
     } catch {
@@ -233,15 +277,15 @@ export function createHttpBoundary(handle: Handle): HttpBoundary {
   // Un rechazo en bruto se escribe al instante si no hay respuestas
   // pendientes; si las hay, se difiere hasta que termine la última. Tras un
   // rechazo o con otro ya diferido, se suprime.
-  function rejectInOrder(socket: Duplex, status: Rejection): void {
+  function rejectInOrder(socket: Duplex, decision: Decision): void {
     const connection = connectionOf(socket);
     if (connection.rejected || connection.deferred !== undefined) {
       return;
     }
     if (connection.pending > 0) {
-      connection.deferred = status;
+      connection.deferred = decision;
     } else {
-      reject(socket, connection, status);
+      reject(socket, connection, decision);
     }
   }
 
@@ -288,14 +332,10 @@ export function createHttpBoundary(handle: Handle): HttpBoundary {
       return;
     }
     try {
-      const rejection = decide(req, false);
-      if (rejection !== undefined) {
+      const decision = decide(req, false);
+      if (decision !== undefined) {
         connection.rejected = true;
-        respond(
-          res,
-          rejection,
-          rejection === 405 ? METHOD_NOT_ALLOWED : CLOSED,
-        );
+        respond(res, decision.status, decision.headers);
         return;
       }
     } catch {
@@ -319,15 +359,15 @@ export function createHttpBoundary(handle: Handle): HttpBoundary {
     socket.on("error", () => {
       socket.destroy();
     });
-    let status: Rejection;
+    let decision: Decision;
     try {
-      status = decide(req, true) ?? 405;
+      decision = decide(req, true) ?? rejection(405);
     } catch {
       // Sin decisión no hay rechazo que escribir: se destruye la conexión.
       socket.destroy();
       return;
     }
-    rejectInOrder(socket, status);
+    rejectInOrder(socket, decision);
   }
 
   return {
@@ -349,7 +389,7 @@ export function createHttpBoundary(handle: Handle): HttpBoundary {
         }
         return;
       }
-      rejectInOrder(socket, 400);
+      rejectInOrder(socket, rejection(400));
     },
   };
 }

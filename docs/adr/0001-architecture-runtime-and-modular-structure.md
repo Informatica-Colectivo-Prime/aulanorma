@@ -8,6 +8,14 @@ pasa de la publicación en Moodle a la exportación, y la ubicación de su módu
 `src/modules/moodle-publication` a `src/modules/content-export`. El resto de esta decisión
 sigue vigente y su texto no se modifica (nota de revisión; no cambia la decisión).
 
+**Segunda sustitución parcial**: el [ADR 0004](./0004-product-surface-persistence-identity-and-generation.md),
+Aceptado, sustituye lo que enumera su apartado "Relación con los ADR aceptados": de la decisión
+8, la ausencia de HTML, la delegación de un único destino, el cuerpo vacío, la prueba de la
+ruta única y el registro de peticiones de Next.js; de la decisión 1, la existencia de una sola
+API Route; de la decisión 5, las importaciones de la capa de entrega y de `server.mjs`; y de la
+decisión 7, los eventos de registro. El resto de esta decisión sigue vigente y su texto no se
+modifica (nota de revisión; no cambia la decisión).
+
 **Fecha**: 2026-09-25
 
 **Contexto de origen**: [`specs/001-engineering-baseline/plan.md`](../../specs/001-engineering-baseline/plan.md)

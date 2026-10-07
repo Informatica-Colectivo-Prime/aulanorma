@@ -18,7 +18,15 @@ operación, quién puede ejecutarla y sus condiciones.
 - **Mutaciones**: solo `POST`, con comprobación de origen contra el origen público
   configurado y testigo de sesión. El envío del formulario de entrada lo exige también, con
   el testigo de su sesión previa.
-- **Sesiones**: cookie `__Host-`, `Secure`, `HttpOnly` y `SameSite=Strict`; caducidad por
+- **Sesiones**: cookie `HttpOnly`, `SameSite=Strict` y `Path=/`, sin `Domain`, con el prefijo
+  `__Host-` y `Secure`. La única excepción es el modo desarrollo (`npm run dev`) con el origen
+  local por HTTP, donde se emite sin el prefijo ni `Secure`: fuera de ese modo la
+  configuración rechaza cualquier origen que no sea HTTPS y el servidor no arranca. Nombre y
+  atributos dependen solo del origen público configurado; ninguna cabecera de la petición
+  (`Host`, `Forwarded`, `X-Forwarded-*`) los cambia, ni cambia el origen exigido a un envío.
+  El identificador de sesión viaja solo en `Set-Cookie` y el testigo, solo en los formularios
+  de su propia sesión; ninguno aparece en registros, auditoría, errores ni en otras
+  respuestas. Caducidad por
   inactividad (30 minutos) y por duración máxima (12 horas), configurables; se revocan al
   cerrar sesión, cambiar la contraseña, desactivar la cuenta o cambiar sus permisos (FR-068).
 - **Generación de pago**: toda solicitud muestra antes la estimación y el presupuesto
@@ -30,6 +38,22 @@ operación, quién puede ejecutarla y sus condiciones.
   referencia normativa cuando aplica.
 - **Cuerpos**: tamaño máximo por operación, aplicado en la frontera.
 - **Sin borrado**: no existe ninguna operación `DELETE`.
+
+## Rutas implementadas (cimientos, fase 3)
+
+| Destino                 | Métodos                  | Operación                                 |
+| ----------------------- | ------------------------ | ----------------------------------------- |
+| `/api/health`           | `GET`, `HEAD`, `OPTIONS` | Comprobar estado                          |
+| `/login`                | `GET`                    | Ver el formulario de entrada              |
+| `/api/session/sign-in`  | `POST`                   | Iniciar sesión                            |
+| `/`                     | `GET`                    | Inicio                                    |
+| `/account/password`     | `GET`                    | Ver el formulario de cambio de contraseña |
+| `/api/session/sign-out` | `POST`                   | Cerrar sesión                             |
+| `/api/account/password` | `POST`                   | Cambiar la contraseña                     |
+
+Las demás operaciones de la tabla siguiente todavía no existen. Las páginas responden con HTML
+completo o con una redirección; las acciones, siempre con una redirección o con un rechazo sin
+cuerpo. Los destinos son exactos: no admiten parámetros de consulta.
 
 ## Operaciones
 
