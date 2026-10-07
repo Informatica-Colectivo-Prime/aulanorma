@@ -43,3 +43,4 @@ consideradas** y **Consecuencias**.
 | [0001](./0001-architecture-runtime-and-modular-structure.md) | Arquitectura, runtime y estructura modular | Aceptado |
 | [0002](./0002-quality-ci-and-security-strategy.md) | Estrategia de calidad, integración continua y seguridad | Aceptado |
 | [0003](./0003-scorm-export-instead-of-automatic-moodle-publication.md) | Exportación SCORM en lugar de publicación automática en Moodle (sustituye parcialmente al 0001) | Propuesto |
+| [0004](./0004-product-surface-persistence-identity-and-generation.md) | Superficie de producto, persistencia, identidad y generación (sustituye parcialmente al 0001) | Propuesto |
