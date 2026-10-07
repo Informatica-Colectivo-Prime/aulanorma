@@ -53,7 +53,11 @@ La constitución exige un monolito modular, sin infraestructura adicional sin ne
 7. **Despliegue**. El proceso sigue escuchando en `127.0.0.1:3000`, detrás de un proxy
    inverso que termina TLS. La aplicación conoce su origen público por configuración y no
    confía en cabeceras reenviadas. Un único servidor y una única instancia.
-8. **Estructura**. `src/platform` gana las áreas `persistence`, `identity`, `audit` y
+8. **Tratamiento de los PDF**. El texto se extrae con `pdfjs-dist`. La estructura se
+   inspecciona con `qpdf`, una herramienta externa que se instala como binario verificado,
+   y una política propia decide sobre esa estructura. Ninguna de las dos acredita que un PDF
+   sea seguro.
+9. **Estructura**. `src/platform` gana las áreas `persistence`, `identity`, `audit` y
    `generation`. La capa de entrega puede importar la API pública de las cuatro capas de
    dominio.
 
@@ -133,7 +137,9 @@ los mismos. El ADR 0003 es independiente y trata de la cuarta capa.
 
 - Proveedor, modelo, moneda y presupuesto real de generación.
 - Dominio y servidor de destino del piloto.
-- Resultado de la comprobación de viabilidad del tratamiento de PDF (research R4) y de la
-  validación del manifiesto con los esquemas oficiales (research R8).
+- Instalación de qpdf, la herramienta externa elegida para la inspección estructural de los
+  PDF tras la comprobación de viabilidad (research R4), en el servidor de destino y en la
+  integración continua.
+- Origen de referencia y redistribución de los esquemas oficiales de SCORM 1.2 (research R8).
 
 Mientras este ADR está Propuesto, puede corregirse con lo que la implementación descubra.

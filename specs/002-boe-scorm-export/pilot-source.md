@@ -3,8 +3,9 @@
 **Tarea**: T009 | **Informe**: [feasibility.md](./feasibility.md)
 
 Registro de procedencia del PDF oficial con el que se ha hecho la comprobación de viabilidad.
-El fichero **no está en el repositorio**: se añadirá, con este registro, cuando se decida su
-ubicación (feasibility.md, apartado 4; tarea T042).
+El fichero **no está en el repositorio** y no se añadirá: el documento real se conserva por
+su huella y su procedencia. Los resultados específicos de la unidad se guardarán también en
+este directorio (tarea T042).
 
 ## Procedencia
 

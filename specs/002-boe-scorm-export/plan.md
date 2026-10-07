@@ -39,7 +39,8 @@ Tres ideas sostienen el diseño:
 
 **Primary Dependencies**: las existentes (Next.js 16.3.6 con Pages Router, React 19.3.0, Zod
 4.6.5, Pino 10.3.1). Nuevas de producción: `pdfjs-dist`, `fflate` y `xmllint-wasm`. Nueva de
-desarrollo: `jsdom`. Ningún SDK de proveedor de generación por ahora. Versiones exactas por
+desarrollo: `jsdom`. Herramienta externa nueva: `qpdf`, para la inspección estructural de los
+PDF, instalada como binario verificado y no como paquete de npm. Ningún SDK de proveedor de generación por ahora. Versiones exactas por
 fijar al añadirlas (research R10).
 
 **Storage**: SQLite en un fichero, con `node:sqlite` (en estado *release candidate* en Node.js
@@ -152,10 +153,15 @@ src/
     └── content-export/            # Paquete SCORM, conformidad, exportaciones, descargas
 tests/
 ├── architecture/  contract/  integration/  unit/
-└── fixtures/                  # PDF con procedencia, XSD oficiales, respuestas grabadas
+└── fixtures/                  # PDF sintéticos, XSD oficiales, respuestas grabadas
 docs/engineering/
 └── deployment.md              # Despliegue aislado, copia y restauración
 ```
+
+**Datos del piloto**: la procedencia del documento real y los resultados específicos de la
+unidad viven en `specs/002-boe-scorm-export/`, no en `tests/` ni en `src/`. Las pruebas
+automáticas usan casos sintéticos. El PDF real no se guarda en el repositorio: se identifica
+por su huella y su procedencia.
 
 **Structure Decision**: se mantiene la estructura de ADR 0001. El dominio vive en las cuatro
 capas; lo transversal, en cuatro áreas nuevas de `src/platform`. La capa de entrega pasa a
@@ -262,7 +268,8 @@ principio XII.
 | Frontera HTTP con rutas y cuerpos       | El producto necesita interfaz, formularios y subida de PDF        | No hay producto con una única ruta; se registra en el ADR 0004     |
 | Cuatro áreas nuevas en `src/platform`   | Persistencia, identidad, auditoría y generación son transversales | Ponerlas en una capa rompería el orden de dependencias             |
 | Proxy inverso con TLS                   | El piloto se usa desde otros equipos                              | TLS en la aplicación duplicaría lo que el proxy hace               |
-| `pdfjs-dist`                            | Texto por página y análisis del PDF                               | Una herramienta del sistema difiere entre macOS y Linux            |
+| `qpdf` (herramienta externa)            | Estructura interpretada del PDF para aplicar la política          | Las consultas de `pdfjs-dist` y la búsqueda en bytes fallaron      |
+| `pdfjs-dist`                            | Texto por página del PDF                                          | Una herramienta del sistema difiere entre macOS y Linux            |
 | `fflate`                                | Crear y releer el ZIP                                             | Un escritor propio solo fallaría al importar                       |
 | `xmllint-wasm`                          | Conformidad del manifiesto con un criterio externo al generador   | Una validación propia repite las suposiciones del generador        |
 | `jsdom` (desarrollo)                    | Probar el seguimiento del paquete contra un doble                 | Un navegador automatizado es desproporcionado                      |
@@ -273,7 +280,6 @@ Nada de esto bloquea los pasos 2 a 8 con el adaptador determinista.
 
 | Dato                                                                           | Tarea que bloquea                                                        |
 | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| Ubicación del PDF real y de sus resultados esperados (el PDF ya está obtenido y registrado) | Fixture real y resultados esperados de UF0517                            |
 | Dominio y servidor de destino                                                  | Despliegue real y copia de seguridad en el destino (paso 9)              |
 | Proveedor, modelo, moneda, precios y presupuesto real, con cuenta de API       | Adaptador real y cualquier generación de pago (paso 10)                  |
 | Instancia de Moodle de pruebas y su versión                                    | Comprobación manual y texto final de las instrucciones (paso 11)         |

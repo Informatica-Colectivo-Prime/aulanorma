@@ -1,6 +1,6 @@
 # Informe de viabilidad: PDF, SQLite y validación XSD
 
-**Fecha**: 2026-10-07 | **Tareas**: T007 a T012 | **Plan**: [plan.md](./plan.md) | **Research**: [research.md](./research.md)
+**Fecha**: 2026-10-07, en dos rondas | **Tareas**: T007 a T012 | **Plan**: [plan.md](./plan.md) | **Research**: [research.md](./research.md)
 
 Resultado de las comprobaciones de la fase 2. Cada apartado separa **lo observado** de **lo que
 sigue siendo una hipótesis**. Los experimentos se hicieron con código desechable en un
@@ -13,13 +13,15 @@ dependencia de la aplicación ni se ha hecho ninguna llamada a un servicio de ge
 | -------------------------------------- | -------------------------------------------------------------------------- | --------------------------------- |
 | SQLite con `node:sqlite`               | Cumple todo lo previsto                                                    | Seguir                            |
 | Extracción de texto por página         | Cumple; el PDF del piloto se extrae completo y sin páginas vacías          | Seguir                            |
-| Detección de contenido activo          | **No cumple tal como estaba planificada**: falsos positivos y negativos    | Cambiar de enfoque; requiere decisión |
+| Detección de contenido activo          | El método planificado no cumple; la inspección estructural con qpdf, sí    | Cambiar a qpdf y política propia  |
 | Aislamiento del tratamiento del PDF    | Cumple en parte: contiene bloqueos y consumo; no es un entorno estanco     | Ajustar                           |
 | Validación XSD del manifiesto          | Cumple, sin red                                                            | Seguir; origen de los XSD pendiente |
 | PDF real del piloto                    | Contiene UF0517 completa; procedencia registrada                           | Seguir                            |
 
-T012 no queda cerrada: el cambio de enfoque de la detección de contenido activo necesita una
-decisión del mantenedor y un caso que no se ha podido probar (ver "Pendiente").
+La primera ronda dejó abierta la detección de contenido activo. La segunda, tras las
+decisiones del mantenedor, evaluó qpdf (apartado 2.6) y amplió los casos. Con ello T012 queda
+cerrada: cada punto tiene una decisión respaldada por un resultado, y lo que sigue pendiente
+está asignado a una fase posterior (ver "Pendiente").
 
 ## Entorno
 
@@ -30,6 +32,7 @@ decisión del mantenedor y un caso que no se ha podido probar (ver "Pendiente").
 | SQLite          | 3.53.4, el incluido en `node:sqlite`                           |
 | `pdfjs-dist`    | 6.4.299, instalado solo en el directorio de los experimentos   |
 | `xmllint-wasm`  | 5.3.0 (licencia MIT), instalado solo allí                      |
+| qpdf            | 12.4.2: binario oficial y, aparte, su biblioteca (ver 2.6)     |
 
 Las dos bibliotecas se instalaron con `npm install --ignore-scripts` en un directorio
 desechable. `package.json` y `package-lock.json` de la aplicación no han cambiado. Las versiones
@@ -135,7 +138,7 @@ Con límites de prueba de 50 MB y 4 páginas para los casos sintéticos:
 | Cinco páginas, con límite de cuatro         | Rechazado                        | Rechazado por el límite de páginas                    |
 | Por encima del tamaño máximo                | Rechazado antes de analizarlo    | Rechazado por tamaño (la disposición de 53,4 MB, con el límite en 50 MB) |
 
-### 2.5 Detección de contenido activo
+### 2.5 Detección de contenido activo: primera ronda
 
 **Este es el punto que no cumple lo planificado.** research R4 preveía usar las consultas de
 `pdfjs-dist` y rechazar cuando no se pudiera determinar. Se probaron tres métodos:
@@ -169,33 +172,153 @@ Con límites de prueba de 50 MB y 4 páginas para los casos sintéticos:
 **Consecuencia para el piloto**: con el método planificado, el documento oficial del piloto se
 rechazaría. Con la búsqueda de marcas, también.
 
-**Dos cuestiones que el mantenedor debe decidir**:
+Las dos cuestiones que esta ronda dejó al mantenedor (el campo de firma y el método de
+detección) están decididas; el resultado está en el apartado siguiente. El examen de
+diccionarios de la tabla era un analizador propio de la sintaxis del fichero: **no se adopta**
+como detector.
 
-1. **Firma digital**. Los PDF del BOE llevan un formulario con un campo de firma. FR-002 pide
-   rechazar el contenido activo. Un campo de firma sin acciones no ejecuta nada, pero es un
-   formulario. Se propone declararlo admitido de forma expresa y seguir rechazando XFA,
-   JavaScript, acciones automáticas, lanzamientos y ficheros incrustados.
-2. **Método de detección**. Se propone sustituir las consultas de `pdfjs-dist` por un examen
-   propio de los diccionarios del fichero, como el del prototipo, y rechazar cuando ese examen
-   no pueda completarse.
+### 2.6 Inspección estructural con qpdf: segunda ronda
 
-**Hipótesis y límites de la alternativa**:
+**Decisiones del mantenedor aplicadas**: admitir un campo de firma pasivo por su estructura,
+nunca por el nombre, el origen o la huella del documento; mantener el rechazo de JavaScript,
+XFA, acciones automáticas, lanzamientos y ficheros incrustados; no adoptar el analizador
+propio; evaluar qpdf con su salida JSON versión 2 y aplicar la política sobre la estructura
+interpretada; y rechazar ante cualquier error, límite excedido o estructura no comprobable.
 
-- **Flujos de objetos** (PDF 1.5 o posterior). El prototipo los descomprime y los examina,
-  pero **no se ha probado**: ninguno de los documentos disponibles los usa y el generador de
-  casos sintéticos no los produce. Los dos documentos oficiales son PDF 1.4 sin flujos de
-  objetos. Es el caso pendiente que impide cerrar T012.
-- Un examen propio puede interpretar un fichero malformado de forma distinta a como lo hace
-  un visor. Reduce el riesgo; no demuestra que un PDF sea inofensivo.
-- Las defensas que no dependen de la detección siguen siendo necesarias: el PDF no se ejecuta
-  ni se convierte, se sirve solo a usuarios autorizados con su tipo exacto y una política de
-  contenido restrictiva, y su texto se trata como dato.
+**Herramienta y procedencia**
 
-No se relaja ningún requisito: la propuesta mantiene el rechazo del contenido activo y cambia
-el método porque el previsto rechaza el documento que el piloto necesita y deja pasar clases
-de contenido que debe rechazar.
+| Elemento                    | Valor                                                                                   |
+| --------------------------- | --------------------------------------------------------------------------------------- |
+| qpdf, binario oficial       | 12.4.2, `qpdf-12.4.2-bin-macos-arm64.zip`, de las publicaciones del proyecto en GitHub  |
+| Obtenido                    | 2026-10-07T12:53:52Z                                                                    |
+| SHA-256 del fichero         | `62e46987a30ea167cbc530ccb22690aec3d8c812ed09979a941bcee92e504b79`                      |
+| Verificación                | Coincide con el fichero de huellas publicado junto a la versión                         |
+| qpdf, biblioteca            | 12.4.2, incluida en `pikepdf` 10.16.0, en un entorno virtual de Python 3.14.3           |
+| Orden usada                 | `qpdf --json=2 --json-stream-data=none <fichero>`                                       |
 
-### 2.6 Límites de recursos y aislamiento
+Las dos vías se instalaron en un directorio desechable. Nada se ha instalado en el sistema ni
+se ha añadido a la aplicación. La misma publicación ofrece un binario para Linux x86_64, con
+su huella en el mismo fichero; **no se ha probado**.
+
+**Qué entrega qpdf**. Un documento JSON con cada objeto ya interpretado: los nombres sin
+escapes, las referencias como `"7 0 R"`, los objetos de los flujos de objetos como objetos
+normales y, tras una actualización incremental, el estado vigente. La política recorre esa
+estructura; no lee los bytes del PDF.
+
+**Política aplicada en el experimento**
+
+1. Rechazo si qpdf termina con error, con avisos o con un código distinto de 0, si se le
+   interrumpe o si su salida no se puede leer.
+2. Rechazo si cualquier objeto contiene las claves de JavaScript, acción automática o de
+   apertura, ficheros incrustados, XFA o contenido multimedia enriquecido.
+3. Rechazo si el tipo de una acción, **resuelto a través de sus referencias**, es
+   JavaScript, lanzamiento, envío o importación de formulario, salto a otro documento u
+   otra acción de la lista prohibida.
+4. Una acción en una anotación solo se admite si es un salto dentro del documento o un
+   enlace. Los atributos del árbol de estructura de un PDF etiquetado usan la misma clave y
+   se distinguen recorriendo ese árbol, no por su aspecto.
+5. Un formulario solo se admite si **todos** sus campos son de firma y ninguno tiene
+   acciones. Cualquier otro formulario se rechaza.
+6. Rechazo si una referencia no se puede resolver.
+
+**Casos y resultados** (26 sintéticos y 2 oficiales; mismo veredicto con el binario y con la
+biblioteca)
+
+| Documento                                                          | Estructura que contiene                       | Esperado  | Observado |
+| ------------------------------------------------------------------ | --------------------------------------------- | --------- | --------- |
+| Texto, página en blanco, página solo imagen, cinco páginas         | —                                             | Aceptado  | Aceptado  |
+| JavaScript en el árbol de nombres                                  | —                                             | Rechazado | Rechazado |
+| Acción de apertura con JavaScript                                  | Referencia indirecta                          | Rechazado | Rechazado |
+| Acción de apertura de lanzamiento                                  | Referencia indirecta                          | Rechazado | Rechazado |
+| La misma, con el nombre escrito con escapes                        | Nombre escapado                               | Rechazado | Rechazado |
+| Acción adicional en una página                                     | —                                             | Rechazado | Rechazado |
+| Fichero incrustado                                                 | —                                             | Rechazado | Rechazado |
+| Formulario XFA                                                     | —                                             | Rechazado | Rechazado |
+| Cifrado                                                            | —                                             | Rechazado | Rechazado |
+| Truncado                                                           | —                                             | Rechazado | Rechazado, por avisos de qpdf |
+| No es un PDF                                                       | —                                             | Rechazado | Rechazado |
+| **Campo de firma pasivo**                                          | Formulario con un campo de firma              | Aceptado  | Aceptado  |
+| Campo de firma con una acción                                      | Formulario con un campo de firma              | Rechazado | Rechazado |
+| Campo de firma, y una actualización añade una acción de apertura   | Actualización incremental                     | Rechazado | Rechazado |
+| Formulario con un campo de texto                                   | Formulario que no es de firma                 | Rechazado | Rechazado |
+| Sin contenido activo, con flujo de objetos                         | Flujo de objetos y tabla en flujo             | Aceptado  | Aceptado  |
+| Lanzamiento dentro de un flujo de objetos                          | Flujo de objetos comprimido                   | Rechazado | Rechazado |
+| Lanzamiento cuyo tipo es una referencia a otro objeto              | Referencia indirecta y flujo de objetos       | Rechazado | Rechazado |
+| Valores inocuos tras referencias indirectas                        | Referencia indirecta y flujo de objetos       | Aceptado  | Aceptado  |
+| Actualización que añade el idioma                                  | Actualización incremental                     | Aceptado  | Aceptado  |
+| Actualización que añade una acción de apertura                     | Actualización incremental                     | Rechazado | Rechazado |
+| Actualización que retira la acción, pero deja su objeto            | Actualización incremental, objeto huérfano    | —         | Rechazado |
+| Actualización que retira la acción y libera su objeto              | Actualización incremental, objeto liberado    | —         | Aceptado  |
+| **PDF real del piloto**                                            | Firma, 27 807 objetos, PDF etiquetado         | Aceptado  | Aceptado  |
+| Otra disposición del mismo boletín                                 | Firma, 51 712 objetos, PDF etiquetado         | Aceptado  | Aceptado  |
+
+**Comprobación de que las variantes contienen lo que dicen**. Se verificó sobre los bytes de
+cada fichero: los cuatro casos con flujo de objetos son PDF 1.5, tienen un flujo de objetos y
+una tabla en flujo, y **no contienen como texto** ni la acción ni su tipo; los casos
+incrementales tienen dos secciones finales y una referencia a la tabla anterior; el caso del
+nombre escapado contiene el nombre con escapes y no su forma literal. qpdf informa de la
+versión 1.5 y resuelve los objetos comprimidos.
+
+**La excepción de la firma es estructural**. El mismo documento con campo de firma se acepta;
+se rechaza al añadir una acción al campo y también cuando una actualización posterior añade
+una acción de apertura. Los dos documentos oficiales se aceptan por tener esa estructura, sin
+ninguna regla que mire su nombre, su origen o su huella. **Admitir el campo no comprueba la
+firma**: no se valida criptográficamente y el experimento usa una firma sintética no válida.
+
+**Error o comprobación incompleta acaba en rechazo**. Observado: fichero truncado (qpdf lo
+repara con avisos; se rechaza por los avisos), fichero que no es PDF, fichero cifrado e
+inspección interrumpida a los 50 ms. En ningún caso el resultado fue "sin contenido activo".
+
+**Primer intento conservado**. La primera versión de la política rechazaba los dos documentos
+oficiales: tomaba por acción el atributo de los elementos del árbol de estructura. Se corrigió
+recorriendo ese árbol desde el catálogo. Otro caso, el del nombre escapado, se había hecho
+alterando bytes de un fichero y qpdf lo rechazaba por dañado, no por su contenido; se
+sustituyó por un caso generado correctamente.
+
+**Coste observado con el PDF del piloto** (19,0 MB)
+
+| Paso                              | Tiempo                         | Memoria residente |
+| --------------------------------- | ------------------------------ | ----------------- |
+| qpdf, con la biblioteca           | ≈ 0,6 s                        | ≈ 68 MB           |
+| qpdf, con el binario              | ≈ 3 s                          | ≈ 40 MB           |
+| Leer el JSON y aplicar la política | ≈ 0,15 s                       | ≈ 237 MB          |
+
+La salida JSON del documento del piloto ocupa 53 MB, casi el triple que el PDF. Leerla entera
+es lo que más memoria consume.
+
+**Coste operativo**
+
+- Es un binario nativo que interpreta ficheros no confiables: hay que mantenerlo al día y
+  ejecutarlo como proceso hijo con entorno vacío y límites, igual que la extracción.
+- Hay que instalarlo en tres sitios: desarrollo, integración continua (Linux y macOS) y
+  servidor de destino. El proyecto ya instala así sus herramientas de seguridad, con la
+  huella fijada y verificada; qpdf publica binarios y huellas para esas plataformas.
+- Añade un segundo intérprete del PDF junto a `pdfjs-dist`. Los dos pueden entender de forma
+  distinta un fichero malformado.
+
+**Límites del enfoque**
+
+- qpdf **no es un antivirus** y que termine sin avisos **no garantiza un PDF seguro**. Dice
+  qué estructura tiene el documento según su propia interpretación.
+- La política es una lista finita de construcciones rechazadas, más dos reglas de admisión
+  cerradas (formularios y acciones de anotación). Lo que no esté en la lista no se rechaza.
+- **Objetos liberados**: cuando una actualización libera un objeto, sus bytes siguen en el
+  fichero pero qpdf no lo incluye, y el documento se acepta. Un visor conforme tampoco lo
+  usa. Si el objeto queda huérfano sin liberarse, sí aparece y el documento se rechaza.
+- No se inspecciona el contenido de los flujos de página. Un fichero pensado para agotar
+  recursos se acepta en la inspección estructural y cae después en los límites de la
+  extracción (apartado 2.7).
+- Rechazar ante cualquier aviso puede dejar fuera un documento legítimo con un defecto leve.
+  Es el precio de no aceptar lo que no se ha podido comprobar.
+- Con el binario, el fichero cifrado se rechaza por un error de qpdf al cargar un componente
+  criptográfico antiguo, no con un motivo específico de cifrado. El veredicto es el mismo; el
+  mensaje al usuario tendrá que tratarlo.
+
+**Decisión**: qpdf con JSON versión 2 es viable. Se adopta como fuente de la estructura, con
+`pdfjs-dist` solo para el texto y la política como código propio. No hace falta volver al
+analizador propio.
+
+### 2.7 Límites de recursos y aislamiento
 
 Son tres cosas distintas y se midieron por separado.
 
@@ -242,12 +365,12 @@ que esta función "no protege frente a código malicioso".
 
 **Conclusión**: un proceso hijo con límites de tiempo y con el modelo de permisos contiene
 bloqueos, agotamiento de memoria y accesos accidentales a ficheros. **No es un aislamiento de
-seguridad.** Para acercarse hace falta, como mínimo: lanzar el hijo con un entorno vacío, sin
+seguridad.** Lo mismo vale para el proceso que ejecute qpdf. Para acercarse hace falta, como mínimo: lanzar el hijo con un entorno vacío, sin
 secretos; un límite de memoria total impuesto desde fuera; y cortar la red del hijo en el
 despliegue. Las dos últimas dependen del servidor de destino y quedan para la fase de
 despliegue.
 
-### 2.7 Límites de partida
+### 2.8 Límites de partida
 
 Valores iniciales, configurables, para el PDF del piloto (19,0 MB, 335 páginas, ≈ 1 s):
 
@@ -261,7 +384,7 @@ Valores iniciales, configurables, para el PDF del piloto (19,0 MB, 335 páginas,
 Con estos valores, la otra disposición probada (53,4 MB) se rechazaría por tamaño. No forma
 parte del piloto; el dato queda anotado para cuando se amplíe el alcance.
 
-### 2.8 Otros datos observados
+### 2.9 Otros datos observados
 
 - `pdfjs-dist` avisa por la salida de errores de que no puede cargar un paquete opcional de
   dibujo con código nativo. No hace falta para extraer texto. El aviso se conserva en la
@@ -333,21 +456,20 @@ unidad aparecen en cualquier fichero de `src/`, `tests/` o `scripts/`, incluidos
 y los binarios. El plan situaba el PDF real, su procedencia y sus resultados esperados en
 `tests/fixtures/pdf/`. Las dos cosas son incompatibles.
 
-En esta fase, la procedencia se ha registrado en `specs/002-boe-scorm-export/pilot-source.md`,
-fuera de los directorios examinados, y la tarea T009 se ha ajustado. Queda por decidir, antes
-de la fase 4, dónde vivirán el PDF real y los resultados esperados de la unidad (T042): en un
-directorio de datos que esa prueba no examine, o con una excepción expresa y acotada en la
-prueba. No se ha tocado la prueba.
+**Decisión del mantenedor**: la procedencia y los resultados específicos de la unidad se
+mantienen en `specs/002-boe-scorm-export/`; las pruebas genéricas usan casos sintéticos; la
+prueba de arquitectura no se relaja; y el documento real no se guarda en el repositorio, se
+conserva por su huella y su procedencia. La tarea T042 queda redactada así y deja de estar
+bloqueada.
 
 ## Pendiente
 
-| Asunto                                                                        | Quién o qué lo cierra                  | Antes de |
-| ----------------------------------------------------------------------------- | -------------------------------------- | -------- |
-| Admitir el campo de firma digital y cambiar el método de detección            | Decisión del mantenedor                | Fase 4   |
-| Probar el examen de diccionarios con un PDF que use flujos de objetos         | Un caso sintético nuevo                | Fase 4   |
-| Ubicación del PDF real y de sus resultados esperados                          | Decisión del mantenedor                | Fase 4   |
-| Límite de memoria total y corte de red del proceso hijo                       | Despliegue en el servidor de destino   | Fase 8   |
-| Origen y redistribución de los esquemas de SCORM 1.2                          | Decisión del mantenedor                | Fase 7   |
+| Asunto                                                                     | Quién o qué lo cierra                 | Antes de |
+| -------------------------------------------------------------------------- | ------------------------------------- | -------- |
+| Instalar qpdf como herramienta verificada y probar el binario de Linux     | Tarea T032 y la integración continua  | Fase 4   |
+| Instalar qpdf en el servidor de destino                                    | Despliegue (T074)                     | Fase 8   |
+| Límite de memoria total y corte de red de los procesos de análisis         | Despliegue en el servidor de destino  | Fase 8   |
+| Origen y redistribución de los esquemas de SCORM 1.2                       | Decisión del mantenedor               | Fase 7   |
 
 Nada de lo anterior afecta a la fase 3: persistencia, auditoría, identidad y frontera HTTP no
 dependen del tratamiento del PDF ni de los esquemas.
@@ -359,9 +481,10 @@ Cada experimento es un script de Node.js ejecutado desde un directorio desechabl
 - **SQLite**: un script que crea una base en modo WAL y lanza procesos hijos para las
   reservas simultáneas, la caída con `SIGKILL` y la escritura durante la copia.
 - **PDF**: un analizador que valida la firma y los límites, abre el documento con
-  `pdfjs-dist`, recorre sus páginas y consulta sus acciones; un examen de diccionarios; un
-  lanzador que impone tiempo y montón al proceso hijo; y una sonda que intenta leer, escribir,
-  lanzar procesos y usar la red con y sin `--permission`.
+  `pdfjs-dist`, recorre sus páginas y consulta sus acciones; un examen de diccionarios,
+  descartado; la inspección con qpdf y la política sobre su salida JSON; un lanzador que
+  impone tiempo y montón al proceso hijo; y una sonda que intenta leer, escribir, lanzar
+  procesos y usar la red con y sin `--permission`.
 - **XSD**: un script que valida cada manifiesto con `xmllint-wasm`, repetido con la red
   bloqueada mediante el aislamiento del sistema operativo.
 

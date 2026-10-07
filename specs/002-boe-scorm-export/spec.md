@@ -144,6 +144,23 @@ del mantenedor, recibidas ese mismo día sin pregunta previa.
 - Decisión del mantenedor (copia de seguridad): la copia debe ser recuperable y coherente
   entre los datos y los ficheros que referencian, y comprobarse con una restauración que
   verifique referencias y huellas.
+- Decisión del mantenedor (contenido activo y firma digital): se rechazan JavaScript, XFA,
+  acciones automáticas, lanzamientos y ficheros incrustados. Se admite un campo de firma
+  digital pasivo, sin acciones prohibidas, por su estructura y no por el nombre, el origen o
+  la huella del documento. Admitirlo no acredita la validez criptográfica de la firma. Ante
+  un error, un límite excedido o una estructura que no pueda comprobarse, el resultado es el
+  rechazo.
+- Decisión del mantenedor (datos del piloto): la procedencia y los resultados específicos de
+  UF0517 se mantienen en `specs/002-boe-scorm-export/`. Las pruebas genéricas usan casos
+  sintéticos. El documento real se conserva por su huella y su procedencia.
+- Decisión del mantenedor (registro de auditoría): ninguna operación del producto, incluidas
+  las del administrador, permite modificar ni borrar eventos ya registrados; las correcciones
+  son eventos nuevos. Eso no protege frente a quien administre el servidor y modifique los
+  ficheros directamente.
+- Decisión del mantenedor (datos de usuarios): son los identificadores de cuenta, los
+  nombres, los correos si existen, los perfiles y las atribuciones de revisión o aprobación.
+  Las contraseñas, las claves y las sesiones son además secretos de autenticación. Es una
+  definición operativa, no una evaluación jurídica de protección de datos.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -426,7 +443,13 @@ las instrucciones, se recorre con un alumno de prueba, se abandona, se reanuda y
 - **FR-002**: El sistema DEBE validar el fichero por su tipo real, su tamaño, su número de
   páginas y su estructura, y rechazar los PDF cifrados, dañados o con contenido activo, con un
   mensaje que explique el motivo. Los límites de tamaño y de páginas son valores configurados
-  y se muestran en ese mensaje.
+  y se muestran en ese mensaje. Es contenido activo el JavaScript, un formulario XFA, una
+  acción automática, una acción de lanzamiento y un fichero incrustado. La comprobación se
+  hace sobre la estructura interpretada del documento. Se admite un formulario cuyos campos
+  sean todos de firma digital y no tengan acciones; se admite por esa estructura, nunca por
+  el nombre, el origen o la huella del documento, y admitirlo NO acredita que la firma sea
+  válida. Si la comprobación falla, excede un límite o no puede completarse, el documento
+  DEBE rechazarse.
 - **FR-003**: El documento registrado NO DEBE modificarse. Las correcciones se registran sobre
   la interpretación. Una fuente que sustituya a otra se registra como un documento nuevo e
   inmutable, vinculado al anterior por una relación de sustitución; el documento anterior, su
@@ -597,8 +620,14 @@ las instrucciones, se recorre con un alumno de prueba, se abandona, se reanuda y
 - **FR-028**: Las subidas, correcciones, aprobaciones, rechazos, exportaciones, descargas y los
   intentos denegados DEBEN quedar en un registro que no pueda alterarse, igual que los inicios
   de sesión, sus intentos fallidos y los cambios de permisos. Cada modificación del límite de
-  coste DEBE registrarse con actor, fecha, valor anterior y valor nuevo.
-- **FR-029**: NO DEBEN enviarse datos personales al servicio de generación.
+  coste DEBE registrarse con actor, fecha, valor anterior y valor nuevo. «Que no pueda
+  alterarse» significa que ninguna operación del producto, con ningún perfil, incluido el
+  administrador, modifica ni borra un evento ya registrado; una corrección se registra como
+  un evento nuevo. Esta protección es de la aplicación: NO cubre a quien administre el
+  servidor y modifique directamente los ficheros.
+- **FR-029**: NO DEBEN enviarse datos de usuarios ni secretos de autenticación al servicio de
+  generación. Las referencias y los metadatos publicados en el documento normativo no son
+  datos de usuarios.
 
 **Exportación y descarga**
 
@@ -611,7 +640,9 @@ las instrucciones, se recorre con un alumno de prueba, se abandona, se reanuda y
 - **FR-032**: El paquete DEBE incluir todos los recursos de su contenido y NO DEBE depender de
   AulaNorma ni hacer peticiones a servicios externos. La comunicación con la plataforma que lo
   ejecuta, para guardar el seguimiento, está permitida y es necesaria.
-- **FR-033**: El paquete NO DEBE contener credenciales ni datos personales de usuarios.
+- **FR-033**: El paquete NO DEBE contener datos de usuarios ni secretos de autenticación. Los
+  registros internos conservan la identificación necesaria para la auditoría, con acceso
+  autorizado, y no forman parte del paquete.
 - **FR-034**: El paquete DEBE identificar la versión aprobada de la que procede.
 - **FR-035**: El sistema DEBE registrar la huella del fichero entregado y mostrarla, para que
   pueda comprobarse su integridad tras la descarga.
@@ -720,6 +751,11 @@ Esta funcionalidad los necesita; su elección técnica corresponde al plan.
   interpretación validada o el índice aprobado), y permanecen en el registro.
 - **Exportación**: un paquete generado a partir de una versión aprobada, con su huella, y sus
   descargas. Se conserva como evidencia aunque deje de ofrecerse.
+- **Datos de usuarios**: identificadores de cuenta, nombres, correos si existen, perfiles y
+  atribuciones de revisión o aprobación. Las contraseñas, las claves y las sesiones son
+  además **secretos de autenticación**. No lo son las referencias ni los metadatos publicados
+  en el documento normativo. Es una definición operativa de esta especificación, no una
+  evaluación jurídica de protección de datos.
 - **Estado de seguimiento**: dentro del paquete y de la plataforma que lo ejecuta, los temas
   marcados, el último tema visitado y la finalización. No pertenece a AulaNorma.
 - **Verificación de importación**: la evidencia de una comprobación manual en un Moodle de
@@ -758,6 +794,16 @@ Esta funcionalidad los necesita; su elección técnica corresponde al plan.
   limpio: el servicio arranca, el 100 % de las referencias tienen su fichero con la huella
   correcta, las generaciones que estaban enviadas figuran como inciertas y ninguna sesión
   anterior sirve.
+- **SC-042**: El 100 % de los documentos de prueba con JavaScript, XFA, acción automática,
+  lanzamiento o fichero incrustado se rechazan, también cuando esa estructura está en un
+  flujo de objetos, tras una referencia indirecta o en una actualización incremental. El
+  documento con un campo de firma pasivo se acepta, y deja de aceptarse al añadirle una
+  acción prohibida. Todo error, límite excedido o estructura no comprobable acaba en rechazo.
+  Tras cualquier comprobación, el fichero original conserva su huella.
+- **SC-043**: Tras ejercitar todas las operaciones del producto con todos los perfiles,
+  incluido el administrador, el 100 % de los eventos registrados antes conservan su
+  contenido y ninguno ha desaparecido; los intentos de modificar o borrar un evento se
+  rechazan, y cada corrección aparece como un evento nuevo.
 - **SC-041**: Tras rechazar una interpretación, un índice o un tema, en el 100 % de los casos
   el contenido sigue disponible como borrador, constan quién lo rechazó, cuándo y el motivo,
   no se ha iniciado ninguna generación, y la versión del temario no puede aprobarse ni
@@ -826,8 +872,10 @@ Esta funcionalidad los necesita; su elección técnica corresponde al plan.
   100 % de las descargas comprobadas.
 - **SC-014**: Dos exportaciones de la misma versión aprobada contienen el mismo contenido
   aprobado, con la misma estructura de temas, y ambas identifican esa versión.
-- **SC-015**: Una revisión del paquete del piloto no encuentra credenciales ni datos
-  personales de usuarios.
+- **SC-015**: Una revisión del paquete del piloto no encuentra ningún dato de usuarios
+  (identificadores de cuenta, nombres, correos, perfiles ni atribuciones de revisión o
+  aprobación) ni ningún secreto de autenticación, y una revisión de las entradas enviadas al
+  servicio de generación tampoco.
 - **SC-016**: Tras un fallo de generación provocado, no queda ningún paquete descargable de
   ese intento.
 - **SC-031**: Tras invalidar la aprobación de una versión ya exportada, el 100 % de los

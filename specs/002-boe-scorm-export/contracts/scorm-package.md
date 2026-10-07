@@ -20,7 +20,8 @@ comprobación en un Moodle real es manual y está en [../quickstart.md](../quick
 - Ningún fichero fuera de los que declara el manifiesto, y ninguno declarado que falte.
 - Ninguna URL externa en ningún fichero: sin fuentes, scripts, imágenes ni enlaces de
   seguimiento remotos.
-- Sin credenciales ni datos personales: el paquete no incluye quién aprobó ni quién exportó.
+- Sin datos de usuarios ni secretos de autenticación: el paquete no incluye quién aprobó ni
+  quién exportó.
 
 ## Manifiesto
 

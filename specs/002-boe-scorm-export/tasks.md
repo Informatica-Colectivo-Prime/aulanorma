@@ -26,7 +26,7 @@ sesión, con los nueve controles en verde, y termina con algo que se puede ver o
 - La enmienda 2.0.0 y el ADR 0003 (Propuesto) están integrados en `main`.
 - La especificación, el plan, estas tareas y el ADR 0004 (Propuesto) se integran juntos, con
   la fila del ADR 0004 en el índice de `docs/adr/README.md`.
-- Los cinco puntos abiertos de `checklists/pilot-readiness.md` se resuelven antes de la fase
+- Los tres puntos abiertos de `checklists/pilot-readiness.md` se resuelven antes de la fase
   que indica la tabla "Puntos abiertos de la lista de calidad".
 - Ninguna tarea de esta lista toca `specs/001-engineering-baseline/`. La única aceptación de
   un ADR es la del 0003, en T005, con su nota en el ADR 0001; el ADR 0004 sigue Propuesto.
@@ -54,12 +54,12 @@ lógica nueva.
 **Purpose**: resolver los puntos **[por verificar]** de research.md antes de construir sobre
 ellos. Código desechable fuera de `src/`; lo que queda es el informe.
 
-- [X] T007 Crear `scripts/fixtures/make-pdf-fixtures.mjs`, que genera los PDF sintéticos de research R4 (página solo imagen, página en blanco, cifrado, truncado, con JavaScript, con acción de apertura o de lanzamiento, con fichero incrustado, no PDF con extensión `.pdf`, por encima del tamaño y de las páginas máximas) en `tests/fixtures/pdf/synthetic/`, sin datos reales
+- [X] T007 Crear `scripts/fixtures/make-pdf-fixtures.mjs`, que genera los PDF sintéticos de research R4 (página solo imagen, página en blanco, cifrado, truncado, con JavaScript, con acción de apertura o de lanzamiento, con fichero incrustado, no PDF con extensión `.pdf`, por encima del tamaño y de las páginas máximas) en `tests/fixtures/pdf/synthetic/`, sin datos reales; y los casos añadidos tras la primera viabilidad: campo de firma pasivo, campo de firma con acción, firma con actualización que añade una acción, formulario con campo de texto, flujos de objetos permitidos y prohibidos, tipo de acción tras referencia indirecta, referencias indirectas permitidas, actualizaciones incrementales permitida, con acción añadida, con acción retirada y con acción liberada, y nombre escapado
 - [X] T008 Comprobar con `pdfjs-dist` la extracción por página, la detección de cada tipo de contenido activo y el aislamiento en un proceso hijo con límites de tiempo, memoria y sistema de ficheros, sobre los PDF de T007 y otro PDF oficial del BOE con procedencia anotada; registrar el resultado de cada caso de la tabla de R4 en `specs/002-boe-scorm-export/feasibility.md`
 - [X] T009 Repetir T008 con el PDF real, registrar su procedencia (organismo, referencia oficial, origen, fecha de obtención, SHA-256) en `specs/002-boe-scorm-export/pilot-source.md` y fijar en `feasibility.md` los límites de partida de tamaño y páginas; la procedencia no va en `tests/fixtures/pdf/`, porque `tests/architecture/no-domain-specifics.test.ts` rechaza los códigos del certificado en `tests/`
 - [X] T010 [P] Comprobar `node:sqlite` en Node.js 24.21.0: modo WAL, transacciones con bloqueo de escritura, disparadores que rechazan `UPDATE` y `DELETE`, la operación `backup` y la ausencia de avisos al arrancar; anotar en `feasibility.md` su estado *release candidate* y lo observado
 - [X] T011 [P] Comprobar `xmllint-wasm` validando un `imsmanifest.xml` contra los XSD oficiales de SCORM 1.2 sin acceso a la red, con sus importaciones resueltas en local; anotar en `feasibility.md` el resultado y las condiciones de redistribución de los XSD
-- [ ] T012 Cerrar `feasibility.md` con una decisión por punto (seguir, ajustar o cambiar de enfoque) y, si alguna decisión cambia, corregir `research.md` y el ADR 0004 mientras sigue Propuesto. **Abierta**: el informe propone una decisión por punto, pero el cambio de método de la detección de contenido activo espera la decisión del mantenedor y falta el caso con flujos de objetos
+- [X] T012 Cerrar `feasibility.md` con una decisión por punto (seguir, ajustar o cambiar de enfoque) y, si alguna decisión cambia, corregir `research.md` y el ADR 0004 mientras sigue Propuesto. Cerrada con las decisiones del mantenedor del 2026-10-07 y la inspección estructural con qpdf probada sobre 26 casos sintéticos y dos documentos oficiales; lo que queda pendiente está asignado a fases posteriores en la tabla de decisiones
 
 **Checkpoint**: informe con resultado por caso. Ningún "aceptado" sin haberse ejecutado.
 
@@ -77,7 +77,7 @@ autenticada. Sin funciones de producto.
 - [ ] T013 Añadir a `src/platform/config/` las claves nuevas del esquema Zod (directorio de datos, origen público, caducidad de sesión por inactividad y máxima, límites de tamaño de petición, máximo de coste por operación) y actualizar `.env.example` sin valores reales, con pruebas en `tests/unit/platform/config.test.ts`
 - [ ] T014 Crear `src/platform/persistence/` con la conexión `node:sqlite` en modo WAL, el ejecutor de migraciones numeradas (`src/platform/persistence/migrations/`) y un `index.ts` público, con pruebas en `tests/unit/platform/persistence.test.ts`
 - [ ] T015 [P] Añadir a `src/platform/persistence/` el almacén de ficheros por SHA-256 (publicación antes de referenciar: fichero temporal en el mismo directorio, sincronización a disco, renombrado a su huella y sincronización del directorio; sin sobrescritura ni borrado; verificación de huella al leer), con pruebas en `tests/unit/platform/blob-store.test.ts`
-- [ ] T016 Crear `src/platform/audit/` con `AuditEvent` de solo inserción, impuesto por disparadores, y campos `at`, `actor_id`, `action`, `target_kind`, `target_id`, `result`, `correlation_id`, `details`; pruebas en `tests/unit/platform/audit.test.ts` que demuestren que `UPDATE` y `DELETE` fallan
+- [ ] T016 Crear `src/platform/audit/` con `AuditEvent` de solo inserción, impuesto por disparadores, y campos `at`, `actor_id`, `action`, `target_kind`, `target_id`, `result`, `correlation_id`, `details`; pruebas en `tests/unit/platform/audit.test.ts` que demuestren que `UPDATE` y `DELETE` fallan; y una prueba de contrato en `tests/contract/audit-immutability.contract.test.ts` que, tras ejercitar todas las operaciones de la superficie con todos los perfiles, compruebe que los eventos anteriores conservan su contenido, que ninguno desaparece y que una corrección es un evento nuevo (SC-043)
 - [ ] T017 [P] Añadir a `src/platform/logging/` el identificador de correlación por petición y los eventos de producto, sin secretos ni contenido, con pruebas en `tests/unit/platform/logging.test.ts`
 
 ### Identidad
@@ -111,7 +111,7 @@ autenticada. Sin funciones de producto.
 página de origen de varios elementos, corrige uno y valida.
 
 - [ ] T031 [P] [US1] Crear la migración y el repositorio de `Document`, `DocumentPage` y `PageResolution` en `src/modules/normative-source/` (documento inmutable, `sha256` único, `replaces_document_id`, una fila por página aunque no tenga texto), con pruebas en `tests/unit/normative-source/repository.test.ts`
-- [ ] T032 [US1] Implementar en `src/modules/normative-source/pdf/` la validación del fichero (firma, tamaño, páginas, cifrado, contenido activo) y la extracción por página en un proceso hijo con límites, con la salida validada por esquema; pruebas en `tests/unit/normative-source/pdf.test.ts` sobre los PDF sintéticos, un caso por fila de la tabla de research R4
+- [ ] T032 [US1] Incorporar `qpdf` como herramienta verificada (binario oficial con huella fijada en `scripts/tools/tools.lock.json`, instalado por `npm run tools:install`) e implementar en `src/modules/normative-source/pdf/` la validación del fichero: firma, tamaño y páginas; inspección estructural con la salida JSON versión 2 de qpdf y la política propia sobre esa estructura (rechazo de JavaScript, XFA, acciones automáticas, lanzamientos y ficheros incrustados; formulario admitido solo si todos sus campos son de firma y sin acciones; rechazo ante error, avisos, límite excedido o referencia no resoluble); y extracción por página con `pdfjs-dist`, todo en procesos hijos con entorno vacío y límites, con la salida validada por esquema y sin modificar el original; pruebas en `tests/unit/normative-source/pdf.test.ts`, un caso por cada fichero de `tests/fixtures/pdf/synthetic/` (SC-042)
 - [ ] T033 [US1] Exponer en `src/modules/normative-source/index.ts` registrar documento, registrar sustituto, leer página y resolver página sin texto, con auditoría
 - [ ] T034 [P] [US1] Crear la migración y el repositorio de `Interpretation`, `Requirement` (`kind`: `capability`, `criterion`, `content`, `subcontent`; `parent_id`; referencia normativa), `Correction` e `InterpretationValidation` en `src/modules/structured-interpretation/`, con pruebas en `tests/unit/structured-interpretation/repository.test.ts`
 - [ ] T035 [P] [US1] Crear `src/platform/generation/` con la interfaz `GenerationProvider`, el adaptador determinista con respuestas grabadas en `tests/fixtures/generation/`, `GenerationRun` y `GenerationCall`, y el prompt versionado `prompts/interpretation/v1.md`; pruebas de contrato en `tests/contract/generation-provider.contract.test.ts` (salida inválida rechazada y registrada; texto con instrucciones incrustadas tratado como dato; ninguna identidad ni registro de usuarios en la entrada enviada)
@@ -121,7 +121,7 @@ página de origen de varios elementos, corrige uno y valida.
 - [ ] T039 [US1] Crear las páginas `src/pages/interpretation/` (inventario con jerarquía, duración como metadato, acceso a la página de origen junto al texto extraído, corrección, validación con confirmación expresa)
 - [ ] T040 [US1] Implementar el documento sustituto (FR-067): interpretación nueva sin validación ni aprobaciones, sin mezclar páginas ni reasignar referencias, sin iniciar generación; pruebas en `tests/integration/substitute-document.test.ts`
 - [ ] T041 [US1] Escribir `tests/integration/us1-document-interpretation.test.ts` con los escenarios de aceptación 1 a 10 de la historia 1 y las denegaciones por perfil
-- [ ] T042 [US1] ⛔ BLOQUEADA (ubicación de los datos del piloto) Añadir el PDF real como fixture con su procedencia y los resultados esperados verificados de UF0517 en `tests/fixtures/pdf/pilot/`, y la prueba `tests/integration/pilot-pdf.test.ts`
+- [ ] T042 [US1] Ejecutar el tratamiento completo sobre el PDF real del piloto, localizado por su ruta y verificado contra la huella de `specs/002-boe-scorm-export/pilot-source.md`, y registrar los resultados esperados y obtenidos de la unidad en `specs/002-boe-scorm-export/pilot/`; el PDF no se añade al repositorio y esta comprobación no forma parte de la integración continua
 
 **Checkpoint**: subir un PDF y validar su interpretación desde el navegador.
 
@@ -256,16 +256,14 @@ documental antes de empezar la fase indicada.
 
 | Punto  | Qué falta definir                                                              | Antes de |
 | ------ | ------------------------------------------------------------------------------ | -------- |
-| CHK023 | Un criterio de éxito para el registro que no puede alterarse                   | Fase 3   |
-| CHK026 | Qué datos se consideran personales                                             | Fase 3   |
 | CHK007 | Qué ve el usuario en un conflicto de edición y cómo reenvía su cambio          | Fase 4   |
 | CHK047 | Criterios de éxito propios para FR-020, FR-029, FR-055 y FR-056                | Fase 4   |
 | CHK032 | Cuándo un tema es «fallido», cuántos reintentos hay y qué ve el docente        | Fase 6   |
 
-Ninguno impide las fases 1 y 2.
+Ninguno impide la fase 3.
 
 - **Fase 1** no depende de ninguna otra tarea. **Fase 2** puede hacerse a la vez.
-- **Fase 3** depende de la fase 1 y de T010. La parte abierta de T012 solo afecta al tratamiento del PDF y condiciona la fase 4.
+- **Fase 3** depende de las fases 1 y 2, ya completadas.
 - **Fases 4 → 5 → 6 → 7** van en ese orden: cada historia usa lo aprobado en la anterior.
 - **T058** se apoya en T040 y condiciona la aprobación de T046 y T054 tras un sustituto.
 - **Fase 8**: T070 a T073 dependen de T014 a T016; T072 necesita además T050 y T066.
@@ -280,31 +278,30 @@ bloqueada.
 
 | Estado                                        | Tareas                                                                 |
 | --------------------------------------------- | ---------------------------------------------------------------------- |
-| Completadas                                   | T001–T011                                                              |
-| Abierta                                       | T012                                                                   |
-| Ejecutables, en este orden                    | T013–T041, T043–T073, T078, T082–T087                                  |
-| Bloqueada por la ubicación de los datos del piloto | T042, hasta decidir dónde viven el PDF real y sus resultados esperados |
+| Completadas                                   | T001–T012                                                              |
+| Ejecutables, en este orden                    | T013–T073, T078, T082–T087                                             |
 | Bloqueada por el dominio y el servidor        | T074                                                                   |
 | Bloqueadas por el proveedor de generación     | T075; y por depender de ella, T076 y T077                              |
 | Bloqueadas por el Moodle de pruebas           | T079; y por depender de ella, T080                                     |
 | Bloqueada por las tres anteriores             | T081, que depende de T074, T077 y T079                                 |
 
-De las 87 tareas, 11 están completadas (T001 a T011), T012 está abierta, 67 son ejecutables y
-8 están bloqueadas. T086 no cierra la aceptación mientras quede alguna bloqueada. Ninguna
-evidencia de las tareas bloqueadas se simula: el recorrido con respuestas deterministas se
-registra como ensayo.
+De las 87 tareas, 12 están completadas (T001 a T012), 68 son ejecutables y 7 están
+bloqueadas. T086 no cierra la aceptación mientras quede alguna bloqueada. Ninguna evidencia
+de las tareas bloqueadas se simula: el recorrido con respuestas deterministas se registra
+como ensayo.
 
-### Decisiones pendientes tras la viabilidad
+### Decisiones tomadas y pendientes tras la viabilidad
 
 Salen de [feasibility.md](./feasibility.md). No son tareas de código.
 
-| Decisión                                                                  | Antes de |
-| ------------------------------------------------------------------------- | -------- |
-| Admitir el campo de firma digital y el método de detección de contenido activo | Fase 4 |
-| Caso sintético con flujos de objetos para el examen de diccionarios       | Fase 4   |
-| Ubicación del PDF real y de sus resultados esperados (T042)               | Fase 4   |
-| Origen de referencia y redistribución de los esquemas de SCORM 1.2        | Fase 7   |
-| Límite de memoria total y corte de red del proceso de análisis            | Fase 8   |
+| Asunto                                                                     | Estado                                   |
+| -------------------------------------------------------------------------- | ---------------------------------------- |
+| Campo de firma digital pasivo                                              | Admitido por su estructura               |
+| Método de detección de contenido activo                                    | qpdf JSON versión 2 y política propia    |
+| Ubicación de los datos del piloto                                          | `specs/002-boe-scorm-export/`            |
+| Instalación de qpdf en el servidor de destino y en la integración continua | Pendiente; se resuelve en T032 y en T074 |
+| Origen de referencia y redistribución de los esquemas de SCORM 1.2         | Pendiente; antes de la fase 7            |
+| Límite de memoria total y corte de red de los procesos de análisis         | Pendiente; fase 8                        |
 
 ### Parallel Opportunities
 
