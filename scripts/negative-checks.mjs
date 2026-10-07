@@ -593,13 +593,13 @@ const CASES = {
     label: "lint",
     command: "check:lint",
     alter: (copy) =>
-      writeInCopy(copy, LINT_FILE, 'import "@/modules/moodle-publication";\n'),
+      writeInCopy(copy, LINT_FILE, 'import "@/modules/content-export";\n'),
     evaluate: ({ code, output }, copy) => {
       const errors = lintLocations(output, copy.realDir);
       const expected = errors.find(
         (error) =>
           error.file === LINT_FILE &&
-          /'@\/modules\/moodle-publication'/.test(error.line) &&
+          /'@\/modules\/content-export'/.test(error.line) &&
           /\sno-restricted-imports$/.test(error.line),
       );
       if (code === 0 || expected === undefined) {
@@ -610,7 +610,7 @@ const CASES = {
       const [position] = expected.line.split(/\s+/);
       return {
         cause:
-          "ESLint: no-restricted-imports (normative-source importa @/modules/moodle-publication)",
+          "ESLint: no-restricted-imports (normative-source importa @/modules/content-export)",
         location: `${LINT_FILE}:${position}`,
         collateral: errors
           .filter((error) => error !== expected)

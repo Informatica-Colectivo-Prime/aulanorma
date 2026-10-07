@@ -1,4 +1,4 @@
-# Capa: exportación (`moodle-publication`, nombre transitorio)
+# Capa: exportación (`content-export`)
 
 **Responsabilidad**: transformar el índice y el contenido aprobados en un paquete descargable
 en el formato de exportación vigente, SCORM 1.2.
@@ -6,12 +6,10 @@ en el formato de exportación vigente, SCORM 1.2.
 Es la cuarta de las cuatro capas del principio II de la constitución. No genera ni altera
 contenido didáctico: solo transforma contenido aprobado al formato de exportación.
 
-**Nombre transitorio**. Esta capa era la publicación automática en Moodle hasta la versión
-1.1.0 de la constitución. El
+**Origen**. Esta capa era la publicación automática en Moodle hasta la versión 1.1.0 de la
+constitución, con el nombre `moodle-publication`. El
 [ADR 0003](../../../docs/adr/0003-scorm-export-instead-of-automatic-moodle-publication.md) la
-sustituye por la exportación y fija como ubicación objetivo `src/modules/content-export`. El
-directorio, las reglas de importación y las pruebas conservan el nombre `moodle-publication`
-hasta que se haga esa migración; este documento describe ya la responsabilidad vigente.
+sustituye por la exportación y fija esta ubicación, `src/modules/content-export`.
 
 ## Estado
 
@@ -25,8 +23,8 @@ datos de ningún certificado ni exportación.
 
 ## API pública
 
-El único punto de acceso a esta capa es su `index.ts` (`@/modules/moodle-publication`). Importar
-sus rutas internas (`@/modules/moodle-publication/<interno>`) está prohibido. Según la matriz de
+El único punto de acceso a esta capa es su `index.ts` (`@/modules/content-export`). Importar
+sus rutas internas (`@/modules/content-export/<interno>`) está prohibido. Según la matriz de
 dependencias, ninguna otra capa puede importarla, y tampoco `platform` ni la entrega HTTP
 (`server.mjs` y `src/pages/api/health.ts`).
 

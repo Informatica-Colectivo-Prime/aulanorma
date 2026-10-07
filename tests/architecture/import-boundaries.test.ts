@@ -25,7 +25,7 @@ const LAYERS = [
   "normative-source",
   "structured-interpretation",
   "didactic-content",
-  "moodle-publication",
+  "content-export",
 ] as const;
 type Layer = (typeof LAYERS)[number];
 
@@ -35,7 +35,7 @@ const ALLOWED_LAYER_IMPORTS: Readonly<Record<Layer, readonly Layer[]>> = {
   "normative-source": [],
   "structured-interpretation": ["normative-source"],
   "didactic-content": ["structured-interpretation"],
-  "moodle-publication": ["didactic-content"],
+  "content-export": ["didactic-content"],
 };
 
 const API_ROUTE = "src/pages/api/health.ts";

@@ -1,6 +1,9 @@
 # ADR 0003: Exportación SCORM en lugar de publicación automática en Moodle
 
-**Estado**: Propuesto
+**Estado**: Aceptado. Estuvo Propuesto desde el 2026-10-07; se acepta con el cambio que migra
+el módulo de la cuarta capa a `src/modules/content-export`. La aceptación registra la decisión
+arquitectónica y no cambia su sentido. No indica que la exportación SCORM esté implementada:
+el módulo sigue vacío.
 
 **Fecha**: 2026-10-07
 
@@ -160,6 +163,9 @@ parcialmente** al ADR 0001, solo en lo que se indica, y no sustituye al ADR 0002
   ADR nuevo.
 
 ## Migración pendiente
+
+**Nota de revisión (aceptación)**: la migración descrita en esta sección se completó en el
+cambio que acepta este ADR. El texto que sigue se conserva como se propuso.
 
 La ubicación objetivo es `src/modules/content-export`. **Este ADR no renombra nada**: el módulo
 actual, `src/modules/moodle-publication`, sigue vacío y conserva su nombre hasta que la

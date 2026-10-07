@@ -2,6 +2,12 @@
 
 **Estado**: Aceptado. Estuvo Propuesto desde el 2026-09-25 y durante todo el PR de implementación; se acepta en el primer PR posterior a la integración de `001-engineering-baseline` y a la activación de los nueve controles requeridos, ambas del 2026-10-06. La aceptación no cambia el sentido de la decisión.
 
+**Sustitución parcial**: el [ADR 0003](./0003-scorm-export-instead-of-automatic-moodle-publication.md),
+Aceptado, sustituye dos elementos de la decisión 5: la responsabilidad de la cuarta capa, que
+pasa de la publicación en Moodle a la exportación, y la ubicación de su módulo, que pasa de
+`src/modules/moodle-publication` a `src/modules/content-export`. El resto de esta decisión
+sigue vigente y su texto no se modifica (nota de revisión; no cambia la decisión).
+
 **Fecha**: 2026-09-25
 
 **Contexto de origen**: [`specs/001-engineering-baseline/plan.md`](../../specs/001-engineering-baseline/plan.md)

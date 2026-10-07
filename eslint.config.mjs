@@ -12,7 +12,7 @@ const LAYERS = [
   "normative-source",
   "structured-interpretation",
   "didactic-content",
-  "moodle-publication",
+  "content-export",
 ];
 
 // Capas de dominio que cada capa puede importar, además de `platform`.
@@ -21,7 +21,7 @@ const ALLOWED_LAYER_IMPORTS = {
   "normative-source": [],
   "structured-interpretation": ["normative-source"],
   "didactic-content": ["structured-interpretation"],
-  "moodle-publication": ["didactic-content"],
+  "content-export": ["didactic-content"],
 };
 
 const PLATFORM_AREAS = [
