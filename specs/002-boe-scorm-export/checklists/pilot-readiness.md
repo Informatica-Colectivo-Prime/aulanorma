@@ -31,7 +31,7 @@ requisitos, no si el sistema funciona.
 - [x] CHK013 ¿Está definido qué debe contener la confirmación de la revisión del inventario contra la sección original? [Clarity, Spec §FR-057, §SC-036]
 - [x] CHK014 ¿Están definidos los requisitos para un documento sustituto por motivos distintos de una página ilegible, o se excluyen expresamente? [Gap, Spec §FR-003, §FR-067]
 - [x] CHK015 ¿Está definido cómo se «comprueba» una referencia heredada contra la nueva fuente y quién lo hace? [Clarity, Spec §FR-067]
-- [ ] CHK016 ¿Está cuantificado el criterio para considerar una página «sin texto extraíble»? [Ambiguity, Spec §FR-064]
+- [x] CHK016 ¿Está cuantificado el criterio para considerar una página «sin texto extraíble»? [Ambiguity, Spec §FR-064]
 - [x] CHK017 ¿Está especificado qué ocurre cuando el documento no contiene la unidad formativa o la contiene en páginas no consecutivas? [Gap, Spec §Edge Cases]
 
 ## Seguridad y acceso
@@ -41,10 +41,10 @@ requisitos, no si el sistema funciona.
 - [x] CHK020 ¿Está delimitado con precisión qué es accesible sin autenticación y qué no puede concederse desde ahí? [Clarity, Contracts §http-surface]
 - [x] CHK021 ¿Está justificado cada perfil por requisitos, y definido qué puede hacer una cuenta sin perfiles? [Completeness, Spec §FR-027, §FR-054]
 - [x] CHK022 ¿Son coherentes los perfiles entre la especificación, el modelo de datos y el contrato de la superficie HTTP? [Consistency, Spec §FR-054, Data Model §Plataforma]
-- [ ] CHK023 ¿Está definido de forma medible qué significa un registro «que no pueda alterarse»? [Measurability, Spec §FR-028]
+- [x] CHK023 ¿Está definido de forma medible qué significa un registro «que no pueda alterarse»? [Measurability, Spec §FR-028]
 - [x] CHK024 ¿Están cuantificados los límites de tamaño y de páginas del PDF, o fijado cuándo y cómo se cuantifican? [Ambiguity, Spec §FR-002]
 - [x] CHK025 ¿Distinguen los requisitos entre extracción de texto, detección de contenido activo y aislamiento, con el límite declarado de cada uno? [Clarity, Spec §FR-002, §FR-004, Research §R4]
-- [ ] CHK026 ¿Está especificado qué datos se consideran personales a efectos de FR-029 y FR-033? [Clarity, Spec §FR-029, §FR-033]
+- [x] CHK026 ¿Está especificado qué datos se consideran personales a efectos de FR-029 y FR-033? [Clarity, Spec §FR-029, §FR-033]
 - [x] CHK027 ¿Están definidos los requisitos de accesibilidad de la interfaz docente, y no solo los del contenido exportado? [Gap, Spec §FR-050]
 
 ## Presupuesto y generación
@@ -136,3 +136,33 @@ cierra antes de la fase de `tasks.md` que lo necesita:
 | CHK016 | Fase 4 (se fija con la fase 2)             |
 | CHK047 | Fase 4 (primera generación y saneamiento)  |
 | CHK032 | Fase 6 (generación del temario)            |
+
+## Revisión documental tras la viabilidad (2026-10-07)
+
+**CHK016 pasa a satisfecho.** FR-064 define ahora «página sin texto extraíble» como la que no
+devuelve ningún carácter distinto de espacio, sin umbral, y añade la señal de páginas con
+imágenes. Evidencia: `feasibility.md`, apartado 2.3 (página en blanco y página solo con imagen,
+0 caracteres; las 335 páginas del documento del piloto, entre 315 y 3501; ninguna con
+imágenes). La marca acredita que el criterio está definido y es verificable; no acredita que
+el texto extraído esté completo, que sigue dependiendo de la revisión humana.
+
+Siguen abiertos cinco: CHK023 y CHK026 (antes de la fase 3), CHK007 y CHK047 (antes de la
+fase 4) y CHK032 (antes de la fase 6). La tabla anterior conserva la fila de CHK016 como
+registro de cuándo debía cerrarse.
+
+## Revisión documental tras las decisiones del mantenedor (2026-10-07)
+
+**CHK023 pasa a satisfecho.** FR-028 define «que no pueda alterarse»: ninguna operación del
+producto, con ningún perfil, modifica ni borra un evento registrado, y las correcciones son
+eventos nuevos. SC-043 fija cómo se comprueba y la tarea T016 lo recoge. El requisito declara
+su límite: no cubre a quien administre el servidor y modifique los ficheros directamente.
+
+**CHK026 pasa a satisfecho.** La especificación define «datos de usuarios» y «secretos de
+autenticación» en las entidades clave, y FR-029, FR-033 y SC-015 usan esos términos. Es una
+definición operativa, no una evaluación jurídica de protección de datos.
+
+Las dos marcas acreditan que la redacción y la forma de verificar están definidas. **No
+acreditan ninguna prueba del producto**: SC-043 y SC-015 siguen pendientes de ejecutarse
+cuando exista lo que comprueban.
+
+Siguen abiertos tres: CHK007 y CHK047 (antes de la fase 4) y CHK032 (antes de la fase 6).

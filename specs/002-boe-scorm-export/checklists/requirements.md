@@ -44,6 +44,9 @@
   sustituto y la conservación durante el piloto.
 - **Fase de aclaraciones cerrada (2026-10-07)**: no quedan decisiones funcionales
   bloqueantes para el plan.
+- **Añadidos tras la viabilidad (2026-10-07)**: SC-042 (contenido activo y firma) y SC-043
+  (registro de auditoría), por decisión del mantenedor; FR-002, FR-028, FR-029, FR-033 y
+  FR-064 ajustados.
 - **Añadidos tras el análisis (2026-10-07)**: FR-068 a FR-070 y SC-039 a SC-041 (sesiones,
   recuperación mediante copia y rechazo), por decisión del mantenedor.
 - **Añadidos por las aclaraciones**: FR-057 a FR-067 y SC-025 a SC-038. Se sitúan junto a

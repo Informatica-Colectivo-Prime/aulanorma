@@ -12,6 +12,11 @@ sección final.
 
 ## R1. Persistencia
 
+> **Resultado de la viabilidad (2026-10-07)**, en [feasibility.md](./feasibility.md): modo
+> WAL, transacciones, exclusión entre escritores, disparadores de solo inserción,
+> recuperación tras la caída del proceso y copia en línea, observados en Node.js 24.21.0. La
+> documentación de esa versión declara `node:sqlite` como *release candidate* (1.2).
+
 **Decisión**: una base de datos SQLite en un único fichero, con el módulo `node:sqlite`
 incluido en Node.js, en modo WAL, más un almacén de ficheros direccionado por huella SHA-256
 para los PDF y los paquetes exportados. Migraciones como ficheros SQL numerados, aplicados por
@@ -146,6 +151,10 @@ con API JSON (más código de cliente y peor accesibilidad de partida).
 
 ## R4. PDF: extracción, contenido activo y aislamiento
 
+> **Decisión tras la viabilidad (2026-10-07)**, en [feasibility.md](./feasibility.md). Lo
+> que sigue describe el plan original de detección; **queda sustituido** por el apartado
+> "Inspección estructural" de más abajo. La extracción de texto no cambia.
+
 Son tres problemas distintos. Resolver uno no acredita los otros.
 
 **Extracción de texto**. `pdfjs-dist` obtiene el texto página a página y el número de
@@ -161,6 +170,32 @@ multimedia enriquecido. Se usan las consultas de `pdfjs-dist` sobre el catálogo
 anotaciones, y se rechaza también cuando no se puede determinar. **Límite declarado**: esto
 reduce el riesgo, pero no demuestra que un PDF sea inofensivo; un documento manipulado puede
 ocultar contenido a un analizador concreto.
+
+**Inspección estructural (sustituye a la detección anterior)**. La estructura del documento
+se obtiene con **qpdf**, en su salida JSON versión 2, que entrega cada objeto ya interpretado
+y sus referencias: resuelve los flujos de objetos, las actualizaciones incrementales y los
+nombres escapados. `pdfjs-dist` se mantiene solo para extraer el texto. La política es código
+propio que se aplica sobre esa estructura, no sobre los bytes del fichero:
+
+- rechaza las claves y acciones de JavaScript, XFA, acciones automáticas, lanzamientos y
+  ficheros incrustados, siguiendo las referencias indirectas;
+- admite un formulario solo si todos sus campos son de firma digital y ninguno tiene
+  acciones; cualquier otro formulario se rechaza;
+- distingue los atributos del árbol de estructura de los PDF etiquetados, que usan la misma
+  clave que las acciones;
+- rechaza el documento si qpdf termina con error o con avisos, si se excede un límite o si
+  una referencia no se puede resolver.
+
+Probado con 26 casos sintéticos y dos documentos oficiales, con el mismo resultado usando el
+binario oficial de qpdf 12.4.2 y su biblioteca. **Límites**: qpdf no es un antivirus y su
+éxito no garantiza un PDF seguro; lo que qpdf interpreta puede diferir de lo que interprete
+un visor; los bytes de objetos liberados por una actualización no se examinan; la política
+es una lista finita; y no se valida criptográficamente ninguna firma.
+
+**Alternativas descartadas**: las consultas de `pdfjs-dist` (no detectan cuatro de seis
+clases y dan un falso positivo con el documento oficial); buscar marcas en los bytes (falsos
+positivos y negativos); un analizador propio de la sintaxis del fichero (descartado por el
+mantenedor como detector definitivo).
 
 **Aislamiento**. Lo anterior se ejecuta en un proceso hijo sin acceso a la base de datos, a
 la configuración ni a los secretos, con límite de tiempo, de memoria y de tamaño de entrada y
@@ -296,6 +331,11 @@ renderizador garantiza que la vista previa y el paquete muestran lo mismo.
 
 ## R8. Generación y conformidad del paquete SCORM 1.2
 
+> **Resultado de la viabilidad (2026-10-07)**, en [feasibility.md](./feasibility.md).
+> `xmllint-wasm` valida contra los esquemas de SCORM 1.2 sin red y acepta manifiestos ajenos.
+> Los esquemas no restringen `masteryscore`, así que esa regla va en la comprobación propia.
+> Quedan por decidir el origen de referencia de los esquemas y si pueden redistribuirse.
+
 **Decisión**: SCORM 1.2, un único SCO y generador propio. El manifiesto `imsmanifest.xml` se
 produce desde una plantilla con escapado, con una organización, un ítem y un recurso `sco`.
 El contenido es una página `index.html` con todos los temas, una hoja de estilos y un script,
@@ -377,6 +417,11 @@ al final.
 | `fflate`       | producción | Crear y releer el ZIP del paquete          | Escritor ZIP propio             |
 | `xmllint-wasm` | producción | Validar el manifiesto contra los XSD       | Validación circular             |
 | `jsdom`        | desarrollo | Prueba de contrato del seguimiento         | Navegador automatizado          |
+
+Además, una **herramienta externa**, que no es un paquete de npm: **qpdf** (12.4.2 en la
+viabilidad), para la inspección estructural de los PDF. Se instalaría como las herramientas
+de seguridad ya existentes: binario oficial con su huella fijada y verificada. Su coste
+operativo está en [feasibility.md](./feasibility.md).
 
 El SDK de un proveedor de generación **no se añade todavía**: se decidirá con el proveedor.
 Persistencia, identidad, sesiones y criptografía no añaden ninguna dependencia. Las versiones
