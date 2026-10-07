@@ -879,6 +879,10 @@ describe("lista cerrada de rutas de producto", () => {
       ["/interpretations/:id/unit", ["GET"], 0],
       ["/interpretations/:id/requirements/new", ["GET"], 0],
       ["/interpretations/:id/requirements/:id", ["GET"], 0],
+      ["/outlines/:id", ["GET"], 0],
+      ["/outlines/:id/preview", ["GET"], 0],
+      ["/outlines/:id/entries/new", ["GET"], 0],
+      ["/outlines/:id/entries/:id", ["GET"], 0],
       ["/api/documents/upload", ["POST"], 67_108_864],
       ["/api/documents/resolve-page", ["POST"], 4096],
       ["/api/interpretations/request", ["POST"], 4096],
@@ -886,6 +890,11 @@ describe("lista cerrada de rutas de producto", () => {
       ["/api/interpretations/validate", ["POST"], 4096],
       ["/api/interpretations/reject", ["POST"], 65_536],
       ["/api/interpretations/resubmit", ["POST"], 4096],
+      ["/api/outlines/request", ["POST"], 4096],
+      ["/api/outlines/edit", ["POST"], 65_536],
+      ["/api/outlines/approve", ["POST"], 4096],
+      ["/api/outlines/reject", ["POST"], 65_536],
+      ["/api/outlines/resubmit", ["POST"], 4096],
     ]);
   });
 
@@ -903,6 +912,10 @@ describe("lista cerrada de rutas de producto", () => {
     `/interpretations/${ID}/unit`,
     `/interpretations/${ID}/requirements/new`,
     `/interpretations/${ID}/requirements/${OTHER}`,
+    `/outlines/${ID}`,
+    `/outlines/${ID}/preview`,
+    `/outlines/${ID}/entries/new`,
+    `/outlines/${ID}/entries/${OTHER}`,
   ])("GET %s se delega una vez", async (url) => {
     const handle = neverCalled();
     const result = await run(handle, { url });
@@ -935,6 +948,24 @@ describe("lista cerrada de rutas de producto", () => {
     `/interpretations/${ID}/requirements/nuevo`,
     `/interpretations/${ID}/requirements/${OTHER}/x`,
     `/interpretations/${ID}/unit/`,
+    "/outlines",
+    "/outlines/",
+    `/outlines/${ID}/`,
+    `/outlines/${ID.toUpperCase()}`,
+    `/outlines/${ID}?force=1`,
+    `/outlines/${ID}/approve`,
+    `/outlines/${ID}/entries`,
+    `/outlines/${ID}/entries/`,
+    `/outlines/${ID}/entries/${OTHER}/x`,
+    `/outlines/${ID}/entries/nueva`,
+    `/outlines/${ID}/preview/`,
+    `/outlines/${ID}/preview.zip`,
+    "/api/outlines",
+    `/api/outlines/${ID}`,
+    "/api/outlines/approve/",
+    "/api/outlines/approve?force=1",
+    "/api/outlines/force-approve",
+    "/api/outlines/delete",
     `/api/documents/${ID}`,
     "/api/documents/upload/",
     "/api/documents",
@@ -951,6 +982,8 @@ describe("lista cerrada de rutas de producto", () => {
     { url: "/api/documents/upload", max: 67_108_864 },
     { url: "/api/interpretations/correct", max: 65_536 },
     { url: "/api/interpretations/validate", max: 4096 },
+    { url: "/api/outlines/edit", max: 65_536 },
+    { url: "/api/outlines/approve", max: 4096 },
   ])(
     "POST $url admite un cuerpo de hasta $max bytes y ni uno más",
     async ({ url, max }) => {

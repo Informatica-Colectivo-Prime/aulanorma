@@ -1,0 +1,29 @@
+{
+  "task": "outline",
+  "promptVersion": "v1",
+  "inputSha256": "851941e6616e0337dde429f523c37455e48a7aaf64b2a6edbae0e4d3398cf000",
+  "output": {
+    "entries": [
+      {
+        "title": "Tema 1. La capacidad sintética y su criterio",
+        "unsupported": false,
+        "requirementRefs": ["r1", "r2"]
+      },
+      {
+        "title": "Tema 2. El contenido sintético",
+        "unsupported": false,
+        "requirementRefs": ["r3", "r4"]
+      },
+      {
+        "title": "Tema 3. El detalle del subapartado",
+        "unsupported": false,
+        "requirementRefs": ["r5", "r3"]
+      },
+      {
+        "title": "Presentación del curso",
+        "unsupported": true,
+        "requirementRefs": []
+      }
+    ]
+  }
+}

@@ -129,13 +129,17 @@ test("10. el sustituto es un documento nuevo; el anterior y su interpretación q
     );
   };
   const interpret = async (document: string): Promise<string> => {
-    const reply = await client.post(requestAction, {
+    const estimate = await client.post(requestAction, {
       csrf: token,
       document,
       unit_code: UNIT,
       page_from: "1",
       page_to: "1",
     });
+    const reply = await client.post(
+      requestAction,
+      client.hiddenFields(estimate, "/api/interpretations/request"),
+    );
     expect(reply.location).toMatch(/^\/interpretations\//);
     return reply.location?.split("/").pop() ?? "";
   };

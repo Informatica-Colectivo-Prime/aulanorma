@@ -74,6 +74,18 @@ cuyo documento tiene un sustituto es histórico: se consulta, pero no se corrige
 | `Rejection`         | `id`, `target_kind`, `target_id`, `target_revision`, `rejected_by`, `rejected_at`, `reason`                     | Solo inserción. `target_kind`: `interpretation`, `outline` o `topic`. `reason` obligatorio (FR-070).                    |
 | `ReferenceCheck`    | `id`, `target_kind`, `target_id`, `requirement_id`, `checked_by`, `checked_at`                                  | Solo inserción. Comprobación de una referencia heredada contra el documento sustituto (FR-067).                        |
 
+**Implementación (fase 5)**. Hay un índice por interpretación. `Outline` guarda la ejecución
+de generación de la que procede, y quién y cuándo lo pidió. `OutlineEntry` lleva `removed`:
+una entrada quitada queda marcada, con su título y sus vínculos, y deja de contar (FR-052).
+`unsupported` se deriva de no tener vínculos, y la base de datos impide que una entrada
+marcada los tenga. Los vínculos de `EntryRequirement` se sustituyen al editar la entrada;
+cada cambio queda en `outline_change` (`kind`: `add`, `edit`, `move` o `remove`), con el antes,
+el después, su autor y la revisión a la que da lugar. Cambios, aprobaciones y rechazos son de
+solo inserción, impuesta por disparadores. Un vínculo con un requisito retirado se conserva y
+no cuenta. Un índice cuya interpretación pertenece a un documento con sustituto es histórico:
+se consulta, pero no se cambia ni se aprueba, hasta que exista la comprobación de referencias
+heredadas (T058). `Topic` y las entidades que dependen de él todavía no existen.
+
 **Vigencia**:
 
 - `OutlineApproval`: su `outline_revision` es la actual y su validación de la interpretación
@@ -123,6 +135,12 @@ deje de ofrecerse (FR-053). No contiene identidades de usuarios (FR-033).
 | `generation` | `GenerationCall`    | `id`, `run_id`, `provider`, `model`, `prompt_version`, `tokens_in`, `tokens_out`, `latency_ms`, `validation_result`  | Solo inserción. Lo que exige el principio IX.                                             |
 | `generation` | `BudgetReservation` | `id`, `call_id`, `reserved_cost`, `settled_cost`, `state`, `sent_at`                                                 | `state`: `reserved`, `sent`, `settled`, `released` o `uncertain`.                         |
 | `generation` | `Reconciliation`    | `id`, `reservation_id`, `actor_id`, `at`, `confirmed_cost`, `note`                                                   | Solo inserción. Cierra una reserva `uncertain`; solo `admin` (FR-021).                    |
+
+**Implementación (fase 5)**. `BudgetReservation` se crea antes que la llamada, así que guarda
+`run_id` y `task`, y recibe `call_id` al cerrarse; lleva además `created_at` y `closed_at`.
+`Budget` nace con límite cero y moneda `XXX` (sin fijar). Los disparadores impiden borrar una
+reserva, cambiar su importe y cualquier transición distinta de las de abajo. `BudgetChange` y
+`Reconciliation` son de solo inserción.
 
 **Presupuesto disponible** = `project_limit` − liquidado − reservado − incierto. El límite es
 acumulado durante todo el piloto, sin reinicios; hay además un máximo por operación, en la

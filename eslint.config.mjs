@@ -38,7 +38,11 @@ const PLATFORM_AREAS = [
 ];
 // Capas de dominio que la entrega puede importar, por su API pública. Se
 // abren una a una, con la primera ruta que las necesita (ADR 0004).
-const DELIVERY_LAYERS = ["normative-source", "structured-interpretation"];
+const DELIVERY_LAYERS = [
+  "normative-source",
+  "structured-interpretation",
+  "didactic-content",
+];
 const DELIVERY_PLATFORM_AREAS = [
   "config",
   "logging",
@@ -449,7 +453,7 @@ export default defineConfig([
     patterns: [
       pattern(
         `^@/(?!platform/(?:${alternatives(DELIVERY_PLATFORM_AREAS)})$|modules/(?:${alternatives(DELIVERY_LAYERS)})$|views$)`,
-        "La entrega solo importa `@/platform/<área>` (config, logging, health, version o web), las capas `normative-source` y `structured-interpretation` por su API pública, y `@/views`.",
+        "La entrega solo importa `@/platform/<área>` (config, logging, health, version o web), las capas `normative-source`, `structured-interpretation` y `didactic-content` por su API pública, y `@/views`.",
       ),
       relativeEscape([...PLATFORM_AREAS, ...LAYERS, ...OTHER_SEGMENTS]),
     ],
@@ -474,7 +478,7 @@ export default defineConfig([
     patterns: [
       pattern(
         `^@/(?!platform/web$|modules/(?:${alternatives(DELIVERY_LAYERS)})$)`,
-        "Las vistas solo importan `@/platform/web` y las capas `normative-source` y `structured-interpretation`, por su API pública.",
+        "Las vistas solo importan `@/platform/web` y las capas `normative-source`, `structured-interpretation` y `didactic-content`, por su API pública.",
       ),
       relativeEscape([...PLATFORM_AREAS, ...LAYERS, ...OTHER_SEGMENTS]),
     ],

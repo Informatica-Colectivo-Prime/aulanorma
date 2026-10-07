@@ -42,7 +42,7 @@ operación, quién puede ejecutarla y sus condiciones.
 - **Cuerpos**: tamaño máximo por operación, aplicado en la frontera.
 - **Sin borrado**: no existe ninguna operación `DELETE`.
 
-## Rutas implementadas (cimientos e historia 1)
+## Rutas implementadas (cimientos e historias 1 y 2)
 
 | Destino                 | Métodos                  | Operación                                 |
 | ----------------------- | ------------------------ | ----------------------------------------- |
@@ -69,6 +69,15 @@ operación, quién puede ejecutarla y sus condiciones.
 | `/api/interpretations/validate` | `POST`           | Validar interpretación                    |
 | `/api/interpretations/reject` | `POST`             | Rechazar interpretación                   |
 | `/api/interpretations/resubmit` | `POST`           | Devolver a revisión una rechazada         |
+| `/api/outlines/request` | `POST`                   | Pedir índice                              |
+| `/outlines/:id`         | `GET`                    | Ver el índice, su cobertura y su registro |
+| `/outlines/:id/preview` | `GET`                    | Previsualizar el índice, sin fichero      |
+| `/outlines/:id/entries/new` | `GET`                | Ver el formulario de una entrada nueva    |
+| `/outlines/:id/entries/:id` | `GET`                | Ver el formulario de una entrada          |
+| `/api/outlines/edit`    | `POST`                   | Editar índice y sus vínculos              |
+| `/api/outlines/approve` | `POST`                   | Aprobar índice                            |
+| `/api/outlines/reject`  | `POST`                   | Rechazar índice                           |
+| `/api/outlines/resubmit` | `POST`                  | Devolver a revisión uno rechazado         |
 
 Las demás operaciones de la tabla siguiente todavía no existen. Los destinos son exactos: no
 admiten parámetros de consulta ni barra final. `:id` es un identificador opaco de 32 cifras
@@ -86,6 +95,23 @@ redirección o con un rechazo sin cuerpo, con tres excepciones:
   indicada. Sin sesión responde 401 sin cuerpo.
 - **PDF original**: se sirve con `Content-Type: application/pdf`, `nosniff`, sin caché y con
   una política de contenido que no le permite cargar nada.
+
+**Índice (fase 5)**. Las rutas usan `/outlines`, en plural, como las demás. Aprobar con la
+cobertura incompleta responde 422 con los requisitos pendientes, cada uno con su documento,
+su sección y su página, y no existe ningún campo, perfil ni destino que lo evite. Un cambio o
+una decisión sobre una revisión que ya no es la actual responde 409 con la versión más
+reciente: el formulario de una entrada conserva lo enviado, y aprobar, rechazar, reordenar o
+quitar muestran el índice actual para repetir la decisión. La vista previa no genera ningún
+fichero; sin aprobación vigente o con cobertura incompleta se identifica como borrador no
+entregable.
+
+**Estimación previa (FR-021)**. Pedir una interpretación tiene dos pasos sobre el mismo
+destino: el envío con la unidad y las páginas no manda nada y responde 200 con la estimación,
+el máximo que se reserva y lo disponible; el envío de confirmación lleva las cifras mostradas
+y, si ya no son las actuales, responde 409 con las nuevas, sin enviar nada. La página de la
+interpretación muestra esas cifras para el índice, y su solicitud las lleva con la misma
+regla. Estimación, reserva máxima y consumo confirmado se muestran por separado; con el
+adaptador determinista son cero y figuran como coste simulado.
 
 Cada acción admite un cuerpo máximo: 4 KiB los formularios simples, 64 KiB los que llevan el
 texto de un requisito o un motivo, y 64 MiB la subida, sobre la que la ruta aplica además el

@@ -11,11 +11,15 @@ Con la historia 1 (fase 4) quedan además implementadas y verificadas: la decisi
 determinista y el registro de cada llamada; y, de la decisión 9, el área `generation` y la
 apertura de la entrega a las capas `normative-source` y `structured-interpretation`.
 
+Con la historia 2 (fase 5) quedan además implementados y verificados: de la decisión 6, el
+presupuesto, con sus reservas, su ciclo y su conciliación, probados con consumos simulados; y,
+de la decisión 9, la apertura de la entrega a la capa `didactic-content`. Las páginas para
+consultar el presupuesto, modificar el límite y conciliar llegan con la historia 3.
+
 **No están implementadas**, y quedan registradas como la dirección acordada: de la decisión
-6, el presupuesto, sus reservas y su conciliación, y cualquier proveedor real, que sigue sin
-seleccionar; el despliegue real de la decisión 7; y la apertura de la entrega a las capas
-`didactic-content` y `content-export`. Si su implementación las desmiente, se sustituirán con
-un ADR nuevo.
+6, cualquier proveedor real, que sigue sin seleccionar, y con él sus precios y la moneda del
+presupuesto; el despliegue real de la decisión 7; y la apertura de la entrega a la capa
+`content-export`. Si su implementación las desmiente, se sustituirán con un ADR nuevo.
 
 **Fecha**: 2026-10-07
 

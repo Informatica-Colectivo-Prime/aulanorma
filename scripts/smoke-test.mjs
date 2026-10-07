@@ -104,6 +104,7 @@ const PRODUCT_CONFIG = {
   AULANORMA_SESSION_MAX_HOURS: "12",
   AULANORMA_PDF_MAX_MIB: "32",
   AULANORMA_PDF_MAX_PAGES: "600",
+  AULANORMA_GENERATION_MAX_OPERATION_COST: "1000000",
 };
 const VALID_CONFIG = {
   AULANORMA_LOG_LEVEL: "info",
@@ -1139,6 +1140,12 @@ async function checkProductSurface(secure) {
     `/documents/${"a".repeat(32)}/pages/0`,
     `/documents/${"a".repeat(32)}/pages/1?x=1`,
     `/interpretations/${"a".repeat(32)}/requirements/`,
+    "/outlines",
+    `/outlines/${"a".repeat(32)}/`,
+    `/outlines/${"a".repeat(32)}/approve`,
+    `/outlines/${"a".repeat(32)}/entries/`,
+    "/api/outlines",
+    "/api/outlines/force-approve",
     "/api/documents",
   ]) {
     const response = await rawRequest("GET", target, { persistent: true });
@@ -1161,6 +1168,10 @@ async function checkProductSurface(secure) {
     `/interpretations/${"a".repeat(32)}/unit`,
     `/interpretations/${"a".repeat(32)}/requirements/new`,
     `/interpretations/${"a".repeat(32)}/requirements/${"b".repeat(32)}`,
+    `/outlines/${"a".repeat(32)}`,
+    `/outlines/${"a".repeat(32)}/preview`,
+    `/outlines/${"a".repeat(32)}/entries/new`,
+    `/outlines/${"a".repeat(32)}/entries/${"b".repeat(32)}`,
   ]) {
     const name = `GET ${target} sin sesión`;
     const response = await rawRequest("GET", target, {
@@ -1263,6 +1274,11 @@ async function checkProductSurface(secure) {
     "/api/interpretations/validate",
     "/api/interpretations/reject",
     "/api/interpretations/resubmit",
+    "/api/outlines/request",
+    "/api/outlines/edit",
+    "/api/outlines/approve",
+    "/api/outlines/reject",
+    "/api/outlines/resubmit",
   ]) {
     const noLength = await rawRequest("POST", target, { persistent: true });
     problems.push(
@@ -1335,6 +1351,11 @@ async function checkProductSurface(secure) {
     "/api/interpretations/validate",
     "/api/interpretations/reject",
     "/api/interpretations/resubmit",
+    "/api/outlines/request",
+    "/api/outlines/edit",
+    "/api/outlines/approve",
+    "/api/outlines/reject",
+    "/api/outlines/resubmit",
   ]) {
     const response = await rawRequest("POST", target, {
       headers: [...FORM_HEADERS, `Origin: ${origin}`],
@@ -3001,6 +3022,7 @@ const CASES = [
           AULANORMA_SESSION_MAX_HOURS: "12",
           AULANORMA_PDF_MAX_MIB: "32",
           AULANORMA_PDF_MAX_PAGES: "600",
+          AULANORMA_GENERATION_MAX_OPERATION_COST: "1000000",
         },
         "AULANORMA_PUBLIC_ORIGIN",
         "missing",

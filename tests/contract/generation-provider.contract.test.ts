@@ -8,7 +8,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, test } from "vitest";
 import { z } from "zod";
+import { createAudit } from "@/platform/audit";
 import {
+  createBudget,
   createDeterministicProvider,
   createGeneration,
   DETERMINISTIC_MODEL,
@@ -76,8 +78,23 @@ beforeEach(() => {
   clock = Date.UTC(2026, 9, 7);
 });
 
+// El presupuesto de estas pruebas admite cualquier operación: sus límites se
+// prueban en `tests/unit/platform/budget*.test.ts`.
 function generationWith(provider: GenerationProvider): Generation {
-  return createGeneration({ db, provider, now: () => (clock += 7) });
+  const now = () => (clock += 7);
+  const budget = createBudget({
+    db,
+    audit: createAudit(db),
+    now,
+    maxOperationCost: 1_000_000,
+  });
+  budget.setLimit({
+    newLimit: 1_000_000,
+    revision: budget.status().revision,
+    actorId: "administrador-1",
+    correlationId: "prueba",
+  });
+  return createGeneration({ db, provider, budget, now });
 }
 
 describe.each(ADAPTERS)("adaptador %s", (name, create) => {
@@ -194,8 +211,26 @@ describe.each(ADAPTERS)("adaptador %s", (name, create) => {
     expect(REQUEST.instructions).not.toContain("Ignora");
   });
 
-  test("el coste estimado no es negativo", () => {
-    expect(create().estimateCost(REQUEST)).toBeGreaterThanOrEqual(0);
+  test("la estimación no es negativa y el coste máximo que se reserva no es menor que ella", () => {
+    const provider = create();
+    expect(provider.estimateCost(REQUEST)).toBeGreaterThanOrEqual(0);
+    expect(provider.maxCost(REQUEST)).toBeGreaterThanOrEqual(
+      provider.estimateCost(REQUEST),
+    );
+  });
+
+  test("toda operación enviada deja una reserva cerrada con su consumo confirmado", async () => {
+    const generation = generationWith(create());
+    const runId = generation.startRun({
+      kind: "interpretation",
+      targetId: "documento",
+      requestedBy: "docente-1",
+    });
+    await generation.call(runId, { ...REQUEST, outputSchema: SCHEMA });
+    const [call] = generation.listCalls(runId);
+    expect(generation.budget.list()).toMatchObject([
+      { runId, callId: call?.id, state: "settled" },
+    ]);
   });
 });
 
@@ -205,12 +240,14 @@ describe("lo que se envía al proveedor", () => {
     const spy: GenerationProvider = {
       name: "espía",
       estimateCost: () => 0,
+      maxCost: () => 0,
       generate(request) {
         received.push(request);
         return Promise.resolve({
           ok: true,
           output: OUTPUT,
           usage: { model: "ninguno", tokensIn: 0, tokensOut: 0 },
+          cost: 0,
         });
       },
     };
@@ -243,11 +280,13 @@ describe("lo que se envía al proveedor", () => {
         Promise.resolve({
           ok: false as const,
           usage: { model: "m", tokensIn: 3, tokensOut: 0 },
+          cost: 0,
         }),
     ]) {
       const generation = generationWith({
         name: "fallido",
         estimateCost: () => 12,
+        maxCost: () => 20,
         generate,
       });
       const runId = generation.startRun({
@@ -277,6 +316,7 @@ describe("adaptador determinista", () => {
     expect(await provider?.generate({ ...REQUEST, input: other })).toEqual({
       ok: false,
       usage: { model: DETERMINISTIC_MODEL, tokensIn: 0, tokensOut: 0 },
+      cost: 0,
     });
     expect(
       await provider?.generate({ ...REQUEST, promptVersion: "v2" }),
@@ -294,8 +334,11 @@ describe("adaptador determinista", () => {
     expect(inputDigest({ a: 1 })).not.toBe(inputDigest({ a: 2 }));
   });
 
-  test("no cuesta nada y no consume tokens", () => {
-    expect(ADAPTERS[0]?.[1]().estimateCost(REQUEST)).toBe(0);
+  test("no cuesta nada: estimación, coste máximo y consumo son cero", async () => {
+    const provider = ADAPTERS[0]?.[1]();
+    expect(provider?.estimateCost(REQUEST)).toBe(0);
+    expect(provider?.maxCost(REQUEST)).toBe(0);
+    expect(await provider?.generate(REQUEST)).toMatchObject({ cost: 0 });
   });
 
   test("las grabaciones del repositorio son válidas y un directorio que no existe no tiene ninguna", () => {

@@ -137,6 +137,11 @@ const SURFACE: readonly SurfaceRoute[] = [
     "/interpretations/:id/requirements/:id",
     "interpretations/[id]/requirements/[rid].ts",
   ),
+  // Historia 2: índice y cobertura. Todas exigen sesión.
+  page("/outlines/:id", "outlines/[id]/index.ts"),
+  page("/outlines/:id/preview", "outlines/[id]/preview.ts"),
+  page("/outlines/:id/entries/new", "outlines/[id]/entries/new.ts"),
+  page("/outlines/:id/entries/:id", "outlines/[id]/entries/[eid].ts"),
   action("/api/documents/upload", UPLOAD, "protectedUpload"),
   action("/api/documents/resolve-page"),
   action("/api/interpretations/request"),
@@ -144,6 +149,11 @@ const SURFACE: readonly SurfaceRoute[] = [
   action("/api/interpretations/validate"),
   action("/api/interpretations/reject", TEXT_FORM),
   action("/api/interpretations/resubmit"),
+  action("/api/outlines/request"),
+  action("/api/outlines/edit", TEXT_FORM),
+  action("/api/outlines/approve"),
+  action("/api/outlines/reject", TEXT_FORM),
+  action("/api/outlines/resubmit"),
 ];
 
 function listFiles(relativeDirectory: string): string[] {
