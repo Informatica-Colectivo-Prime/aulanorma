@@ -53,6 +53,8 @@ function run(
       AULANORMA_PUBLIC_ORIGIN: "https://aulanorma.example",
       AULANORMA_SESSION_IDLE_MINUTES: "30",
       AULANORMA_SESSION_MAX_HOURS: "12",
+      AULANORMA_PDF_MAX_MIB: "32",
+      AULANORMA_PDF_MAX_PAGES: "600",
     } as unknown as NodeJS.ProcessEnv,
   });
   return { code: result.status, stdout: result.stdout, stderr: result.stderr };

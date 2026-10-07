@@ -794,6 +794,7 @@ describe("interfaz", () => {
     expect(Object.keys(namespace).sort()).toEqual([
       "ROUTES",
       "createHttpBoundary",
+      "findRoute",
     ]);
 
     const first = connection();

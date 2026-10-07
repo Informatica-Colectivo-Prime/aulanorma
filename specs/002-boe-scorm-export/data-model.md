@@ -31,6 +31,10 @@ específico de UF0517: el código de la unidad es un dato.
 
 El fichero PDF se guarda en el almacén de ficheros con su huella como nombre.
 
+**Implementación (fase 4)**. `Document` guarda además `size_bytes`, `has_signature_field` y
+`registered_at`, y `DocumentPage`, `has_images` (FR-064). Las tres tablas son de solo
+inserción, impuesta por disparadores: no admiten modificar, borrar ni sustituir una fila.
+
 ## Interpretación estructurada (`structured-interpretation`)
 
 | Entidad                    | Campos principales                                                                                                   | Reglas                                                                                                                                  |
@@ -42,6 +46,16 @@ El fichero PDF se guarda en el almacén de ficheros con su huella como nombre.
 
 **Vigencia**: una validación está vigente si `interpretation_revision` es la revisión actual.
 `Interpretation.status`: `in_review`, `validated` o `rejected`.
+
+**Implementación (fase 4)**. `Interpretation` guarda la referencia de la duración como
+`duration_section`, `duration_page` y `duration_quote`, la sección original de la unidad
+(`section_page_from` y `section_page_to`, FR-057), la ejecución de generación de la que
+procede, y quién y cuándo la pidió. `Requirement` lleva `withdrawn`: un requisito erróneo se
+retira del inventario y no se borra (FR-052). `Correction` lleva `kind` (`edit`, `add`,
+`withdraw` o `unit`) y la revisión a la que da lugar. El rechazo de una interpretación se
+guarda en `interpretation_rejection`, con los campos de `Rejection`. Correcciones,
+validaciones y rechazos son de solo inserción, impuesta por disparadores. Una interpretación
+cuyo documento tiene un sustituto es histórico: se consulta, pero no se corrige ni se valida.
 
 ## Contenido didáctico (`didactic-content`)
 

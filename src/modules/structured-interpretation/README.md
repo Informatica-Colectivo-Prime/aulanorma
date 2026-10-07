@@ -8,8 +8,12 @@ correcciones de interpretación.
 
 ## Estado
 
-Vacía en esta funcionalidad. `index.ts` solo contiene `export {};`: no hay lógica de producto ni
-datos de ningún certificado.
+Implementada con la historia 1 de `002-boe-scorm-export`. Obtiene la interpretación de una
+unidad formativa a través de la interfaz de generación, y solo la guarda si cumple su esquema,
+cada página existe y cada cita aparece en el texto de su página. Registra correcciones,
+validaciones y rechazos, con control de revisión: una validación solo está vigente mientras su
+revisión es la actual. Validar es siempre una acción humana explícita. No contiene datos de
+ningún certificado.
 
 ## Dependencias permitidas
 
@@ -20,8 +24,9 @@ datos de ningún certificado.
 
 El único punto de acceso a esta capa es su `index.ts` (`@/modules/structured-interpretation`).
 Importar sus rutas internas (`@/modules/structured-interpretation/<interno>`) está prohibido.
-Según la matriz de dependencias, solo `didactic-content` puede importarla; ni `platform` ni la
-entrega HTTP (`server.mjs` y `src/pages/api/health.ts`) pueden hacerlo.
+Según la matriz de dependencias, pueden importarla `didactic-content`, las rutas de producto
+de `src/pages` y las vistas de `src/views`; ni `platform`, ni `server.mjs`, ni la comprobación
+de estado (`src/pages/api/health.ts`) pueden hacerlo.
 
 ## Cómo se imponen los límites
 

@@ -310,6 +310,9 @@ es lo que más memoria consume.
   extracción (apartado 2.7).
 - Rechazar ante cualquier aviso puede dejar fuera un documento legítimo con un defecto leve.
   Es el precio de no aceptar lo que no se ha podido comprobar.
+- **Resuelto en la fase 4** (T032): el cifrado lo declara ahora qpdf a partir de la estructura,
+  sin intentar descifrar nada, y el rechazo ya no depende de ese componente. Ver
+  [us1-check.md](./us1-check.md). Lo observado entonces fue lo siguiente.
 - Con el binario, el fichero cifrado se rechaza por un error de qpdf al cargar un componente
   criptográfico antiguo, no con un motivo específico de cifrado. El veredicto es el mismo; el
   mensaje al usuario tendrá que tratarlo.
@@ -466,7 +469,7 @@ bloqueada.
 
 | Asunto                                                                     | Quién o qué lo cierra                 | Antes de |
 | -------------------------------------------------------------------------- | ------------------------------------- | -------- |
-| Instalar qpdf como herramienta verificada y probar el binario de Linux     | Tarea T032 y la integración continua  | Fase 4   |
+| Instalar qpdf como herramienta verificada y probar el binario de Linux     | Hecho en T032; ver `us1-check.md`     | Fase 4   |
 | Instalar qpdf en el servidor de destino                                    | Despliegue (T074)                     | Fase 8   |
 | Límite de memoria total y corte de red de los procesos de análisis         | Despliegue en el servidor de destino  | Fase 8   |
 | Origen y redistribución de los esquemas de SCORM 1.2                       | Decisión del mantenedor               | Fase 7   |

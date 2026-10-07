@@ -473,11 +473,12 @@ beforeEach(() => {
 });
 
 describe("interfaz", () => {
-  test("en ejecución exporta únicamente ROUTES y createHttpBoundary, que devuelve un request invocable", async () => {
+  test("en ejecución exporta únicamente ROUTES, findRoute y createHttpBoundary, que devuelve un request invocable", async () => {
     const namespace = await loadNamespace();
     expect(Object.keys(namespace).sort()).toEqual([
       "ROUTES",
       "createHttpBoundary",
+      "findRoute",
     ]);
     const listener = await boundaryFor(neverCalled());
     expect(typeof listener).toBe("function");
@@ -869,8 +870,122 @@ describe("lista cerrada de rutas de producto", () => {
       ["/api/session/sign-in", ["POST"], 4096],
       ["/api/session/sign-out", ["POST"], 4096],
       ["/api/account/password", ["POST"], 4096],
+      ["/documents", ["GET"], 0],
+      ["/documents/new", ["GET"], 0],
+      ["/documents/:id", ["GET"], 0],
+      ["/documents/:id/file", ["GET"], 0],
+      ["/documents/:id/pages/:n", ["GET"], 0],
+      ["/interpretations/:id", ["GET"], 0],
+      ["/interpretations/:id/unit", ["GET"], 0],
+      ["/interpretations/:id/requirements/new", ["GET"], 0],
+      ["/interpretations/:id/requirements/:id", ["GET"], 0],
+      ["/api/documents/upload", ["POST"], 67_108_864],
+      ["/api/documents/resolve-page", ["POST"], 4096],
+      ["/api/interpretations/request", ["POST"], 4096],
+      ["/api/interpretations/correct", ["POST"], 65_536],
+      ["/api/interpretations/validate", ["POST"], 4096],
+      ["/api/interpretations/reject", ["POST"], 65_536],
+      ["/api/interpretations/resubmit", ["POST"], 4096],
     ]);
   });
+
+  // Destinos con segmentos variables: `:id` son 32 cifras hexadecimales en
+  // minúscula y `:n`, un número de página sin ceros iniciales. Nada más.
+  const ID = "0123456789abcdef0123456789abcdef";
+  const OTHER = "fedcba9876543210fedcba9876543210";
+
+  test.each([
+    `/documents/${ID}`,
+    `/documents/${ID}/file`,
+    `/documents/${ID}/pages/1`,
+    `/documents/${ID}/pages/99999`,
+    `/interpretations/${ID}`,
+    `/interpretations/${ID}/unit`,
+    `/interpretations/${ID}/requirements/new`,
+    `/interpretations/${ID}/requirements/${OTHER}`,
+  ])("GET %s se delega una vez", async (url) => {
+    const handle = neverCalled();
+    const result = await run(handle, { url });
+    expect(result.rejected).toBe(false);
+    expect(handle).toHaveBeenCalledTimes(1);
+    expect(result.response.calls, "la frontera no escribe").toEqual([]);
+  });
+
+  test.each([
+    "/documents/",
+    `/documents/${ID}/`,
+    `/documents/${ID.toUpperCase()}`,
+    `/documents/${ID.slice(1)}`,
+    `/documents/${ID}0`,
+    `/documents/${ID}?x=1`,
+    `/documents/${ID}#page=2`,
+    `/documents/${ID}/pages/0`,
+    `/documents/${ID}/pages/01`,
+    `/documents/${ID}/pages/100000`,
+    `/documents/${ID}/pages/1a`,
+    `/documents/${ID}/pages/-1`,
+    `/documents/${ID}/pages/`,
+    `/documents/${ID}/otra`,
+    "/documents/:id",
+    "/documents/new/",
+    "/documents/%6eew",
+    `/documents/../documents/${ID}`,
+    `//documents/${ID}`,
+    `/interpretations/${ID}/requirements/`,
+    `/interpretations/${ID}/requirements/nuevo`,
+    `/interpretations/${ID}/requirements/${OTHER}/x`,
+    `/interpretations/${ID}/unit/`,
+    `/api/documents/${ID}`,
+    "/api/documents/upload/",
+    "/api/documents",
+    "/api/interpretations",
+    `/documents/${ID}\n`,
+  ])("GET %j recibe el 404 cerrado", async (url) => {
+    const handle = neverCalled();
+    const result = await run(handle, { url });
+    expect(handle).not.toHaveBeenCalled();
+    expectClosedRejection(result, 404);
+  });
+
+  test.each([
+    { url: "/api/documents/upload", max: 67_108_864 },
+    { url: "/api/interpretations/correct", max: 65_536 },
+    { url: "/api/interpretations/validate", max: 4096 },
+  ])(
+    "POST $url admite un cuerpo de hasta $max bytes y ni uno más",
+    async ({ url, max }) => {
+      const within = neverCalled();
+      const accepted = await run(within, {
+        url,
+        method: "POST",
+        rawHeaders: [...HOST, "Content-Length", String(max)],
+      });
+      expect(accepted.rejected).toBe(false);
+      expect(within).toHaveBeenCalledTimes(1);
+      const beyond = neverCalled();
+      const refused = await run(beyond, {
+        url,
+        method: "POST",
+        rawHeaders: [...HOST, "Content-Length", String(max + 1)],
+      });
+      expect(beyond).not.toHaveBeenCalled();
+      expectClosedRejection(refused, 400);
+    },
+  );
+
+  test.each([`/documents/${ID}`, `/documents/${ID}/file`])(
+    "POST %s recibe 405 cerrado con Allow: GET",
+    async (url) => {
+      const handle = neverCalled();
+      const result = await run(handle, { url, method: "POST" });
+      expect(handle).not.toHaveBeenCalled();
+      expect(result.response.committedStatus).toBe(405);
+      expect(result.response.getHeaders()).toStrictEqual({
+        ...CLOSED,
+        allow: "GET",
+      });
+    },
+  );
 
   test.each(PAGES)("GET %s se delega una vez", async (url) => {
     const handle = neverCalled();

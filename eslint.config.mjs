@@ -33,8 +33,12 @@ const PLATFORM_AREAS = [
   "persistence",
   "audit",
   "identity",
+  "generation",
   "web",
 ];
+// Capas de dominio que la entrega puede importar, por su API pública. Se
+// abren una a una, con la primera ruta que las necesita (ADR 0004).
+const DELIVERY_LAYERS = ["normative-source", "structured-interpretation"];
 const DELIVERY_PLATFORM_AREAS = [
   "config",
   "logging",
@@ -215,7 +219,7 @@ const sourceLocation = ({
   },
 });
 
-const OTHER_SEGMENTS = ["platform", "modules", "pages", "app", "src"];
+const OTHER_SEGMENTS = ["platform", "modules", "pages", "views", "app", "src"];
 
 /** @param {string} area */
 const platformArea = (area) =>
@@ -444,8 +448,33 @@ export default defineConfig([
     files: ["src/pages/**/*"],
     patterns: [
       pattern(
+        `^@/(?!platform/(?:${alternatives(DELIVERY_PLATFORM_AREAS)})$|modules/(?:${alternatives(DELIVERY_LAYERS)})$|views$)`,
+        "La entrega solo importa `@/platform/<área>` (config, logging, health, version o web), las capas `normative-source` y `structured-interpretation` por su API pública, y `@/views`.",
+      ),
+      relativeEscape([...PLATFORM_AREAS, ...LAYERS, ...OTHER_SEGMENTS]),
+    ],
+  }),
+  // La comprobación de estado es la excepción sin sesión: no importa ninguna
+  // capa de dominio ni las vistas.
+  sourceLocation({
+    name: "delivery/health",
+    files: ["src/pages/api/health.ts"],
+    patterns: [
+      pattern(
         `^@/(?!platform/(?:${alternatives(DELIVERY_PLATFORM_AREAS)})$)`,
-        "La entrega solo importa `@/platform/<área>` (config, logging, health, version o web).",
+        "La comprobación de estado solo importa `@/platform/<área>` (config, logging, health, version o web).",
+      ),
+      relativeEscape([...PLATFORM_AREAS, ...LAYERS, ...OTHER_SEGMENTS]),
+    ],
+  }),
+  // Vistas que comparten páginas y acciones: solo componen HTML.
+  sourceLocation({
+    name: "views",
+    files: ["src/views/**/*"],
+    patterns: [
+      pattern(
+        `^@/(?!platform/web$|modules/(?:${alternatives(DELIVERY_LAYERS)})$)`,
+        "Las vistas solo importan `@/platform/web` y las capas `normative-source` y `structured-interpretation`, por su API pública.",
       ),
       relativeEscape([...PLATFORM_AREAS, ...LAYERS, ...OTHER_SEGMENTS]),
     ],

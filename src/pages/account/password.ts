@@ -10,9 +10,9 @@ import {
   noticeBox,
   protectedPage,
 } from "@/platform/web";
-import type { Html, Notice } from "@/platform/web";
+import type { Html, NoticeCode } from "@/platform/web";
 
-const MESSAGES: Partial<Record<Notice, Html>> = {
+const MESSAGES: Partial<Record<NoticeCode, Html>> = {
   password_changed: noticeBox(
     "good",
     "Tu contraseña se ha cambiado. Las demás sesiones de tu cuenta se han cerrado.",
@@ -48,7 +48,7 @@ export const getServerSideProps = protectedPage(
       title: "Contraseña",
       session,
       content: html`<h1>Cambiar la contraseña</h1>
-        ${notice === undefined ? null : MESSAGES[notice]}
+        ${notice === undefined ? null : MESSAGES[notice.code]}
         ${session.user.mustChangePassword ? PENDING : null}
         <form method="post" action="/api/account/password">
           <input type="hidden" name="csrf" value="${session.csrfToken}" />

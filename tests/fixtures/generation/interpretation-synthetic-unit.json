@@ -1,0 +1,72 @@
+{
+  "task": "interpretation",
+  "promptVersion": "v1",
+  "inputSha256": "dfd21ad9095e4abd253c50478ed05fb23e9019bd8fa3055c04a4ec0a457a13f7",
+  "output": {
+    "unit": {
+      "code": "UX9001",
+      "title": "Unidad sintética de prueba",
+      "durationHours": 30,
+      "durationSection": "Unidad formativa",
+      "durationPage": 1,
+      "durationQuote": "Synthetic fixture, page 1."
+    },
+    "requirements": [
+      {
+        "ref": "C1",
+        "parentRef": null,
+        "kind": "capability",
+        "code": "C1",
+        "text": "Capacidad sintética uno.",
+        "section": "Capacidades y criterios",
+        "pageFrom": 1,
+        "pageTo": 1,
+        "quote": "Synthetic fixture, page 1."
+      },
+      {
+        "ref": "CE1.1",
+        "parentRef": "C1",
+        "kind": "criterion",
+        "code": "CE1.1",
+        "text": "Criterio sintético uno.\n– Con un detalle.",
+        "section": "Capacidades y criterios",
+        "pageFrom": 1,
+        "pageTo": 2,
+        "quote": "This text is extractable. Synthetic fixture, page 2."
+      },
+      {
+        "ref": "K1",
+        "parentRef": null,
+        "kind": "content",
+        "code": "1.",
+        "text": "Contenido sintético uno",
+        "section": "Contenidos",
+        "pageFrom": 2,
+        "pageTo": 2,
+        "quote": "Synthetic fixture, page 2."
+      },
+      {
+        "ref": "S1",
+        "parentRef": "K1",
+        "kind": "subcontent",
+        "code": "",
+        "text": "Subapartado sintético",
+        "section": "Contenidos",
+        "pageFrom": 3,
+        "pageTo": 3,
+        "quote": null
+      },
+      {
+        "ref": "S2",
+        "parentRef": "S1",
+        "kind": "subcontent",
+        "code": "",
+        "text": "Subapartado de segundo nivel <b>con marcado</b>",
+        "section": "Contenidos",
+        "pageFrom": 3,
+        "pageTo": 3,
+        "quote": "This text is extractable."
+      }
+    ]
+  }
+}

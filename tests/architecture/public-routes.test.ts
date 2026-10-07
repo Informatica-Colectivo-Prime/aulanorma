@@ -30,14 +30,44 @@ const BOUNDARY = "src/platform/http-boundary/index.ts";
 const WEB = "@/platform/web";
 
 type Guard =
-  "entryPage" | "entryAction" | "protectedPage" | "protectedAction" | "none";
+  | "entryPage"
+  | "entryAction"
+  | "protectedPage"
+  | "protectedAction"
+  | "protectedUpload"
+  | "none";
 
 interface SurfaceRoute {
   readonly target: string;
   readonly file: string;
   readonly methods: readonly string[];
   readonly guard: Guard;
+  // Tamaño máximo del cuerpo; 0 si la ruta no admite cuerpo.
+  readonly maxBody: number;
 }
+
+const FORM = 4096;
+const TEXT_FORM = 65_536;
+const UPLOAD = 64 * 1024 * 1024;
+
+const page = (target: string, file: string): SurfaceRoute => ({
+  target,
+  file: `src/pages/${file}`,
+  methods: ["GET"],
+  guard: "protectedPage",
+  maxBody: 0,
+});
+const action = (
+  target: string,
+  maxBody: number = FORM,
+  guard: Guard = "protectedAction",
+): SurfaceRoute => ({
+  target,
+  file: `src/pages${target}.ts`,
+  methods: ["POST"],
+  guard,
+  maxBody,
+});
 
 // Lista cerrada. Añadir una ruta exige añadirla aquí, en `ROUTES` y en el
 // contrato, con su guarda.
@@ -47,43 +77,73 @@ const SURFACE: readonly SurfaceRoute[] = [
     file: "src/pages/api/health.ts",
     methods: ["GET", "HEAD", "OPTIONS"],
     guard: "none",
+    maxBody: 0,
   },
   {
     target: "/",
     file: "src/pages/index.ts",
     methods: ["GET"],
     guard: "protectedPage",
+    maxBody: 0,
   },
   {
     target: "/login",
     file: "src/pages/login.ts",
     methods: ["GET"],
     guard: "entryPage",
+    maxBody: 0,
   },
   {
     target: "/account/password",
     file: "src/pages/account/password.ts",
     methods: ["GET"],
     guard: "protectedPage",
+    maxBody: 0,
   },
   {
     target: "/api/session/sign-in",
     file: "src/pages/api/session/sign-in.ts",
     methods: ["POST"],
     guard: "entryAction",
+    maxBody: FORM,
   },
   {
     target: "/api/session/sign-out",
     file: "src/pages/api/session/sign-out.ts",
     methods: ["POST"],
     guard: "protectedAction",
+    maxBody: FORM,
   },
   {
     target: "/api/account/password",
     file: "src/pages/api/account/password.ts",
     methods: ["POST"],
     guard: "protectedAction",
+    maxBody: FORM,
   },
+  // Historia 1: documento e interpretación. Todas exigen sesión.
+  page("/documents", "documents/index.ts"),
+  page("/documents/new", "documents/new.ts"),
+  page("/documents/:id", "documents/[id]/index.ts"),
+  page("/documents/:id/file", "documents/[id]/file.ts"),
+  page("/documents/:id/pages/:n", "documents/[id]/pages/[n].ts"),
+  page("/interpretations/:id", "interpretations/[id]/index.ts"),
+  page("/interpretations/:id/unit", "interpretations/[id]/unit.ts"),
+  page(
+    "/interpretations/:id/requirements/new",
+    "interpretations/[id]/requirements/new.ts",
+  ),
+  page(
+    "/interpretations/:id/requirements/:id",
+    "interpretations/[id]/requirements/[rid].ts",
+  ),
+  action("/api/documents/upload", UPLOAD, "protectedUpload"),
+  action("/api/documents/resolve-page"),
+  action("/api/interpretations/request"),
+  action("/api/interpretations/correct", TEXT_FORM),
+  action("/api/interpretations/validate"),
+  action("/api/interpretations/reject", TEXT_FORM),
+  action("/api/interpretations/resubmit"),
 ];
 
 function listFiles(relativeDirectory: string): string[] {
@@ -108,12 +168,16 @@ function parse(file: string): ts.SourceFile {
   );
 }
 
-// Destino que Next.js asigna a un fichero de `src/pages`.
+// Destino que Next.js asigna a un fichero de `src/pages`, con sus segmentos
+// variables en la forma cerrada de la frontera: `[n]` es un número de página
+// y cualquier otro, un identificador.
 function targetOf(file: string): string {
   const route = file
     .replace(/^src\/pages/, "")
     .replace(/\.tsx?$/, "")
-    .replace(/\/index$/, "");
+    .replace(/\/index$/, "")
+    .replace(/\[n\]/g, ":n")
+    .replace(/\[[a-z]+\]/g, ":id");
   return route === "" ? "/" : route;
 }
 
@@ -226,6 +290,7 @@ const GUARDS: readonly string[] = [
   "entryAction",
   "protectedPage",
   "protectedAction",
+  "protectedUpload",
 ];
 
 describe("lista cerrada de rutas", () => {
@@ -251,14 +316,29 @@ describe("lista cerrada de rutas", () => {
     ).toStrictEqual(SURFACE.map(({ target, methods }) => [target, methods]));
   });
 
-  test("solo las acciones admiten cuerpo, y con un máximo", () => {
+  test("solo las acciones admiten cuerpo, y cada una con su máximo exacto", () => {
     for (const route of ROUTES) {
-      const guard = SURFACE.find(
-        ({ target }) => target === route.target,
-      )?.guard;
-      const isAction = guard === "entryAction" || guard === "protectedAction";
+      const declared = SURFACE.find(({ target }) => target === route.target);
+      const isAction =
+        declared?.guard === "entryAction" ||
+        declared?.guard === "protectedAction" ||
+        declared?.guard === "protectedUpload";
       expect(route.maxBody > 0, route.target).toBe(isAction);
-      expect(route.maxBody, route.target).toBeLessThanOrEqual(4096);
+      expect(route.maxBody, route.target).toBe(declared?.maxBody);
+    }
+    // Solo la subida de un PDF admite un cuerpo grande.
+    expect(
+      SURFACE.filter(({ maxBody }) => maxBody > TEXT_FORM).map(
+        ({ target }) => target,
+      ),
+    ).toEqual(["/api/documents/upload"]);
+  });
+
+  test("los segmentos variables son solo :id y :n, y ningún destino lleva comodines", () => {
+    for (const { target } of ROUTES) {
+      for (const segment of target.split("/")) {
+        expect(segment, target).toMatch(/^(?::id|:n|[a-z-]*)$/);
+      }
     }
   });
 });

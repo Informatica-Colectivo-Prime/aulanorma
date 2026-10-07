@@ -3,7 +3,8 @@
 AulaNorma es un monolito modular: una única aplicación Next.js 16.3.6 con Pages Router, que se
 despliega como una sola unidad. Expone la comprobación de estado `/api/health` y, desde los
 cimientos del producto, una lista cerrada de rutas con entrada, sesión y permisos, sobre una
-base de datos SQLite. No hace llamadas a servicios externos. Las decisiones que describe este
+base de datos SQLite. Su primera historia registra el PDF oficial y permite revisar y validar
+su interpretación. No hace llamadas a servicios externos. Las decisiones que describe este
 documento están en el
 [ADR 0001](../adr/0001-architecture-runtime-and-modular-structure.md) y en el
 [ADR 0004](../adr/0004-product-surface-persistence-identity-and-generation.md), que lo
@@ -21,18 +22,23 @@ src/
 │   ├── login.ts                   # Formulario de entrada
 │   ├── index.ts                   # Inicio
 │   ├── account/password.ts        # Cambio de contraseña
-│   └── api/                       # Acciones: session/sign-in, session/sign-out, account/password
+│   ├── documents/                 # Documentos: lista, subida, registro, página y PDF original
+│   ├── interpretations/           # Interpretación: inventario y formularios de corrección
+│   └── api/                       # Acciones: session, account, documents e interpretations
+├── views/                 # Vistas HTML que comparten páginas y acciones
 ├── platform/              # Utilidades transversales; API pública: el índice de cada área
 │   ├── config/  logging/  http-boundary/  health/  version/
 │   ├── persistence/       # SQLite, migraciones y almacén de ficheros por huella
 │   ├── audit/             # Registro de solo inserción
 │   ├── identity/          # Cuentas, contraseñas, sesiones, intentos y permisos
+│   ├── generation/        # Interfaz de generación, adaptador determinista y registro de uso
 │   └── web/               # Guardas de acceso, cookies y documento HTML de las rutas
-└── modules/               # Las cuatro capas de la constitución, todavía vacías
-    ├── normative-source/
-    ├── structured-interpretation/
-    ├── didactic-content/
-    └── content-export/
+└── modules/               # Las cuatro capas de la constitución
+    ├── normative-source/          # Documentos, páginas y tratamiento del PDF (pdf/)
+    ├── structured-interpretation/ # Inventario, correcciones, validación y rechazo
+    ├── didactic-content/          # Todavía vacía
+    └── content-export/            # Todavía vacía
+prompts/                   # Prompts versionados de la generación
 ```
 
 No existen `src/app`, `middleware.ts`, `proxy.ts` ni `instrumentation.ts`.
@@ -63,8 +69,26 @@ Moodle. El
 la exportación de un paquete que el usuario incorpora manualmente a Moodle. Con ese cambio, el
 módulo pasó de llamarse `moodle-publication` a `src/modules/content-export`.
 
-**Estado actual**: las cuatro capas están vacías. Cada `index.ts` solo contiene `export {};`, y
-no hay lógica de producto ni nada específico de ningún certificado (FR-024).
+**Estado actual**: `normative-source` y `structured-interpretation` están implementadas;
+`didactic-content` y `content-export` siguen vacías, con `export {};` en su `index.ts`. Nada es
+específico de ningún certificado (FR-024): el código de la unidad es un dato.
+
+### Tratamiento de un PDF
+
+`src/modules/normative-source/pdf/` separa tres pasos, y superar uno no acredita los otros:
+
+1. **Validación del fichero**: tamaño máximo configurado y firma `%PDF-`.
+2. **Inspección estructural**: qpdf, instalado como herramienta verificada, entrega la
+   estructura interpretada y la política propia (`policy.ts`) decide sobre ella. Rechaza
+   JavaScript, XFA, acciones automáticas, lanzamientos y ficheros incrustados, y solo admite
+   un formulario si todos sus campos son de firma y sin acciones. qpdf no es un antivirus.
+3. **Extracción**: `pdfjs-dist` obtiene el texto de cada página.
+
+Los tres se ejecutan en procesos hijos con el entorno vacío, límite de tiempo y de salida, y
+la salida validada por esquema. Los de Node.js llevan además límite de montón y el modelo de
+permisos. Cualquier error, aviso o resultado no comprobable acaba en rechazo, y el fichero
+nunca se modifica. Es contención, no un aislamiento de seguridad. La revisión de lo extraído
+es siempre humana.
 
 ## Matriz de dependencias
 
@@ -72,14 +96,15 @@ Cada celda indica si el módulo de la fila puede importar al de la columna, siem
 su API pública (`index.ts`). Es la matriz de
 [`data-model.md`](../../specs/001-engineering-baseline/data-model.md#matriz-de-dependencias-entre-capas).
 
-| Importa →                              | `platform`               | `normative-source` | `structured-interpretation` | `didactic-content` | `content-export` |
-| -------------------------------------- | ------------------------ | ------------------ | --------------------------- | ------------------ | ---------------- |
-| `platform`                             | —                        | No                 | No                          | No                 | No               |
-| `normative-source`                     | Sí                       | —                  | No                          | No                 | No               |
-| `structured-interpretation`            | Sí                       | Sí                 | —                           | No                 | No               |
-| `didactic-content`                     | Sí                       | No                 | Sí                          | —                  | No               |
-| `content-export`                       | Sí                       | No                 | No                          | Sí                 | —                |
-| Entrega: `server.mjs` y `src/pages/**` | **Sí, solo API pública** | **No**             | **No**                      | **No**             | **No**           |
+| Importa →                                | `platform`               | `normative-source` | `structured-interpretation` | `didactic-content` | `content-export` |
+| ---------------------------------------- | ------------------------ | ------------------ | --------------------------- | ------------------ | ---------------- |
+| `platform`                               | —                        | No                 | No                          | No                 | No               |
+| `normative-source`                       | Sí                       | —                  | No                          | No                 | No               |
+| `structured-interpretation`              | Sí                       | Sí                 | —                           | No                 | No               |
+| `didactic-content`                       | Sí                       | No                 | Sí                          | —                  | No               |
+| `content-export`                         | Sí                       | No                 | No                          | Sí                 | —                |
+| Entrega: rutas de producto y `src/views` | **Sí, solo API pública** | **Sí**             | **Sí**                      | **No**             | **No**           |
+| Entrega: `server.mjs` y `/api/health`    | **Sí, solo API pública** | **No**             | **No**                      | **No**             | **No**           |
 
 Reglas:
 
@@ -89,9 +114,13 @@ Reglas:
 - **Capas de dominio**: cada una solo depende de `platform` y de la capa inmediatamente anterior,
   en la dirección que fija el principio II.
 - **`platform`** no depende de ninguna capa de dominio.
-- **Entrega limitada a `platform`**: la entrega no importa todavía ninguna capa de dominio,
-  porque las rutas actuales no las necesitan. El ADR 0004 prevé abrir esta fila a las cuatro
-  capas; se hará con la primera historia que lo necesite, con su propia prueba de arquitectura.
+- **Entrega abierta capa a capa**: las rutas de producto importan `normative-source` y
+  `structured-interpretation`, por su API pública, desde la historia que las usa. Las otras dos
+  capas siguen cerradas a la entrega hasta que una ruta las necesite. `server.mjs` y la
+  comprobación de estado no importan ninguna.
+- **Vistas**: `src/views` reúne el HTML que comparten una página y la acción que, ante un
+  conflicto o un bloqueo, responde con ese mismo formulario. Solo importa `@/platform/web` y
+  esas dos capas; no alcanza la persistencia, la identidad, la auditoría ni la generación.
 - **Rutas de producto solo a través de `web`**: las páginas y las acciones importan
   `@/platform/web`, donde están las guardas de acceso, y no importan directamente `identity`,
   `persistence` ni `audit`.
@@ -133,6 +162,7 @@ La capa de entrega son `server.mjs` y los ficheros de `src/pages`:
 | `persistence`   | Base de datos SQLite (`node:sqlite`), migraciones numeradas y almacén de ficheros por huella SHA-256                 | Sí              |
 | `audit`         | Registro de auditoría de solo inserción: `createAudit`, con `record` y `list`                                        | Sí              |
 | `identity`      | Cuentas, contraseñas con `scrypt`, sesiones, intentos repetidos, comprobación de origen y permisos: `createIdentity` | Sí              |
+| `generation`    | Interfaz propia con cualquier proveedor de IA, adaptador determinista y registro de cada llamada: `createGeneration` | No              |
 | `web`           | Servicios del proceso, cookies, documento HTML y guardas de acceso de las rutas de producto                          | No              |
 
 Cada área expone su API pública en su `index.ts`. `platform` no depende de ninguna capa de
@@ -179,7 +209,7 @@ Next.js. La frontera evalúa en este orden, y la primera regla incumplida decide
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
 | Versión | Solo HTTP/1.0 y HTTP/1.1                                                                                                                                                  | 505            |
 | `Host`  | En HTTP/1.1, exactamente uno, no vacío, sin comas ni caracteres de control; en HTTP/1.0, opcional con las mismas reglas                                                   | 400            |
-| Destino | El destino crudo es exactamente uno de la lista cerrada `ROUTES`, byte a byte, sin normalizar ni decodificar                                                              | 404            |
+| Destino | El destino crudo es exactamente uno de la lista cerrada `ROUTES`, byte a byte, sin normalizar ni decodificar, salvo sus segmentos variables de forma cerrada              | 404            |
 | Método  | Uno de los métodos de esa ruta                                                                                                                                            | 405            |
 | Cuerpo  | Sin `Transfer-Encoding`. Si la ruta no admite cuerpo, `Content-Length` ausente o igual a 0; si lo admite, exactamente un `Content-Length` decimal que no supere su máximo | 400            |
 
@@ -189,15 +219,26 @@ si el destino no está en la lista y 405 si lo está.
 
 La lista cerrada es:
 
-| Destino                 | Métodos                  | Cuerpo máximo | Acceso                                          |
-| ----------------------- | ------------------------ | ------------- | ----------------------------------------------- |
-| `/api/health`           | `GET`, `HEAD`, `OPTIONS` | 0             | Sin sesión (excepción cerrada)                  |
-| `/login`                | `GET`                    | 0             | Sin sesión; no concede nada más                 |
-| `/api/session/sign-in`  | `POST`                   | 4096 bytes    | Sin sesión; exige la sesión previa y su testigo |
-| `/`                     | `GET`                    | 0             | Sesión                                          |
-| `/account/password`     | `GET`                    | 0             | Sesión                                          |
-| `/api/session/sign-out` | `POST`                   | 4096 bytes    | Sesión y su testigo                             |
-| `/api/account/password` | `POST`                   | 4096 bytes    | Sesión y su testigo                             |
+| Destino                                                                                   | Métodos                  | Cuerpo máximo | Acceso                                          |
+| ----------------------------------------------------------------------------------------- | ------------------------ | ------------- | ----------------------------------------------- |
+| `/api/health`                                                                             | `GET`, `HEAD`, `OPTIONS` | 0             | Sin sesión (excepción cerrada)                  |
+| `/login`                                                                                  | `GET`                    | 0             | Sin sesión; no concede nada más                 |
+| `/api/session/sign-in`                                                                    | `POST`                   | 4096 bytes    | Sin sesión; exige la sesión previa y su testigo |
+| `/`                                                                                       | `GET`                    | 0             | Sesión                                          |
+| `/account/password`                                                                       | `GET`                    | 0             | Sesión                                          |
+| `/api/session/sign-out`                                                                   | `POST`                   | 4096 bytes    | Sesión y su testigo                             |
+| `/api/account/password`                                                                   | `POST`                   | 4096 bytes    | Sesión y su testigo                             |
+| `/documents`, `/documents/new`                                                            | `GET`                    | 0             | Sesión y perfil de docente                      |
+| `/documents/:id`, `/documents/:id/file`, `/documents/:id/pages/:n`                        | `GET`                    | 0             | Sesión y perfil de docente                      |
+| `/interpretations/:id`, `…/unit`, `…/requirements/new`, `…/requirements/:id`              | `GET`                    | 0             | Sesión y perfil de docente                      |
+| `/api/documents/upload`                                                                   | `POST`                   | 64 MiB        | Sesión, su testigo y perfil de docente          |
+| `/api/documents/resolve-page`, `/api/interpretations/request`, `…/validate`, `…/resubmit` | `POST`                   | 4096 bytes    | Sesión, su testigo y perfil de docente          |
+| `/api/interpretations/correct`, `/api/interpretations/reject`                             | `POST`                   | 65 536 bytes  | Sesión, su testigo y perfil de docente          |
+
+Un segmento variable solo tiene dos formas: `:id`, 32 cifras hexadecimales en minúscula, y
+`:n`, un número de página de 1 a 99999 sin ceros iniciales. No hay comodines ni parámetros de
+consulta: cualquier otra forma recibe el 404 cerrado. Sobre el máximo de 64 MiB de la subida,
+la ruta aplica el tamaño máximo configurado.
 
 La frontera no comprueba la sesión ni los permisos: decide solo sobre la forma de la petición.
 El acceso lo comprueba cada ruta de producto con su guarda. Lo delegado llega a Next.js con una

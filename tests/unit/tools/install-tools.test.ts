@@ -34,7 +34,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { gzipSync } from "node:zlib";
+import { crc32, deflateRawSync, gzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
@@ -137,6 +137,131 @@ function redirect(from: string, location: string): void {
   });
 }
 
+// --- Herramienta de varios ficheros (qpdf): archivo `.zip` sintético ---
+
+interface BundleFile {
+  readonly member: string;
+  readonly path: string;
+  readonly sha256: string;
+  readonly executable: boolean;
+}
+
+interface BundleEntry {
+  readonly url: string;
+  readonly archiveSha256: string;
+  readonly files: readonly BundleFile[];
+}
+
+interface ZipMember {
+  readonly name: string;
+  readonly data: Buffer;
+  // Modo Unix; 0o120777 es un enlace simbólico.
+  readonly mode?: number;
+  readonly stored?: boolean;
+  readonly encrypted?: boolean;
+}
+
+// Escribe un `.zip` mínimo y válido: cabeceras locales, directorio central y
+// registro final, sin ZIP64.
+function zip(members: readonly ZipMember[]): Buffer {
+  const locals: Buffer[] = [];
+  const centrals: Buffer[] = [];
+  let offset = 0;
+  for (const member of members) {
+    const name = Buffer.from(member.name, "utf8");
+    const stored = member.stored === true;
+    const body = stored ? member.data : deflateRawSync(member.data);
+    const flags = member.encrypted === true ? 1 : 0;
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(flags, 6);
+    local.writeUInt16LE(stored ? 0 : 8, 8);
+    local.writeUInt32LE(crc32(member.data), 14);
+    local.writeUInt32LE(body.length, 18);
+    local.writeUInt32LE(member.data.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(0x031e, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(flags, 8);
+    central.writeUInt16LE(stored ? 0 : 8, 10);
+    central.writeUInt32LE(crc32(member.data), 16);
+    central.writeUInt32LE(body.length, 20);
+    central.writeUInt32LE(member.data.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(((member.mode ?? 0o100644) << 16) >>> 0, 38);
+    central.writeUInt32LE(offset, 42);
+    locals.push(local, name, body);
+    centrals.push(central, name);
+    offset += local.length + name.length + body.length;
+  }
+  const directory = Buffer.concat(centrals);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(members.length, 8);
+  end.writeUInt16LE(members.length, 10);
+  end.writeUInt32LE(directory.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, directory, end]);
+}
+
+const BUNDLE_BINARY = Buffer.from("ejecutable sintético de qpdf\n");
+const BUNDLE_LIBRARY = Buffer.from(
+  "biblioteca sintética de qpdf\n".repeat(200),
+);
+
+const bundleFiles = (): BundleFile[] => [
+  {
+    member: "bin/qpdf",
+    path: "bin/qpdf",
+    sha256: sha256(BUNDLE_BINARY),
+    executable: true,
+  },
+  {
+    member: "lib/libqpdf.1.2.so",
+    path: "lib/libqpdf.so",
+    sha256: sha256(BUNDLE_LIBRARY),
+    executable: false,
+  },
+];
+
+const regularZip = (): Buffer =>
+  zip([
+    { name: "bin/", data: Buffer.alloc(0), mode: 0o040755, stored: true },
+    { name: "bin/qpdf", data: BUNDLE_BINARY, mode: 0o100755 },
+    { name: "bin/otro", data: Buffer.from("no se instala\n") },
+    { name: "lib/libqpdf.1.2.so", data: BUNDLE_LIBRARY },
+    {
+      name: "lib/libqpdf.so",
+      data: Buffer.from("libqpdf.1.2.so"),
+      mode: 0o120777,
+      stored: true,
+    },
+  ]);
+
+function serveBundle(
+  name: string,
+  data: Buffer,
+  files: readonly BundleFile[] = bundleFiles(),
+): BundleEntry {
+  routes.set(`/files/${name}`, (res) => {
+    res.writeHead(200, { "Content-Length": String(data.length) });
+    res.end(data);
+  });
+  return {
+    url: `${baseUrl}/files/${name}`,
+    archiveSha256: sha256(data),
+    files,
+  };
+}
+
+let goodBundle: BundleEntry = { url: "", archiveSha256: "", files: [] };
+
+const bundlePath = (dir: string, relative: string): string =>
+  path.join(dir, ".tools/qpdf", relative);
+
 const good: Record<Tool, Entry> = {
   gitleaks: { url: "", archiveSha256: "", member: "", binarySha256: "" },
   zizmor: { url: "", archiveSha256: "", member: "", binarySha256: "" },
@@ -145,6 +270,7 @@ const good: Record<Tool, Entry> = {
 function lockWith(
   entries: Partial<Record<Tool, Entry>> = {},
   platforms: readonly string[] = PLATFORMS,
+  bundle: object = goodBundle,
 ): object {
   const tool = (name: Tool, source: string): object => ({
     version: name === "gitleaks" ? "8.30.1" : "1.30.1",
@@ -158,6 +284,13 @@ function lockWith(
     tools: {
       gitleaks: tool("gitleaks", "release-checksums-file"),
       zizmor: tool("zizmor", "github-asset-digest"),
+      qpdf: {
+        version: "12.4.2",
+        archiveSha256Source: "release-checksums-file",
+        platforms: Object.fromEntries(
+          platforms.map((platform) => [platform, bundle]),
+        ),
+      },
     },
   };
 }
@@ -223,12 +356,14 @@ function published(dir: string): string[] {
   return existsSync(bin) ? readdirSync(bin).sort() : [];
 }
 
-// Tras cualquier ejecución, `.tools` solo puede contener `bin`: ningún
-// temporal sobrevive.
+// Tras cualquier ejecución, `.tools` solo puede contener `bin` y `qpdf`:
+// ningún temporal sobrevive.
 function expectNoTemporaries(dir: string): void {
   const tools = path.join(dir, ".tools");
   const entries = existsSync(tools) ? readdirSync(tools) : [];
-  expect(entries.filter((entry) => entry !== "bin")).toEqual([]);
+  expect(
+    entries.filter((entry) => entry !== "bin" && entry !== "qpdf"),
+  ).toEqual([]);
 }
 
 function expectFailure(result: Result, message: string): void {
@@ -319,6 +454,7 @@ beforeAll(async () => {
   for (const tool of TOOLS) {
     good[tool] = serve(`${tool}.tar.gz`, regularArchive(tool), tool);
   }
+  goodBundle = serveBundle("qpdf.zip", regularZip());
 });
 
 afterAll(async () => {
@@ -334,7 +470,7 @@ afterAll(async () => {
 
 describe("instalación verificada", () => {
   test(
-    "instala las dos herramientas con permisos de ejecución y sin temporales",
+    "instala las herramientas con permisos de ejecución y sin temporales",
     async () => {
       const dir = workspace(lockWith());
       const start = received.length;
@@ -343,22 +479,43 @@ describe("instalación verificada", () => {
       expect(result.code).toBe(0);
       expect(result.stdout).toBe(
         "gitleaks 8.30.1: instalado y verificado en .tools/bin/gitleaks.\n" +
-          "zizmor 1.30.1: instalado y verificado en .tools/bin/zizmor.\n",
+          "zizmor 1.30.1: instalado y verificado en .tools/bin/zizmor.\n" +
+          "qpdf 12.4.2: instalado y verificado en .tools/qpdf.\n",
       );
       expect(published(dir)).toEqual(["gitleaks", "zizmor"]);
+      expect(
+        snapshot(path.join(dir, ".tools/qpdf")).map((entry) =>
+          entry.replace(/ [0-9a-f]{64}$/, ""),
+        ),
+      ).toEqual([
+        "directorio bin",
+        "fichero bin/qpdf",
+        "directorio lib",
+        "fichero lib/libqpdf.so",
+      ]);
+      expect(readFileSync(bundlePath(dir, "bin/qpdf"))).toEqual(BUNDLE_BINARY);
+      expect(readFileSync(bundlePath(dir, "lib/libqpdf.so"))).toEqual(
+        BUNDLE_LIBRARY,
+      );
+      expect(statSync(bundlePath(dir, "bin/qpdf")).mode & 0o777).toBe(0o755);
+      expect(statSync(bundlePath(dir, "lib/libqpdf.so")).mode & 0o777).toBe(
+        0o644,
+      );
       for (const tool of TOOLS) {
         expect(readFileSync(binPath(dir, tool))).toEqual(content(tool));
         expect(statSync(binPath(dir, tool)).mode & 0o777).toBe(0o755);
       }
       expectNoTemporaries(dir);
-      // Dos descargas y ninguna con `Authorization`, aunque el entorno del
+      // Tres descargas y ninguna con `Authorization`, aunque el entorno del
       // proceso tiene tokens.
       const requests = received.slice(start);
       expect(requests.map((request) => request.url)).toEqual([
         "/files/gitleaks.tar.gz",
         "/files/zizmor.tar.gz",
+        "/files/qpdf.zip",
       ]);
       expect(requests.map((request) => request.authorization)).toEqual([
+        undefined,
         undefined,
         undefined,
       ]);
@@ -420,7 +577,8 @@ describe("idempotencia y reparación", () => {
       expect(result.code).toBe(0);
       expect(result.stdout).toBe(
         "gitleaks 8.30.1: ya instalado y verificado en .tools/bin/gitleaks.\n" +
-          "zizmor 1.30.1: ya instalado y verificado en .tools/bin/zizmor.\n",
+          "zizmor 1.30.1: ya instalado y verificado en .tools/bin/zizmor.\n" +
+          "qpdf 12.4.2: ya instalado y verificado en .tools/qpdf.\n",
       );
       expect(requests()).toBe(0);
       expect(TOOLS.map((tool) => statSync(binPath(dir, tool)).ino)).toEqual(
@@ -875,6 +1033,258 @@ describe("extracción segura", () => {
       expect(published(dir)).toEqual([]);
       expectNoTemporaries(dir);
       expect(readdirSync(dir).sort()).toEqual([".tools", "scripts"]);
+    },
+    TIMEOUT_MS,
+  );
+});
+
+describe("herramienta de varios ficheros", () => {
+  const QPDF_INSTALLED =
+    "qpdf 12.4.2: instalado y verificado en .tools/qpdf.\n";
+  const QPDF_VERIFIED =
+    "qpdf 12.4.2: ya instalado y verificado en .tools/qpdf.\n";
+  const QPDF_REPAIRED =
+    "qpdf 12.4.2: lo instalado no coincide con tools.lock.json; se retira y se reinstala.\n";
+
+  test(
+    "una segunda ejecución no descarga nada",
+    async () => {
+      const dir = workspace(lockWith());
+      expect((await run(dir)).code).toBe(0);
+      const before = snapshot(path.join(dir, ".tools"));
+      const requests = requestsDuring();
+      const result = await run(dir);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain(QPDF_VERIFIED);
+      expect(requests()).toBe(0);
+      expect(snapshot(path.join(dir, ".tools"))).toEqual(before);
+    },
+    TIMEOUT_MS,
+  );
+
+  const alterations: readonly (readonly [string, (dir: string) => void])[] = [
+    [
+      "un fichero alterado",
+      (dir) => {
+        appendFileSync(bundlePath(dir, "lib/libqpdf.so"), "alterado");
+      },
+    ],
+    [
+      "un fichero de más",
+      (dir) => {
+        writeFileSync(bundlePath(dir, "lib/extra.so"), "ajeno");
+      },
+    ],
+    [
+      "un fichero que falta",
+      (dir) => {
+        rmSync(bundlePath(dir, "bin/qpdf"));
+      },
+    ],
+    [
+      "un fichero sustituido por un enlace",
+      (dir) => {
+        rmSync(bundlePath(dir, "bin/qpdf"));
+        symlinkSync("../lib/libqpdf.so", bundlePath(dir, "bin/qpdf"));
+      },
+    ],
+  ];
+
+  test.each(alterations)(
+    "con %s, retira lo instalado y lo reinstala completo",
+    async (_name, alter) => {
+      const dir = workspace(lockWith());
+      expect((await run(dir)).code).toBe(0);
+      const before = snapshot(path.join(dir, ".tools"));
+      alter(dir);
+      const result = await run(dir);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain(QPDF_REPAIRED + QPDF_INSTALLED);
+      expect(snapshot(path.join(dir, ".tools"))).toEqual(before);
+      expectNoTemporaries(dir);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "si .tools/qpdf es un enlace, lo retira sin seguirlo ni tocar su destino",
+    async () => {
+      const dir = workspace(lockWith());
+      const outside = path.join(dir, "ajeno");
+      mkdirSync(outside);
+      writeFileSync(path.join(outside, "dato"), "no se toca");
+      mkdirSync(path.join(dir, ".tools"));
+      symlinkSync(outside, path.join(dir, ".tools/qpdf"));
+      const result = await run(dir);
+
+      expect(result.code).toBe(0);
+      expect(lstatSync(path.join(dir, ".tools/qpdf")).isDirectory()).toBe(true);
+      expect(readFileSync(bundlePath(dir, "bin/qpdf"))).toEqual(BUNDLE_BINARY);
+      expect(snapshot(outside)).toEqual([
+        `fichero dato ${sha256("no se toca")}`,
+      ]);
+    },
+    TIMEOUT_MS,
+  );
+
+  const rejected: readonly (readonly [string, () => BundleEntry, string])[] = [
+    [
+      "el archivo no coincide con su hash",
+      () => ({ ...goodBundle, archiveSha256: sha256("otro") }),
+      "qpdf 12.4.2: el SHA-256 del archivo no coincide con tools.lock.json.",
+    ],
+    [
+      "un fichero extraído no coincide con su hash",
+      () =>
+        serveBundle(
+          "qpdf-hash.zip",
+          regularZip(),
+          bundleFiles().map((file, index) =>
+            index === 1 ? { ...file, sha256: sha256("otro") } : file,
+          ),
+        ),
+      "qpdf 12.4.2: el SHA-256 de un fichero extraído no coincide con tools.lock.json.",
+    ],
+    [
+      "falta un miembro",
+      () =>
+        serveBundle(
+          "qpdf-missing.zip",
+          zip([{ name: "bin/qpdf", data: BUNDLE_BINARY }]),
+        ),
+      "qpdf 12.4.2: el archivo no contiene un miembro esperado.",
+    ],
+    [
+      "un miembro está repetido",
+      () =>
+        serveBundle(
+          "qpdf-repeated.zip",
+          zip([
+            { name: "bin/qpdf", data: BUNDLE_BINARY },
+            { name: "bin/qpdf", data: BUNDLE_BINARY },
+            { name: "lib/libqpdf.1.2.so", data: BUNDLE_LIBRARY },
+          ]),
+        ),
+      "qpdf 12.4.2: el archivo contiene un miembro repetido con esa ruta.",
+    ],
+    [
+      "un miembro es un enlace simbólico",
+      () =>
+        serveBundle(
+          "qpdf-link.zip",
+          zip([
+            { name: "bin/qpdf", data: BUNDLE_BINARY, mode: 0o120777 },
+            { name: "lib/libqpdf.1.2.so", data: BUNDLE_LIBRARY },
+          ]),
+        ),
+      "qpdf 12.4.2: un miembro del archivo no es un fichero admitido.",
+    ],
+    [
+      "un miembro está cifrado",
+      () =>
+        serveBundle(
+          "qpdf-encrypted.zip",
+          zip([
+            { name: "bin/qpdf", data: BUNDLE_BINARY, encrypted: true },
+            { name: "lib/libqpdf.1.2.so", data: BUNDLE_LIBRARY },
+          ]),
+        ),
+      "qpdf 12.4.2: un miembro del archivo no es un fichero admitido.",
+    ],
+    [
+      "el archivo no es un .zip",
+      () =>
+        serveBundle("qpdf-not-zip.zip", Buffer.from("no es un zip".repeat(8))),
+      "qpdf 12.4.2: el archivo .zip no es válido.",
+    ],
+    [
+      "el contenido de un miembro está dañado",
+      () => {
+        const data = regularZip();
+        const at = data.indexOf(deflateRawSync(BUNDLE_LIBRARY));
+        data.writeUInt8(data.readUInt8(at + 4) ^ 0xff, at + 4);
+        return serveBundle("qpdf-damaged.zip", data);
+      },
+      "qpdf 12.4.2: el archivo .zip no es válido.",
+    ],
+  ];
+
+  test.each(rejected)(
+    "falla cerrado si %s, sin publicar nada de qpdf",
+    async (_name, build, message) => {
+      const dir = workspace(lockWith({}, PLATFORMS, build()));
+      const result = await run(dir);
+
+      expectFailure(result, message);
+      expect(existsSync(path.join(dir, ".tools/qpdf"))).toBe(false);
+      expectNoTemporaries(dir);
+    },
+    TIMEOUT_MS,
+  );
+
+  const invalidBundles: readonly (readonly [string, () => object])[] = [
+    ["sin ficheros", () => ({ ...goodBundle, files: [] })],
+    [
+      "ruta de instalación con ..",
+      () => ({
+        ...goodBundle,
+        files: [{ ...bundleFiles()[0], path: "../bin/qpdf" }],
+      }),
+    ],
+    [
+      "miembro absoluto",
+      () => ({
+        ...goodBundle,
+        files: [{ ...bundleFiles()[0], member: "/bin/qpdf" }],
+      }),
+    ],
+    [
+      "dos ficheros con la misma ruta de instalación",
+      () => ({
+        ...goodBundle,
+        files: bundleFiles().map((file) => ({ ...file, path: "bin/qpdf" })),
+      }),
+    ],
+    [
+      "clave desconocida en un fichero",
+      () => ({
+        ...goodBundle,
+        files: [{ ...bundleFiles()[0], extra: true }],
+      }),
+    ],
+    [
+      "hash mal formado",
+      () => ({
+        ...goodBundle,
+        files: [{ ...bundleFiles()[0], sha256: "abc" }],
+      }),
+    ],
+    [
+      "executable que no es booleano",
+      () => ({
+        ...goodBundle,
+        files: [{ ...bundleFiles()[0], executable: "sí" }],
+      }),
+    ],
+    ["URL HTTP", () => ({ ...goodBundle, url: "http://127.0.0.1/x" })],
+    ["forma de herramienta de un solo binario", () => good.gitleaks],
+  ];
+
+  test.each(invalidBundles)(
+    "rechaza un lock inválido (%s) antes de descargar",
+    async (_name, build) => {
+      const dir = workspace(lockWith({}, PLATFORMS, build()));
+      const requests = requestsDuring();
+      const result = await run(dir);
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toBe(
+        "tools.lock.json no tiene la estructura esperada.\nNo se completó la instalación.\n",
+      );
+      expect(requests()).toBe(0);
+      expect(existsSync(path.join(dir, ".tools"))).toBe(false);
     },
     TIMEOUT_MS,
   );

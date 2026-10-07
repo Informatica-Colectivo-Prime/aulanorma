@@ -202,31 +202,63 @@ describe("migrate(db, migrations)", () => {
 });
 
 describe("PLATFORM_MIGRATIONS", () => {
-  test("crea las tablas de auditoría e identidad y los disparadores de solo inserción", () => {
+  test("crea las tablas de cada módulo y sus disparadores", () => {
     const db = openMemoryDatabase();
     expect(migrate(db, PLATFORM_MIGRATIONS)).toEqual([
       "0001_audit_event",
       "0002_identity",
+      "0003_normative_source",
+      "0004_structured_interpretation",
+      "0005_generation",
     ]);
     expect(tables(db)).toEqual([
       "audit_event",
+      "correction",
+      "document",
+      "document_page",
+      "generation_call",
+      "generation_run",
+      "interpretation",
+      "interpretation_rejection",
+      "interpretation_validation",
+      "page_resolution",
+      "requirement",
       "schema_migration",
       "session",
       "sign_in_throttle",
       "user_account",
     ]);
-    expect(
-      db
-        .prepare(
-          "SELECT name FROM sqlite_master WHERE type = 'trigger' ORDER BY name",
-        )
-        .all()
-        .map((row) => row.name),
-    ).toEqual([
-      "audit_event_no_delete",
-      "audit_event_no_replace",
-      "audit_event_no_update",
-    ]);
+    const triggers = db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'trigger' ORDER BY name",
+      )
+      .all()
+      .map((row) => row.name);
+    // Solo inserción: ni modificar, ni borrar, ni sustituir.
+    for (const table of [
+      "audit_event",
+      "document",
+      "document_page",
+      "page_resolution",
+      "correction",
+      "interpretation_validation",
+      "interpretation_rejection",
+      "generation_call",
+    ]) {
+      expect(triggers).toEqual(
+        expect.arrayContaining([
+          `${table}_no_delete`,
+          `${table}_no_replace`,
+          `${table}_no_update`,
+        ]),
+      );
+    }
+    // Editables, pero sin borrado.
+    for (const table of ["interpretation", "requirement", "generation_run"]) {
+      expect(triggers).toContain(`${table}_no_delete`);
+      expect(triggers).not.toContain(`${table}_no_update`);
+    }
+    expect(triggers).toHaveLength(27);
   });
 
   test("la lista y sus elementos están congelados", () => {

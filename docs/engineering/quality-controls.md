@@ -50,17 +50,23 @@ proyecto ni pasan ningún token a los comandos.
 
 ## Agregados y herramientas
 
-| Comando                  | Qué hace                                                                                  |
-| ------------------------ | ----------------------------------------------------------------------------------------- |
-| `npm run check:quality`  | Formato, lint, tipos, pruebas y construcción, en secuencia; se detiene en el primer fallo |
-| `npm run check:security` | Secretos, dependencias y workflows, en secuencia; se detiene en el primer fallo           |
-| `npm run check`          | `check:quality` y después `check:security`: las ocho categorías                           |
-| `npm run tools:install`  | Instala Gitleaks y zizmor en `.tools/bin` (ignorado por Git), verificando su SHA-256      |
+| Comando                  | Qué hace                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------ |
+| `npm run check:quality`  | Formato, lint, tipos, pruebas y construcción, en secuencia; se detiene en el primer fallo  |
+| `npm run check:security` | Secretos, dependencias y workflows, en secuencia; se detiene en el primer fallo            |
+| `npm run check`          | `check:quality` y después `check:security`: las ocho categorías                            |
+| `npm run tools:install`  | Instala Gitleaks y zizmor en `.tools/bin`, y qpdf en `.tools/qpdf`, verificando su SHA-256 |
 
 `check:secrets` y `check:workflows` necesitan `npm run tools:install`. Ambos controles leen el
 binario de `.tools/bin` sin seguir enlaces simbólicos, comprueban su SHA-256 contra
 `scripts/tools/tools.lock.json` y ejecutan una copia de esos mismos bytes. Fallan cerrado si
 falta la herramienta, si su SHA-256 no coincide o si el análisis no puede completarse.
+
+`check:test` necesita también `npm run tools:install`: las pruebas del tratamiento de los PDF
+ejecutan qpdf, y sin él fallan en lugar de omitirse. qpdf es un `.zip` con el ejecutable y sus
+bibliotecas; `tools.lock.json` fija la huella de cada fichero, el instalador extrae solo esos y
+los publica juntos, y la aplicación y las pruebas comprueban esas huellas antes de cada uso.
+Los controles `test` y `macos-quality` de la integración continua lo instalan antes de probar.
 
 `check:workflows` no admite excepciones: falla si existe una configuración de zizmor
 (`zizmor.yml` o `.github/zizmor.yml`, con extensión `.yml` o `.yaml`) o si un workflow contiene

@@ -64,6 +64,8 @@ interface Config {
   readonly publicOrigin: string;
   readonly sessionIdleMinutes: number;
   readonly sessionMaxHours: number;
+  readonly pdfMaxMib: number;
+  readonly pdfMaxPages: number;
 }
 type ConfigResult =
   | { readonly ok: true; readonly config: Config }
@@ -106,6 +108,8 @@ const DATA_DIR = "AULANORMA_DATA_DIR";
 const PUBLIC_ORIGIN = "AULANORMA_PUBLIC_ORIGIN";
 const SESSION_IDLE_MINUTES = "AULANORMA_SESSION_IDLE_MINUTES";
 const SESSION_MAX_HOURS = "AULANORMA_SESSION_MAX_HOURS";
+const PDF_MAX_MIB = "AULANORMA_PDF_MAX_MIB";
+const PDF_MAX_PAGES = "AULANORMA_PDF_MAX_PAGES";
 const ALL_KEYS = [
   LOG_LEVEL,
   ENVIRONMENT,
@@ -113,6 +117,8 @@ const ALL_KEYS = [
   PUBLIC_ORIGIN,
   SESSION_IDLE_MINUTES,
   SESSION_MAX_HOURS,
+  PDF_MAX_MIB,
+  PDF_MAX_PAGES,
 ] as const;
 
 const VALID_SOURCE: ConfigSource = {
@@ -122,20 +128,26 @@ const VALID_SOURCE: ConfigSource = {
   [PUBLIC_ORIGIN]: "https://aulanorma.example",
   [SESSION_IDLE_MINUTES]: "30",
   [SESSION_MAX_HOURS]: "12",
+  [PDF_MAX_MIB]: "32",
+  [PDF_MAX_PAGES]: "600",
 };
-// Las cuatro claves añadidas con los cimientos del producto, válidas: las
+// Las seis claves añadidas con el producto, válidas: las
 // usan los casos que solo tratan del nivel de registro y del entorno.
 const PRODUCT_SOURCE = {
   [DATA_DIR]: "/var/lib/aulanorma-datos",
   [PUBLIC_ORIGIN]: "https://aulanorma.example",
   [SESSION_IDLE_MINUTES]: "30",
   [SESSION_MAX_HOURS]: "12",
+  [PDF_MAX_MIB]: "32",
+  [PDF_MAX_PAGES]: "600",
 } as const;
 const PRODUCT_CONFIG = {
   dataDir: "/var/lib/aulanorma-datos",
   publicOrigin: "https://aulanorma.example",
   sessionIdleMinutes: 30,
   sessionMaxHours: 12,
+  pdfMaxMib: 32,
+  pdfMaxPages: 600,
 } as const;
 function setProductVariables(): void {
   for (const [key, value] of Object.entries(PRODUCT_SOURCE)) {
@@ -150,6 +162,8 @@ const VALID_CONFIG: Config = {
   publicOrigin: "https://aulanorma.example",
   sessionIdleMinutes: 30,
   sessionMaxHours: 12,
+  pdfMaxMib: 32,
+  pdfMaxPages: 600,
 };
 
 // Datos sintéticos únicos en cada ejecución. Nunca se imprimen.
@@ -259,7 +273,7 @@ function sortProblems(
   );
 }
 
-// Unión discriminada exacta: solo `ok` y `config`, con las seis claves del
+// Unión discriminada exacta: solo `ok` y `config`, con las ocho claves del
 // esquema.
 function expectSuccess(result: ConfigResult, expected: Config): void {
   expectNoLeaks("resultado", result);
@@ -272,6 +286,8 @@ function expectSuccess(result: ConfigResult, expected: Config): void {
     "dataDir",
     "environment",
     "logLevel",
+    "pdfMaxMib",
+    "pdfMaxPages",
     "publicOrigin",
     "sessionIdleMinutes",
     "sessionMaxHours",
@@ -582,6 +598,9 @@ describe("validateConfig(source)", () => {
       field: "sessionMaxHours",
       expected: 168,
     },
+    { key: PDF_MAX_MIB, value: "1", field: "pdfMaxMib", expected: 1 },
+    { key: PDF_MAX_MIB, value: "64", field: "pdfMaxMib", expected: 64 },
+    { key: PDF_MAX_PAGES, value: "2000", field: "pdfMaxPages", expected: 2000 },
   ] as const)(
     "acepta $key=$value como número",
     ({ key, value, field, expected }) => {
@@ -605,25 +624,32 @@ describe("validateConfig(source)", () => {
     { key: SESSION_IDLE_MINUTES, value: "-30" },
     { key: SESSION_MAX_HOURS, value: "169" },
     { key: SESSION_MAX_HOURS, value: "doce" },
+    { key: PDF_MAX_MIB, value: "0" },
+    { key: PDF_MAX_MIB, value: "65" },
+    { key: PDF_MAX_MIB, value: "32.5" },
+    { key: PDF_MAX_PAGES, value: "2001" },
+    { key: PDF_MAX_PAGES, value: "0600" },
   ])("rechaza con invalid_value $key=$value", ({ key, value }) => {
     expectFailure(config.validateConfig({ ...VALID_SOURCE, [key]: value }), [
       { key, problem: "invalid_value" },
     ]);
   });
 
-  test.each([DATA_DIR, PUBLIC_ORIGIN, SESSION_IDLE_MINUTES, SESSION_MAX_HOURS])(
-    "rechaza con missing: %s ausente o vacía",
-    (key) => {
-      const absent: Record<string, string | undefined> = { ...VALID_SOURCE };
-      Reflect.deleteProperty(absent, key);
-      expectFailure(config.validateConfig(absent), [
-        { key, problem: "missing" },
-      ]);
-      expectFailure(config.validateConfig({ ...VALID_SOURCE, [key]: "" }), [
-        { key, problem: "missing" },
-      ]);
-    },
-  );
+  test.each([
+    DATA_DIR,
+    PUBLIC_ORIGIN,
+    SESSION_IDLE_MINUTES,
+    SESSION_MAX_HOURS,
+    PDF_MAX_MIB,
+    PDF_MAX_PAGES,
+  ])("rechaza con missing: %s ausente o vacía", (key) => {
+    const absent: Record<string, string | undefined> = { ...VALID_SOURCE };
+    Reflect.deleteProperty(absent, key);
+    expectFailure(config.validateConfig(absent), [{ key, problem: "missing" }]);
+    expectFailure(config.validateConfig({ ...VALID_SOURCE, [key]: "" }), [
+      { key, problem: "missing" },
+    ]);
+  });
 
   test.each([
     { key: LOG_LEVEL, value: SENTINEL },
