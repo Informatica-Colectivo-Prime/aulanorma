@@ -31,8 +31,11 @@ operación, quién puede ejecutarla y sus condiciones.
   cerrar sesión, cambiar la contraseña, desactivar la cuenta o cambiar sus permisos (FR-068).
 - **Generación de pago**: toda solicitud muestra antes la estimación y el presupuesto
   disponible; sin una reserva dentro de los límites no se envía (FR-021).
-- **Revisión**: guardar un elemento editable exige la revisión abierta. Si no es la actual, la
-  respuesta es 409 con la revisión actual y el contenido enviado, sin guardar nada.
+- **Revisión**: guardar un elemento editable, y validarlo, aprobarlo o rechazarlo, exige la
+  revisión abierta. Si no es la actual, la respuesta es 409, sin guardar nada: dice que hay
+  una versión más reciente, la muestra junto al contenido enviado, que sigue en el
+  formulario, y permite reenviarlo de forma explícita contra esa versión o descartarlo. Nada
+  se fusiona ni se reenvía solo (FR-063).
 - **Bloqueos de negocio** (cobertura incompleta, aprobación no vigente, páginas sin resolver,
   presupuesto insuficiente): 422 con el motivo y la lista de pendientes, cada uno con su
   referencia normativa cuando aplica.

@@ -44,6 +44,10 @@
   sustituto y la conservación durante el piloto.
 - **Fase de aclaraciones cerrada (2026-10-07)**: no quedan decisiones funcionales
   bloqueantes para el plan.
+- **Añadidos antes de la fase 4 (2026-10-07)**: SC-044 (registro de cada generación y
+  cambio de proveedor), SC-045 (nada específico del piloto en el comportamiento) y SC-046
+  (saneamiento), y el detalle del conflicto de edición en FR-063 y SC-033, por decisión del
+  mantenedor.
 - **Añadidos tras la viabilidad (2026-10-07)**: SC-042 (contenido activo y firma) y SC-043
   (registro de auditoría), por decisión del mantenedor; FR-002, FR-028, FR-029, FR-033 y
   FR-064 ajustados.

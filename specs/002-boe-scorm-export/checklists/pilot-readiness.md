@@ -19,7 +19,7 @@ requisitos, no si el sistema funciona.
 - [x] CHK004 ¿Están especificadas las consecuencias de rechazar un índice o un tema, y cómo se vuelve a revisión? [Gap, Spec §FR-015, §FR-022]
 - [x] CHK005 ¿Está definido si aprobar un tema exige que el índice esté aprobado y vigente en ese momento? [Clarity, Spec §FR-022, §FR-060]
 - [x] CHK006 ¿Queda claro que invalidar no borra ni vuelve a generar, en todos los requisitos que hablan de invalidación? [Consistency, Spec §FR-059, §FR-024]
-- [ ] CHK007 ¿Están definidos los requisitos de conciliación tras un conflicto de edición, más allá de conservar las modificaciones? [Clarity, Spec §FR-063]
+- [x] CHK007 ¿Están definidos los requisitos de conciliación tras un conflicto de edición, más allá de conservar las modificaciones? [Clarity, Spec §FR-063]
 - [x] CHK008 ¿Está especificado qué registra cada aprobación y cada validación, con los mismos campos en todos los requisitos que las mencionan? [Consistency, Spec §FR-023, §FR-057, §SC-010]
 
 ## Cobertura e interpretación
@@ -77,7 +77,7 @@ requisitos, no si el sistema funciona.
 
 ## Dependencias y trazabilidad
 
-- [ ] CHK047 ¿Tiene cada requisito funcional al menos un escenario o criterio de éxito que lo cubra? [Traceability, Spec §Requirements, §Success Criteria]
+- [x] CHK047 ¿Tiene cada requisito funcional al menos un escenario o criterio de éxito que lo cubra? [Traceability, Spec §Requirements, §Success Criteria]
 - [x] CHK048 ¿Están identificados los datos externos que bloquean tareas concretas, sin bloquear el resto? [Dependency, Plan §Datos externos]
 - [x] CHK049 ¿Está declarado de qué texto de la constitución 2.0.0 dependen las puertas constitucionales? [Assumption, Plan §Constitution Check]
 - [x] CHK050 ¿Indica el ADR 0004 con exactitud qué sustituye del ADR 0001 y qué deja vigente? [Clarity, ADR 0004 §Relación]
@@ -166,3 +166,32 @@ acreditan ninguna prueba del producto**: SC-043 y SC-015 siguen pendientes de ej
 cuando exista lo que comprueban.
 
 Siguen abiertos tres: CHK007 y CHK047 (antes de la fase 4) y CHK032 (antes de la fase 6).
+
+## Revisión documental antes de la fase 4 (2026-10-07)
+
+**CHK007 pasa a satisfecho.** FR-063 define ahora qué ocurre en un conflicto de edición: no
+se guarda nada, se dice que existe una versión más reciente, se muestra esa versión junto al
+cambio del usuario, que sigue en su formulario, y el usuario puede revisarla y reenviar su
+cambio de forma explícita contra ella, o descartarlo. El sistema no fusiona ni reenvía por
+su cuenta, y la misma regla se aplica a validar, aprobar y rechazar. SC-033 fija cómo se
+comprueba. El contrato HTTP ya describía la respuesta 409 y se ha alineado con el texto.
+
+**CHK047 pasa a satisfecho.** Los cuatro requisitos que no tenían criterio propio quedan
+vinculados así:
+
+| Requisito | Criterio                | Tarea que lo comprueba |
+| --------- | ----------------------- | ---------------------- |
+| FR-020    | SC-046, nuevo           | T052, T061             |
+| FR-029    | SC-015, que ya lo cubre | T035, T069             |
+| FR-055    | SC-044, nuevo           | T035                   |
+| FR-056    | SC-045, nuevo           | T085                   |
+
+SC-015 ya incluía la revisión de las entradas enviadas al servicio de generación: no hacía
+falta un criterio nuevo para FR-029. Los tres criterios nuevos describen comportamiento que
+los requisitos, el plan y las tareas ya exigían; no añaden ninguno.
+
+Las dos marcas acreditan que la redacción y la forma de verificar están definidas. **No
+acreditan ninguna prueba del producto.**
+
+Sigue abierto uno: CHK032 (antes de la fase 6).
+
