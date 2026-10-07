@@ -1,19 +1,38 @@
 # Protección de `main`
 
-Este documento recoge la protección de `main`: la que está activa hoy, los nueve controles que
-deben pasar a ser requeridos, la secuencia exacta para activarlos y las reglas que no cambian
-(FR-026). Distingue dos cosas:
+Este documento recoge la protección de `main`: la que está activa hoy, los nueve controles
+requeridos, la secuencia con la que se activaron y las reglas que no cambian (FR-026).
+Distingue tres cosas:
 
-- la **protección actual observada**, que ya existe y se mantiene;
-- la **configuración exigida para la activación posterior**, que todavía no se ha aplicado.
+- la **protección actual verificada**, con los nueve controles ya requeridos;
+- la **protección observada antes de la activación**, que se conserva como histórico;
+- el **procedimiento de activación**, que se aplicó el 2026-10-06 y queda como referencia.
 
-**Los nueve controles todavía no son requeridos en `main`.** Se ejecutan en cada pull request y
-en cada actualización de `main`, pero solo se añadirán como requeridos tras la primera ejecución
-satisfactoria en `main`, según la secuencia de este documento.
+**Los nueve controles son requeridos en `main` desde el 2026-10-06.** Se ejecutan en cada pull
+request y en cada actualización de `main`, y ningún pull request puede integrarse sin que los
+nueve terminen con éxito sobre una rama al día. Los datos de la activación están en el
+[Registro de activación](#registro-de-activación).
 
-## Protección actual observada
+## Protección actual verificada
 
-Consultada en lectura el 2026-09-30 con la API de GitHub (`gh api`):
+Consultada en lectura el 2026-10-06 con la API de GitHub (`gh api`), después de la activación:
+
+- **Mecanismo**: la misma **regla clásica de protección de rama** sobre `main`. Sigue sin haber
+  rulesets del repositorio ni heredados que se apliquen a `main`.
+- **Controles de estado requeridos**: `format`, `lint`, `types`, `test`, `build`,
+  `macos-quality`, `secrets`, `dependencies` y `workflows`, cada uno vinculado a la aplicación
+  GitHub Actions (identificador 15368).
+- **Ramas al día** exigidas antes de integrar (`strict` activado).
+- **Sin cambios respecto a la protección anterior**: pull request obligatorio con 0
+  aprobaciones requeridas, administradores sujetos a la regla, pushes forzados y borrado de la
+  rama no permitidos, historial lineal y resolución de conversaciones obligatorios, sin listas
+  de elusión ni restricciones de push.
+- La integración automática sigue desactivada en el repositorio (`allow_auto_merge: false`).
+
+## Protección observada antes de la activación (histórico)
+
+Consultada en lectura el 2026-09-30 con la API de GitHub (`gh api`). Describe el estado
+anterior a la activación y se conserva para trazabilidad:
 
 - **Mecanismo**: una **regla clásica de protección de rama** sobre `main`. No hay rulesets del
   repositorio ni heredados de la organización que se apliquen a `main`: `…/rulesets` y
@@ -25,12 +44,13 @@ Consultada en lectura el 2026-09-30 con la API de GitHub (`gh api`):
 - **Historial lineal** obligatorio y **resolución de conversaciones** obligatoria.
 - **Sin listas de elusión**: la respuesta no incluye `bypass_pull_request_allowances` ni
   restricciones de push.
-- **Sin controles de estado requeridos**: `required_status_checks` no está configurado.
-- La integración automática está desactivada en el repositorio (`allow_auto_merge: false`).
+- **Sin controles de estado requeridos**: `required_status_checks` no estaba configurado.
+- La integración automática estaba desactivada en el repositorio (`allow_auto_merge: false`).
 
-Esta protección básica se mantiene durante toda la funcionalidad y no se desactiva.
+Esa protección básica se mantuvo durante toda la funcionalidad y no se desactivó. La activación
+solo le añadió los controles requeridos y la exigencia de ramas al día.
 
-## Los nueve controles que se añadirán como requeridos
+## Los nueve controles requeridos
 
 Los nombres son exactamente los identificadores de job de los workflows y los nombres con los
 que aparecen en los pull requests (FR-022). Hay ocho categorías y un control de plataforma,
@@ -48,14 +68,24 @@ que aparecen en los pull requests (FR-022). Hay ocho categorías y un control de
 | `dependencies`  | `security` | `ubuntu-24.04` |
 | `workflows`     | `security` | `ubuntu-24.04` |
 
-**Fuente esperada**: la aplicación **GitHub Actions** de este repositorio (`github-actions`, con
-identificador de aplicación 15368 en la API). Al configurar cada control se fija esa fuente,
-para que ninguna otra integración pueda satisfacer un control con el mismo nombre.
+**Fuente**: la aplicación **GitHub Actions** de este repositorio (`github-actions`, con
+identificador de aplicación 15368 en la API). Cada control tiene fijada esa fuente, para que
+ninguna otra integración pueda satisfacer un control con el mismo nombre.
+
+**Comprobaciones que no son controles requeridos**. Dependabot informa comprobaciones propias
+en los commits y en sus pull requests: los jobs `Dependabot` de sus actualizaciones y la
+validación de `.github/dependabot.yml`. No forman parte de los nueve controles, no están
+requeridas y no sustituyen a ninguno. Los pull requests de Dependabot están sujetos a los
+mismos nueve controles que cualquier otro.
 
 Renombrar, añadir o retirar un control requerido exige un ADR y una transición que nunca deje
 `main` con un control requerido que no informa ni sin un control equivalente (FR-022 y FR-027).
 
 ## Secuencia de integración y activación
+
+Esta secuencia se siguió para `001-engineering-baseline` entre el 2026-10-06T20:44:11Z
+(integración) y el 2026-10-06T20:51:36Z (activación verificada). Se conserva como
+procedimiento de referencia.
 
 1. **Antes de integrar**: la protección básica de `main` se mantiene. El pull request de la
    funcionalidad registra en su descripción las comprobaciones manuales reproducibles y debe
@@ -88,7 +118,10 @@ Renombrar, añadir o retirar un control requerido exige un ADR y una transición
 ## Configuración exigida para la activación
 
 La activación añade los controles a la **regla existente**; no cambia de mecanismo. Los pasos
-siguientes son instrucciones para el paso 5 y solo se ejecutan entonces.
+siguientes son las instrucciones del paso 5. El 2026-10-06 se aplicó la configuración
+equivalente de la regla clásica mediante la API de GitHub, en una única actualización que
+reprodujo las propiedades existentes y añadió los controles requeridos; no hizo falta el
+procedimiento de ruleset.
 
 ### Regla clásica de protección de rama (mecanismo observado)
 
@@ -152,3 +185,31 @@ demostrar que no hubo integraciones entre la primera ejecución satisfactoria y 
 - **Sin integración automática**: tampoco para los pull requests de Dependabot.
 
 ## Registro de activación
+
+- **Commit de `main`**: `5ca3b16c10f0df943453f8e696cd521642608213`, la integración por squash
+  del pull request #3 (2026-10-06T20:44:11Z).
+- **Primera ejecución satisfactoria en `main`**: evento `push`, intento 1, sobre ese commit, con
+  los nueve controles en success:
+  [`quality` 37528698987](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37528698987)
+  y
+  [`security` 37528698946](https://github.com/Informatica-Colectivo-Prime/aulanorma/actions/runs/37528698946).
+  No hubo integraciones correctivas anteriores.
+- **Inicio de la congelación**: 2026-10-06T20:46:26Z, fin de esa ejecución (`security` había
+  terminado a las 20:45:22Z).
+- **Activación verificada y fin de la congelación**: 2026-10-06T20:51:36Z, hora en la que se
+  releyó la protección desde la API después de aplicarla.
+- **Controles activados**, con su nombre exacto y la aplicación GitHub Actions como fuente
+  (identificador 15368): `format`, `lint`, `types`, `test`, `build`, `macos-quality`,
+  `secrets`, `dependencies` y `workflows`.
+- **Ramas al día** exigidas (`strict` activado).
+- **Resto de la regla**: sin cambios. La configuración anterior y la posterior, comparadas
+  campo a campo sin el bloque de controles requeridos, son idénticas: pull request
+  obligatorio, administradores sujetos, historial lineal, resolución de conversaciones, sin
+  pushes forzados ni borrado, sin listas de elusión.
+- **Sin integraciones durante la congelación**: entre el inicio y la activación, `main` siguió
+  en `5ca3b16c10f0df943453f8e696cd521642608213`, y ningún pull request se integró en ese
+  intervalo. Los pull requests que Dependabot abrió al recibir `main` su configuración
+  quedaron abiertos y sin integrar.
+- **Comprobación en el primer pull request posterior**: que los nueve controles aparecen como
+  requeridos y bloquean la integración mientras no estén en verde se comprueba en ese pull
+  request (T089) y se registra en `acceptance.md` (SC-009).

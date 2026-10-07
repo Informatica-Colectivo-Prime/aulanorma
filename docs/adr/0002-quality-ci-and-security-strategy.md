@@ -1,6 +1,6 @@
 # ADR 0002: Estrategia de calidad, integración continua y seguridad
 
-**Estado**: Propuesto (permanece Propuesto durante el PR de implementación; se acepta en el primer PR posterior a la integración y a la activación de los nueve controles requeridos)
+**Estado**: Aceptado. Estuvo Propuesto desde el 2026-09-25 y durante todo el PR de implementación; se acepta en el primer PR posterior a la integración de `001-engineering-baseline` y a la activación de los nueve controles requeridos, ambas del 2026-10-06. La aceptación no cambia el sentido de la decisión.
 
 **Fecha**: 2026-09-25
 

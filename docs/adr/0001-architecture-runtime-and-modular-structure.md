@@ -1,6 +1,6 @@
 # ADR 0001: Arquitectura, runtime y estructura modular
 
-**Estado**: Propuesto (permanece Propuesto durante el PR de implementación; se acepta en el primer PR posterior a la integración y a la activación de los nueve controles requeridos)
+**Estado**: Aceptado. Estuvo Propuesto desde el 2026-09-25 y durante todo el PR de implementación; se acepta en el primer PR posterior a la integración de `001-engineering-baseline` y a la activación de los nueve controles requeridos, ambas del 2026-10-06. La aceptación no cambia el sentido de la decisión.
 
 **Fecha**: 2026-09-25
 
@@ -285,8 +285,10 @@ decisión lo adopta pese a la complejidad que añade (plan.md, Complexity Tracki
 - La primera funcionalidad con interfaz necesitará recursos bajo `/_next/*` y, en desarrollo,
   la recarga mediante `Upgrade`, que la frontera rechaza hoy. Deberá rediseñar la frontera en
   un ADR nuevo.
-- Mientras este ADR está Propuesto, si la implementación demuestra que la decisión no es
-  viable, se corrige el ADR antes de aceptarlo.
+- Mientras este ADR estuvo Propuesto, si la implementación demostraba que la decisión no era
+  viable, se corregía el ADR antes de aceptarlo; así se hizo en las revisiones citadas en el
+  contexto de origen. Una vez Aceptado, un cambio de sentido exige un ADR nuevo que lo
+  sustituya (nota de revisión de la aceptación; no cambia la decisión).
 - Node 24 pasa a mantenimiento el 2026-10-20, con soporte hasta el 2028-04-30.
 - El rango de desarrollo admite versiones de la línea 24 posteriores a 24.21.0 que la
   integración continua no verifica. La referencia reproducible sigue siendo `.node-version`, y

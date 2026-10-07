@@ -4,7 +4,7 @@ AulaNorma es un monolito modular: una única aplicación Next.js 16.3.6 con Page
 despliega como una sola unidad. En esta funcionalidad no tiene interfaz visible, persistencia ni
 llamadas a servicios externos, y solo expone la comprobación de estado `/api/health`. Las
 decisiones que describe este documento están en el
-[ADR 0001](../adr/0001-architecture-runtime-and-modular-structure.md), en estado **Propuesto**.
+[ADR 0001](../adr/0001-architecture-runtime-and-modular-structure.md), en estado **Aceptado**.
 
 ## Estructura
 
