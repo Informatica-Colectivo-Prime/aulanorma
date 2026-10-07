@@ -149,6 +149,16 @@ cargan directamente con Node.js `scripts/preflight.mjs`, `server.mjs` o
 - `http-boundary` no importa nada en ejecución: de `node:http` y `node:stream` solo toma tipos;
 - usan solo sintaxis TypeScript borrable, sin `enum` ni `namespace` (`erasableSyntaxOnly`).
 
+La ausencia de importaciones relativas es una **regla del proyecto**, no un límite de Node.js.
+Node.js no resuelve el alias `@/` ni los especificadores sin extensión, que son la forma
+habitual de importar en el resto de `src/`; sí resuelve una importación relativa con su
+extensión (`./parte.ts`), y `tsconfig.json` la admite. La base de ingeniería eligió la regla más
+simple de comprobar: cada módulo portable es un único `index.ts` autocontenido, y ESLint y la
+prueba de arquitectura rechazan en él cualquier importación relativa o con alias. Por eso
+`identity`, el mayor de ellos, es un solo fichero. Dividirlo exigiría cambiar antes esa regla y
+sus dos controles para admitir solo importaciones relativas con extensión dentro de la misma
+área; no se ha hecho porque nada lo necesita todavía.
+
 ### Quién lee `process.env`
 
 - En `src/`, solo `src/platform/config` lee `process.env`. El resto recibe la configuración

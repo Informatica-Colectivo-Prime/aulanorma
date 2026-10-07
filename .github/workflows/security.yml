@@ -36,7 +36,7 @@ jobs:
       AULANORMA_LOG_LEVEL: info
       AULANORMA_ENVIRONMENT: ci
       AULANORMA_DATA_DIR: /tmp/aulanorma-ci-data
-      AULANORMA_PUBLIC_ORIGIN: http://127.0.0.1:3000
+      AULANORMA_PUBLIC_ORIGIN: https://aulanorma.example
       AULANORMA_SESSION_IDLE_MINUTES: "30"
       AULANORMA_SESSION_MAX_HOURS: "12"
     steps:
@@ -62,7 +62,7 @@ jobs:
       AULANORMA_LOG_LEVEL: info
       AULANORMA_ENVIRONMENT: ci
       AULANORMA_DATA_DIR: /tmp/aulanorma-ci-data
-      AULANORMA_PUBLIC_ORIGIN: http://127.0.0.1:3000
+      AULANORMA_PUBLIC_ORIGIN: https://aulanorma.example
       AULANORMA_SESSION_IDLE_MINUTES: "30"
       AULANORMA_SESSION_MAX_HOURS: "12"
     steps:
@@ -87,7 +87,7 @@ jobs:
       AULANORMA_LOG_LEVEL: info
       AULANORMA_ENVIRONMENT: ci
       AULANORMA_DATA_DIR: /tmp/aulanorma-ci-data
-      AULANORMA_PUBLIC_ORIGIN: http://127.0.0.1:3000
+      AULANORMA_PUBLIC_ORIGIN: https://aulanorma.example
       AULANORMA_SESSION_IDLE_MINUTES: "30"
       AULANORMA_SESSION_MAX_HOURS: "12"
     steps:

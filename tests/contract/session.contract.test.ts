@@ -770,7 +770,198 @@ describe("caducidad y revocación", () => {
   );
 });
 
+// De qué dependen los atributos de las cookies: solo del origen público de la
+// configuración, que fuera del modo desarrollo es siempre HTTPS
+// (tests/unit/platform/config.test.ts). Ninguna cabecera de la petición los
+// cambia.
+const PROXY_HEADERS = [
+  { "x-forwarded-proto": "http" },
+  { "x-forwarded-proto": "https" },
+  { forwarded: "proto=http;host=otro.example" },
+  { "x-forwarded-host": "otro.example", "x-forwarded-port": "80" },
+  { "x-forwarded-ssl": "off", "front-end-https": "off" },
+  { host: "otro.example" },
+  { "x-forwarded-scheme": "http", "x-url-scheme": "http" },
+];
+
+describe("atributos de las cookies", () => {
+  test("todas las cookies del recorrido cumplen el prefijo __Host-: Secure, Path=/ y sin Domain, además de HttpOnly y SameSite=Strict", async () => {
+    await createUser("docente1", ["teacher"]);
+    const emitted: string[] = [];
+    const keep = (reply: Reply): Reply => {
+      emitted.push(...reply.setCookies);
+      return reply;
+    };
+    keep(await signIn("docente1", WRONG));
+    keep(await client.get(loginPage));
+    keep(await signIn("docente1"));
+    const form = keep(await client.get(passwordPage));
+    keep(
+      await client.post(passwordAction, {
+        csrf: client.csrfOf(form),
+        current: PASSWORD,
+        next: NEW_PASSWORD,
+      }),
+    );
+    const home = keep(await client.get(passwordPage));
+    keep(await client.post(signOutAction, { csrf: client.csrfOf(home) }));
+    keep(await client.get(loginPage));
+
+    const names = new Set(emitted.map((cookie) => cookie.split("=")[0]));
+    expect([...names].sort()).toEqual([ENTRY, NOTICE, SESSION].sort());
+    for (const cookie of emitted) {
+      const [, ...attributes] = cookie.split("; ");
+      expect(cookie).toMatch(/^__Host-aulanorma-(?:session|entry|notice)=/);
+      expect(attributes).toContain("Secure");
+      expect(attributes).toContain("HttpOnly");
+      expect(attributes).toContain("SameSite=Strict");
+      expect(attributes).toContain("Path=/");
+      expect(
+        attributes.filter((attribute) => /^(?:domain|path)=/i.test(attribute)),
+      ).toEqual(["Path=/"]);
+    }
+  });
+
+  test.each(PROXY_HEADERS)(
+    "las cabeceras %j no cambian el nombre ni los atributos de las cookies",
+    async (headers) => {
+      const login = await client.get(loginPage, { headers });
+      expect(login.setCookies).toHaveLength(1);
+      expect(login.setCookies[0]).toMatch(
+        new RegExp(
+          `^${ENTRY}=[\\w-]{43}; Path=/; HttpOnly; SameSite=Strict; Secure$`,
+        ),
+      );
+      await createUser("docente1", ["teacher"]);
+      const reply = await client.post(
+        signInAction,
+        {
+          csrf: client.csrfOf(login),
+          username: "docente1",
+          password: PASSWORD,
+        },
+        { headers },
+      );
+      expect(reply.location).toBe("/account/password");
+      expect(
+        reply.setCookies.find((cookie) => cookie.startsWith(SESSION)),
+      ).toMatch(/; Path=\/; HttpOnly; SameSite=Strict; Secure$/);
+      for (const cookie of reply.setCookies) {
+        expect(cookie).toMatch(/^__Host-/);
+        expect(cookie).toContain("; Secure");
+      }
+    },
+  );
+
+  test.each(PROXY_HEADERS)(
+    "las cabeceras %j no cambian el origen que se exige a un envío",
+    async (headers) => {
+      await createUser("docente1", ["teacher"]);
+      const login = await client.get(loginPage);
+      const reply = await client.post(
+        signInAction,
+        {
+          csrf: client.csrfOf(login),
+          username: "docente1",
+          password: PASSWORD,
+        },
+        { headers, origin: "http://otro.example" },
+      );
+      expectClosed(reply, 403);
+      expect(reply.setCookies).toEqual([]);
+    },
+  );
+});
+
+describe("modo desarrollo con el origen HTTP local", () => {
+  beforeEach(() => {
+    client.dispose();
+    client = createWebClient({ development: true });
+  });
+
+  test("las cookies no llevan __Host- ni Secure, y conservan HttpOnly, SameSite=Strict y Path=/", async () => {
+    const login = await client.get(loginPage);
+    expect(login.setCookies).toHaveLength(1);
+    expect(login.setCookies[0]).toMatch(
+      /^aulanorma-entry=[\w-]{43}; Path=\/; HttpOnly; SameSite=Strict$/,
+    );
+    await createUser("docente1", ["teacher"]);
+    const reply = await client.post(signInAction, {
+      csrf: client.csrfOf(login),
+      username: "docente1",
+      password: PASSWORD,
+    });
+    expect(reply.location).toBe("/account/password");
+    expect(
+      reply.setCookies.find((cookie) =>
+        cookie.startsWith("aulanorma-session="),
+      ),
+    ).toMatch(
+      /^aulanorma-session=[\w-]{43}; Path=\/; HttpOnly; SameSite=Strict$/,
+    );
+  });
+
+  test.each(PROXY_HEADERS)(
+    "las cabeceras %j tampoco cambian aquí las cookies",
+    async (headers) => {
+      const login = await client.get(loginPage, { headers });
+      expect(login.setCookies[0]).toMatch(
+        /^aulanorma-entry=[\w-]{43}; Path=\/; HttpOnly; SameSite=Strict$/,
+      );
+    },
+  );
+
+  test("un envío con el origen HTTPS de otro sitio se rechaza", async () => {
+    const login = await client.get(loginPage);
+    const reply = await client.post(
+      signInAction,
+      { csrf: client.csrfOf(login), username: "docente1", password: PASSWORD },
+      { origin: ORIGIN },
+    );
+    expectClosed(reply, 403);
+  });
+});
+
 describe("secretos", () => {
+  // La cookie de sesión y el testigo del formulario tienen que viajar en las
+  // respuestas que los entregan: `Set-Cookie` y el formulario de la propia
+  // sesión. Lo que se comprueba es que no aparecen en ningún otro sitio.
+  test("el identificador de sesión solo viaja en Set-Cookie y el testigo solo en los formularios de su sesión; los rechazos no llevan ninguno", async () => {
+    await enter("docente1", ["teacher"]);
+    const session = client.cookies.get(SESSION) ?? "";
+    expect(session).toMatch(/^[\w-]{43}$/);
+    const home = await client.get(homePage);
+    const token = client.csrfOf(home);
+    for (const page of [home, await client.get(passwordPage)]) {
+      expect(page.status).toBe(200);
+      expect(page.body).not.toContain(session);
+      expect(page.setCookies).toEqual([]);
+      expect(JSON.stringify(page.headers)).not.toContain(session);
+      expect(JSON.stringify(page.headers)).not.toContain(token);
+      expect(page.body.split(token).length - 1).toBe(
+        (page.body.match(/name="csrf"/g) ?? []).length,
+      );
+    }
+    const rejections = [
+      await client.post(
+        signOutAction,
+        { csrf: token },
+        { origin: "https://atacante.example" },
+      ),
+      await client.post(signOutAction, { csrf: "inventado" }),
+    ];
+    for (const reply of rejections) {
+      expect(reply.body).toBe("");
+      expect(JSON.stringify(reply.headers)).not.toContain(session);
+      expect(JSON.stringify(reply.headers)).not.toContain(token);
+    }
+    const redirect = await client.post(signOutAction, { csrf: token });
+    expect(redirect.location).toBe("/login");
+    expect(redirect.body).toBe("");
+    expect(JSON.stringify(redirect.headers)).not.toContain(session);
+    expect(JSON.stringify(redirect.headers)).not.toContain(token);
+  });
+
   test("ni las respuestas ni la auditoría contienen contraseñas, y la auditoría no contiene cookies ni testigos", async () => {
     await createUser("docente1", ["teacher"]);
     const replies: Reply[] = [];

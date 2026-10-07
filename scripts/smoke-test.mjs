@@ -94,9 +94,12 @@ const PRODUCTION_ENV_FILES = [
 
 const SENTINEL = `centinela-${randomUUID()}`;
 // Claves de los cimientos del producto (ADR 0004), válidas. El directorio de
-// datos lo añade `caseEnvironment`, dentro del temporal de la ejecución.
+// datos lo añade `caseEnvironment`, dentro del temporal de la ejecución. El
+// origen público es HTTPS: `npm start` no admite otro. El origen HTTP local
+// solo vale con `npm run dev` (`DEVELOPMENT_CONFIG`).
+const LOCAL_HTTP_ORIGIN = `http://${HOST}:${String(PORT)}`;
 const PRODUCT_CONFIG = {
-  AULANORMA_PUBLIC_ORIGIN: `http://${HOST}:${String(PORT)}`,
+  AULANORMA_PUBLIC_ORIGIN: "https://aulanorma.example",
   AULANORMA_SESSION_IDLE_MINUTES: "30",
   AULANORMA_SESSION_MAX_HOURS: "12",
 };
@@ -104,6 +107,10 @@ const VALID_CONFIG = {
   AULANORMA_LOG_LEVEL: "info",
   AULANORMA_ENVIRONMENT: "ci",
   ...PRODUCT_CONFIG,
+};
+const DEVELOPMENT_CONFIG = {
+  ...VALID_CONFIG,
+  AULANORMA_PUBLIC_ORIGIN: LOCAL_HTTP_ORIGIN,
 };
 // Arranques satisfactorios auditados (T031): script de npm y entorno esperado
 // en `startup.completed`, el de la configuración válida en ambos modos.
@@ -1099,7 +1106,13 @@ function frameworkHeaderProblems(response) {
     .map((header) => `revela el framework con ${header}`);
 }
 
-async function checkProductSurface() {
+// `secure` indica si el origen público es HTTPS: entonces las cookies llevan
+// el prefijo `__Host-` y `Secure`; con el origen HTTP local del modo
+// desarrollo, ninguno de los dos.
+async function checkProductSurface(secure) {
+  const entryCookie = secure
+    ? /^__Host-aulanorma-entry=[\w-]{43}; Path=\/; HttpOnly; SameSite=Strict; Secure$/
+    : /^aulanorma-entry=[\w-]{43}; Path=\/; HttpOnly; SameSite=Strict$/;
   const problems = [];
   const expectStatus = (name, response, status) => {
     if (!response.responded || response.status !== status) {
@@ -1183,10 +1196,7 @@ async function checkProductSurface() {
         "el HTML carga un recurso externo",
       ],
       [
-        cookies.length === 1 &&
-          /aulanorma-entry=[\w-]+; Path=\/; HttpOnly; SameSite=Strict/.test(
-            cookies[0] ?? "",
-          ),
+        cookies.length === 1 && entryCookie.test(cookies[0] ?? ""),
         "la cookie de la sesión previa no es la esperada",
       ],
     ];
@@ -1232,9 +1242,35 @@ async function checkProductSurface() {
     }
   }
 
+  // El origen exigido es el público de la configuración, no el de la conexión
+  // ni el que digan las cabeceras de un proxy.
+  const origin = secure
+    ? PRODUCT_CONFIG.AULANORMA_PUBLIC_ORIGIN
+    : LOCAL_HTTP_ORIGIN;
+  if (secure) {
+    const local = await rawRequest("POST", "/api/session/sign-out", {
+      headers: [
+        ...FORM_HEADERS,
+        `Origin: ${LOCAL_HTTP_ORIGIN}`,
+        "X-Forwarded-Proto: http",
+        `X-Forwarded-Host: ${HOST}:${String(PORT)}`,
+      ],
+      limitMs: PRODUCT_LIMIT_MS,
+    });
+    if (expectStatus("POST con el origen HTTP local", local, 403)) {
+      if (
+        local.body.length > 0 ||
+        headerValues(local, "set-cookie").length > 0
+      ) {
+        problems.push(
+          "POST con el origen HTTP local: devuelve cuerpo o cookies",
+        );
+      }
+    }
+  }
   for (const target of ["/api/session/sign-out", "/api/account/password"]) {
     const response = await rawRequest("POST", target, {
-      headers: [...FORM_HEADERS, `Origin: http://${HOST}:${String(PORT)}`],
+      headers: [...FORM_HEADERS, `Origin: ${origin}`],
       limitMs: PRODUCT_LIMIT_MS,
     });
     const name = `POST ${target} sin sesión`;
@@ -2342,7 +2378,7 @@ async function validStart(variables, full) {
       const mark = proc.output().length;
       if (full) {
         problems.push(...(await checkContract()));
-        problems.push(...(await checkProductSurface()));
+        problems.push(...(await checkProductSurface(true)));
       } else {
         problems.push(...getProblems(await rawRequest("GET", TARGET)));
       }
@@ -2633,7 +2669,7 @@ async function developmentInvalidStart(fileVariables, variables, key, problem) {
 // destinos no exactos y el `Upgrade` de recarga de desarrollo.
 async function developmentStart(variables, full) {
   await ensurePortFree();
-  writeDevelopmentConfig(VALID_CONFIG);
+  writeDevelopmentConfig(DEVELOPMENT_CONFIG);
   const proc = launch(
     NPM,
     ["run", "dev"],
@@ -2677,7 +2713,7 @@ async function developmentStart(variables, full) {
             (problem) => `Upgrade ${DEVELOPMENT_RELOAD}: ${problem}`,
           ),
         );
-        problems.push(...(await checkProductSurface()));
+        problems.push(...(await checkProductSurface(false)));
       }
     }
     problems.push(...startupLogProblems(proc.output(), DEVELOPMENT_STARTUP));
@@ -2899,6 +2935,15 @@ const CASES = [
         },
         "AULANORMA_PUBLIC_ORIGIN",
         "missing",
+      ),
+  ],
+  [
+    "npm start inválido: AULANORMA_PUBLIC_ORIGIN con el origen HTTP local",
+    () =>
+      invalidStart(
+        { ...VALID_CONFIG, AULANORMA_PUBLIC_ORIGIN: LOCAL_HTTP_ORIGIN },
+        "AULANORMA_PUBLIC_ORIGIN",
+        "invalid_value",
       ),
   ],
   [

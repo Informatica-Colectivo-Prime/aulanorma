@@ -18,9 +18,15 @@ operación, quién puede ejecutarla y sus condiciones.
 - **Mutaciones**: solo `POST`, con comprobación de origen contra el origen público
   configurado y testigo de sesión. El envío del formulario de entrada lo exige también, con
   el testigo de su sesión previa.
-- **Sesiones**: cookie `HttpOnly` y `SameSite=Strict`, con el prefijo `__Host-` y `Secure`
-  cuando el origen público es HTTPS (con el origen local por HTTP, admitido solo para
-  desarrollo, se emite sin ellos); caducidad por
+- **Sesiones**: cookie `HttpOnly`, `SameSite=Strict` y `Path=/`, sin `Domain`, con el prefijo
+  `__Host-` y `Secure`. La única excepción es el modo desarrollo (`npm run dev`) con el origen
+  local por HTTP, donde se emite sin el prefijo ni `Secure`: fuera de ese modo la
+  configuración rechaza cualquier origen que no sea HTTPS y el servidor no arranca. Nombre y
+  atributos dependen solo del origen público configurado; ninguna cabecera de la petición
+  (`Host`, `Forwarded`, `X-Forwarded-*`) los cambia, ni cambia el origen exigido a un envío.
+  El identificador de sesión viaja solo en `Set-Cookie` y el testigo, solo en los formularios
+  de su propia sesión; ninguno aparece en registros, auditoría, errores ni en otras
+  respuestas. Caducidad por
   inactividad (30 minutos) y por duración máxima (12 horas), configurables; se revocan al
   cerrar sesión, cambiar la contraseña, desactivar la cuenta o cambiar sus permisos (FR-068).
 - **Generación de pago**: toda solicitud muestra antes la estimación y el presupuesto

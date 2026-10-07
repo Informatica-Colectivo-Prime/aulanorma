@@ -18,6 +18,8 @@ import {
 } from "@/platform/persistence";
 
 export const ORIGIN = "https://aulanorma.example";
+// Origen del modo desarrollo: el único caso en que se admite HTTP.
+export const DEVELOPMENT_ORIGIN = "http://127.0.0.1:3000";
 const RUNTIME = Symbol.for("aulanorma.web.runtime");
 
 const ENVIRONMENT: Readonly<Record<string, string>> = {
@@ -95,13 +97,23 @@ export interface RequestOptions {
   readonly contentType?: string;
   // Sustituye por completo las cookies del cliente en esta petición.
   readonly cookies?: Readonly<Record<string, string>>;
+  // Cabeceras añadidas a la petición, en minúsculas.
+  readonly headers?: Readonly<Record<string, string>>;
+}
+
+export interface WebClientOptions {
+  // Modo desarrollo: `NODE_ENV=development` y el origen HTTP local.
+  readonly development?: boolean;
 }
 
 export interface WebClient {
   readonly runtime: Runtime;
   readonly dataDir: string;
   readonly cookies: Map<string, string>;
-  get(page: { getServerSideProps: GetServerSideProps }): Promise<Reply>;
+  get(
+    page: { getServerSideProps: GetServerSideProps },
+    options?: RequestOptions,
+  ): Promise<Reply>;
   post(
     action: { default: NextApiHandler },
     fields: Readonly<Record<string, string>>,
@@ -116,12 +128,15 @@ function cookieHeader(cookies: ReadonlyMap<string, string>): string {
   return [...cookies].map(([name, value]) => `${name}=${value}`).join("; ");
 }
 
-export function createWebClient(): WebClient {
+export function createWebClient(options: WebClientOptions = {}): WebClient {
+  const origin = options.development === true ? DEVELOPMENT_ORIGIN : ORIGIN;
   const dataDir = mkdtempSync(path.join(tmpdir(), "aulanorma-web-"));
   const previous = new Map<string, string | undefined>();
   for (const [key, value] of Object.entries({
     ...ENVIRONMENT,
+    AULANORMA_PUBLIC_ORIGIN: origin,
     AULANORMA_DATA_DIR: dataDir,
+    ...(options.development === true ? { NODE_ENV: "development" } : {}),
   })) {
     previous.set(key, process.env[key]);
     process.env[key] = value;
@@ -172,8 +187,9 @@ export function createWebClient(): WebClient {
         ? cookies
         : new Map(Object.entries(options.cookies));
     return {
-      host: "aulanorma.example",
+      host: new URL(origin).host,
       ...(jar.size > 0 ? { cookie: cookieHeader(jar) } : {}),
+      ...options.headers,
     };
   }
 
@@ -181,10 +197,10 @@ export function createWebClient(): WebClient {
     runtime,
     dataDir,
     cookies,
-    async get(page) {
+    async get(page, options = {}) {
       const response = new ResponseDouble();
       await page.getServerSideProps({
-        req: { method: "GET", headers: headersOf({}) },
+        req: { method: "GET", headers: headersOf(options) },
         res: response,
         query: {},
         resolvedUrl: "/",
@@ -199,7 +215,7 @@ export function createWebClient(): WebClient {
           options.contentType ?? "application/x-www-form-urlencoded",
       };
       if (options.origin !== null) {
-        headers.origin = options.origin ?? ORIGIN;
+        headers.origin = options.origin ?? origin;
       }
       if (options.secFetchSite !== undefined) {
         headers["sec-fetch-site"] = options.secFetchSite;

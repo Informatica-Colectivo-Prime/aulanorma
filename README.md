@@ -66,6 +66,11 @@ directorio de datos de ejemplo está en un temporal del sistema, que puede vacia
 el equipo: cámbialo si quieres conservar las cuentas. `.env.development.local` está excluido de Git y solo lo carga `npm run dev`. Una
 variable definida en la terminal prevalece sobre el fichero, aunque esté vacía.
 
+El origen público de ejemplo es `http://127.0.0.1:3000`, que solo se admite con `npm run dev`.
+`npm start` exige un origen `https://…` y no arranca con otro: de él dependen el prefijo
+`__Host-` y el atributo `Secure` de las cookies, que ninguna cabecera de una petición cambia.
+Para probar la interfaz en el equipo, usa `npm run dev`.
+
 Hay una excepción deliberada: `npm run dev` fija vacías `TURBOPACK`, `IS_TURBOPACK_TEST` y
 `NEXT_RSPACK`, que en Next.js eligen el compilador. Lo que valgan en la terminal o en
 `.env.development.local` no tiene efecto: el desarrollo usa siempre Webpack. No son variables de

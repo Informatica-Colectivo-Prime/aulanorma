@@ -53,16 +53,25 @@ export type Environment = z.infer<typeof ENVIRONMENT>;
 // Ruta absoluta del directorio de datos (base de datos y almacén de ficheros).
 const DATA_DIR = z.string().regex(/^\/[^\0]+$/);
 
-// Origen público exacto de la aplicación, sin ruta: `https://…` o, solo para
-// el equipo local, `http://127.0.0.1:…` o `http://localhost:…`.
-function isPublicOrigin(value: string): boolean {
+// Origen público exacto de la aplicación, sin ruta: `https://…` o
+// `http://127.0.0.1:…` o `http://localhost:…`. El origen HTTP solo vale en
+// modo desarrollo (`NODE_ENV=development`, el de `npm run dev`): en cualquier
+// otro modo, incluido el de `npm start`, el origen debe ser HTTPS. De él
+// dependen el prefijo `__Host-` y el atributo `Secure` de las cookies, que
+// ninguna cabecera de una petición puede cambiar.
+function parseOrigin(value: string): URL | undefined {
   let url: URL;
   try {
     url = new URL(value);
   } catch {
-    return false;
+    return undefined;
   }
-  if (url.origin !== value) {
+  return url.origin === value ? url : undefined;
+}
+
+function isPublicOrigin(value: string): boolean {
+  const url = parseOrigin(value);
+  if (url === undefined) {
     return false;
   }
   if (url.protocol === "https:") {
@@ -74,6 +83,10 @@ function isPublicOrigin(value: string): boolean {
   );
 }
 const PUBLIC_ORIGIN = z.string().refine(isPublicOrigin);
+
+function originAllowedInMode(origin: string, nodeEnv: string | undefined) {
+  return origin.startsWith("https:") || nodeEnv === "development";
+}
 
 // Entero positivo escrito en decimal, sin signo ni ceros iniciales.
 function boundedInteger(maximum: number) {
@@ -105,7 +118,8 @@ function failure(problems: readonly ConfigProblem[]): ConfigResult {
 // Valida una fuente inyectada. Es pura: no lee `process.env`, no modifica la
 // fuente y devuelve todos los problemas a la vez, sin ningún valor. Las
 // claves sin el prefijo `AULANORMA_`, incluido `__NEXT_PROCESSED_ENV`, no
-// pertenecen al esquema y se ignoran.
+// pertenecen al esquema y se ignoran, salvo `NODE_ENV`, que solo decide si se
+// admite un origen público HTTP.
 export function validateConfig(source: ConfigSource): ConfigResult {
   const problems: ConfigProblem[] = [];
   const logLevel = SCHEMA.AULANORMA_LOG_LEVEL.safeParse(
@@ -117,9 +131,13 @@ export function validateConfig(source: ConfigSource): ConfigResult {
   const dataDir = SCHEMA.AULANORMA_DATA_DIR.safeParse(
     source.AULANORMA_DATA_DIR,
   );
-  const publicOrigin = SCHEMA.AULANORMA_PUBLIC_ORIGIN.safeParse(
+  const anyOrigin = SCHEMA.AULANORMA_PUBLIC_ORIGIN.safeParse(
     source.AULANORMA_PUBLIC_ORIGIN,
   );
+  const publicOrigin =
+    anyOrigin.success && !originAllowedInMode(anyOrigin.data, source.NODE_ENV)
+      ? ({ success: false } as const)
+      : anyOrigin;
   const sessionIdleMinutes = SCHEMA.AULANORMA_SESSION_IDLE_MINUTES.safeParse(
     source.AULANORMA_SESSION_IDLE_MINUTES,
   );

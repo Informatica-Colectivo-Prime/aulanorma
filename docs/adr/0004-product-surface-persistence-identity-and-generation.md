@@ -63,7 +63,8 @@ La constitución exige un monolito modular, sin infraestructura adicional sin ne
    sigue contando hasta que un administrador la concilia.
 7. **Despliegue**. El proceso sigue escuchando en `127.0.0.1:3000`, detrás de un proxy
    inverso que termina TLS. La aplicación conoce su origen público por configuración y no
-   confía en cabeceras reenviadas. Un único servidor y una única instancia.
+   confía en cabeceras reenviadas. Fuera del modo desarrollo, ese origen debe ser HTTPS: con
+   otro, el servidor no arranca. Un único servidor y una única instancia.
 8. **Tratamiento de los PDF**. El texto se extrae con `pdfjs-dist`. La estructura se
    inspecciona con `qpdf`, una herramienta externa que se instala como binario verificado,
    y una política propia decide sobre esa estructura. Ninguna de las dos acredita que un PDF

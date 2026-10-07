@@ -498,20 +498,70 @@ describe("validateConfig(source)", () => {
       value: "https://aula.example:8443",
       field: "publicOrigin",
     },
-    {
-      key: PUBLIC_ORIGIN,
-      value: "http://127.0.0.1:3000",
-      field: "publicOrigin",
-    },
-    {
-      key: PUBLIC_ORIGIN,
-      value: "http://localhost:3000",
-      field: "publicOrigin",
-    },
   ] as const)("acepta $key=$value", ({ key, value, field }) => {
     const result = config.validateConfig({ ...VALID_SOURCE, [key]: value });
     expectSuccess(result, { ...VALID_CONFIG, [field]: value });
   });
+
+  // El origen HTTP, siempre local, solo vale en modo desarrollo. En cualquier
+  // otro modo, incluido el de `npm start`, el origen debe ser HTTPS: de él
+  // dependen `Secure` y el prefijo `__Host-` de las cookies.
+  describe.each(["http://127.0.0.1:3000", "http://localhost:3000"])(
+    "origen HTTP local %s",
+    (origin) => {
+      test("se acepta con NODE_ENV=development", () => {
+        expectSuccess(
+          config.validateConfig({
+            ...VALID_SOURCE,
+            [PUBLIC_ORIGIN]: origin,
+            NODE_ENV: "development",
+          }),
+          { ...VALID_CONFIG, publicOrigin: origin },
+        );
+      });
+
+      test.each([
+        { name: "production", nodeEnv: "production" },
+        { name: "test", nodeEnv: "test" },
+        { name: "vacío", nodeEnv: "" },
+        { name: "Development", nodeEnv: "Development" },
+        { name: "ausente", nodeEnv: undefined },
+      ])("se rechaza con NODE_ENV $name", ({ nodeEnv }) => {
+        expectFailure(
+          config.validateConfig({
+            ...VALID_SOURCE,
+            [PUBLIC_ORIGIN]: origin,
+            NODE_ENV: nodeEnv,
+          }),
+          [{ key: PUBLIC_ORIGIN, problem: "invalid_value" }],
+        );
+      });
+    },
+  );
+
+  test.each(["development", "production", "test", undefined])(
+    "el origen HTTPS se acepta con NODE_ENV %s",
+    (nodeEnv) => {
+      expectSuccess(
+        config.validateConfig({ ...VALID_SOURCE, NODE_ENV: nodeEnv }),
+        VALID_CONFIG,
+      );
+    },
+  );
+
+  test.each(["development", "production"])(
+    "un origen HTTP que no es local se rechaza también con NODE_ENV %s",
+    (nodeEnv) => {
+      expectFailure(
+        config.validateConfig({
+          ...VALID_SOURCE,
+          [PUBLIC_ORIGIN]: "http://aulanorma.example",
+          NODE_ENV: nodeEnv,
+        }),
+        [{ key: PUBLIC_ORIGIN, problem: "invalid_value" }],
+      );
+    },
+  );
 
   test.each([
     {

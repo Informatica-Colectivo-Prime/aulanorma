@@ -45,6 +45,11 @@ navegador.
 
 ## Verificación visual
 
+> **Revisión posterior (2026-10-07)**. Este recorrido se hizo con `npm start` y el origen local
+> por HTTP, que la configuración admitía entonces. Desde la revisión del PR, `npm start` solo
+> admite un origen HTTPS y el origen HTTP queda para `npm run dev`: el recorrido se repitió
+> con `npm run dev` y el mismo resultado. Ver «Revisión del PR».
+
 **Cómo**: servidor compilado y arrancado con `npm start`, con el origen local por HTTP, y Chrome
 154 sin interfaz gráfica, manejado por su protocolo de depuración con un script desechable. El
 script navega, rellena y envía los formularios, pulsa teclas, hace capturas de pantalla y
@@ -94,7 +99,8 @@ auditoría sin activar el disparador de borrado. Se añadió un disparador que l
 
 - **HTTPS**. La verificación visual usó el origen local por HTTP. El prefijo `__Host-` y el
   atributo `Secure` de las cookies, que se emiten con un origen HTTPS, están cubiertos por las
-  pruebas de contrato, pero no se han visto en un navegador. Queda para el despliegue (fase 8).
+  pruebas de contrato y por la prueba de humo de `npm start`, pero no se han visto en un
+  navegador. Queda para el despliegue (fase 8).
 - **Otros navegadores**. Solo Chrome.
 - **Lectores de pantalla**. La estructura es semántica (un `h1`, etiquetas, alertas, enlace
   para saltar), pero no se ha probado con ninguno. La lista de comprobación WCAG completa es la
@@ -103,3 +109,46 @@ auditoría sin activar el disparador de borrado. Se añadió un disparador que l
   automáticas también en Linux.
 - **Coste de `scrypt` en el servidor de destino**. En el equipo de desarrollo, una derivación
   tarda unas décimas de segundo.
+
+## Revisión del PR
+
+Cuatro puntos revisados a petición del mantenedor antes de integrar.
+
+**Importaciones relativas.** La identidad está en un único fichero por una regla del
+proyecto, no por un límite de Node.js: Node.js resuelve una importación relativa con su
+extensión. La regla, heredada de la base de ingeniería, prohíbe en los módulos portables toda
+importación relativa o con alias, y la aplican ESLint y la prueba de arquitectura. Queda
+explicado en `docs/engineering/architecture.md`, «Módulos portables». El módulo no se ha
+rehecho.
+
+**HTTP solo en desarrollo.** La revisión encontró un hueco: la configuración admitía el origen
+local por HTTP también con `npm start`, y entonces las cookies salían sin `Secure`. Corregido:
+`validateConfig` solo admite un origen HTTP con `NODE_ENV=development`, el modo de
+`npm run dev`; en cualquier otro, el origen debe ser HTTPS o el servidor no arranca.
+
+| Comprobación                                                                              | Dónde                                                          |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Origen HTTP local aceptado solo con `NODE_ENV=development`; rechazado en los demás modos  | `tests/unit/platform/config.test.ts`                           |
+| `npm start` con el origen HTTP local termina con `invalid_value` sin escuchar             | `scripts/smoke-test.mjs`                                       |
+| Con `npm start`, la cookie lleva `__Host-`, `Path=/`, `HttpOnly`, `SameSite=Strict` y `Secure` | `scripts/smoke-test.mjs`                                  |
+| Todas las cookies del recorrido cumplen el prefijo `__Host-`: `Secure`, `Path=/`, sin `Domain` | `tests/contract/session.contract.test.ts`                 |
+| `Host`, `Forwarded` y `X-Forwarded-*` no cambian las cookies ni el origen exigido         | `tests/contract/session.contract.test.ts`, `scripts/smoke-test.mjs` |
+| En desarrollo, sin prefijo ni `Secure`, con `HttpOnly`, `SameSite=Strict` y `Path=/`      | `tests/contract/session.contract.test.ts`, `scripts/smoke-test.mjs` |
+
+**Secretos en las respuestas.** La cookie de sesión y el testigo del formulario tienen que
+viajar en las respuestas que los entregan: `Set-Cookie` y el formulario de la propia sesión.
+Lo que se comprueba es que no aparecen en ningún otro sitio: ni en el cuerpo ni en otras
+cabeceras, ni en los rechazos y redirecciones, ni en la auditoría, ni en los registros. Las
+contraseñas no aparecen en ninguna respuesta.
+
+**Decisiones aceptadas, con sus límites.**
+
+| Decisión                              | Límite y comportamiento                                                                                                                                                                                              | Comprobado en                                             |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Páginas con plantilla HTML propia     | Solo para esta fase. Todo valor interpolado se escapa; no hay estilos ni manejadores en línea; estilo y script únicos, fijados por huella en la política de contenido                                               | `tests/contract/session.contract.test.ts`                 |
+| Registro propio en lugar del de Next.js | Next.js no registra peticiones. La aplicación registra solo eventos de una lista cerrada, con el identificador de correlación y sin contraseñas, cookies ni testigos; `/api/health` no registra nada              | `tests/unit/platform/logging.test.ts`, `scripts/smoke-test.mjs` |
+| Ventana de intentos de 30 minutos     | Dos fallos sin espera; el tercero bloquea 5 s y cada fallo posterior duplica la espera hasta 15 min. La cuenta de fallos se borra tras 30 min sin ninguno o al entrar. Límite global: 50 fallos en 5 min cierran la entrada 60 s | `tests/unit/platform/identity.test.ts`                    |
+
+El recorrido visual se repitió con `npm run dev` y Chrome 154: entrada con contraseña
+incorrecta, entrada correcta, cambio de la contraseña inicial, inicio y salida, con la consola
+limpia y las cookies `HttpOnly` y `SameSite=Strict`.

@@ -60,8 +60,9 @@ un ejecutor propio al arrancar. Todo el acceso pasa por `src/platform/persistenc
 
 > **Resultado de la implementación (2026-10-07)**, en
 > [foundations-check.md](./foundations-check.md). Implementado como se describe, con tres
-> precisiones: el prefijo `__Host-` y `Secure` se emiten cuando el origen público es HTTPS, y
-> con el origen local por HTTP las cookies van sin ellos; la política de referencia es
+> precisiones: el prefijo `__Host-` y `Secure` se emiten siempre salvo en modo desarrollo
+> (`npm run dev`) con el origen local por HTTP, único caso en que la configuración admite un
+> origen que no sea HTTPS; la política de referencia es
 > `same-origin`, porque con `no-referrer` el navegador envía `Origin: null` en los formularios;
 > y los fallos de una cuenta se acumulan mientras no pasen 30 minutos sin ninguno, para que el
 > bloqueo máximo de 15 minutos se mantenga ante quien insiste.
