@@ -1,7 +1,10 @@
 # AulaNorma
 
-AulaNorma es una plataforma que transformará el PDF oficial de la normativa de certificados
-profesionales en un curso revisable por docentes y publicable en Moodle.
+AulaNorma es una plataforma que recibirá el PDF oficial de la normativa de certificados
+profesionales publicado en el BOE, propondrá un índice y desarrollará el temario. El docente
+revisará y aprobará el índice y el contenido, y la plataforma entregará un paquete SCORM
+descargable para incorporarlo manualmente a Moodle. La publicación automática en Moodle queda
+fuera del alcance vigente ([ADR 0003](docs/adr/0003-scorm-export-instead-of-automatic-moodle-publication.md)).
 
 Por ahora, este repositorio contiene su base de ingeniería: una aplicación mínima con Next.js,
 sin interfaz visible, sin persistencia y sin llamadas a servicios externos. Solo expone una

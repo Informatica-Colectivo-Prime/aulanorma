@@ -1,10 +1,14 @@
 # Constitución de ingeniería de AulaNorma
 
-AulaNorma es una plataforma con inteligencia artificial que transforma el PDF oficial de la
-normativa de certificados profesionales en un curso completo, revisable por docentes y
-publicable en Moodle. Esa normativa incluye los antiguos certificados de profesionalidad que
-continúen vigentes o en régimen transitorio. El piloto es ADGG0408. Esta constitución fija las
-reglas de ingeniería no negociables del proyecto. Las palabras
+AulaNorma es una plataforma con inteligencia artificial que recibe el PDF oficial de la
+normativa de certificados profesionales publicado en el BOE, propone un índice basado en su
+contenido y desarrolla el temario. El docente revisa y aprueba el índice y el contenido, y la
+plataforma entrega un paquete SCORM descargable, con instrucciones para que el propio usuario
+lo incorpore manualmente a Moodle. Esa normativa incluye los antiguos certificados de
+profesionalidad que continúen vigentes o en régimen transitorio. El piloto es ADGG0408. La
+publicación automática en Moodle queda fuera del alcance vigente (ver "Restricciones técnicas,
+de datos y de contenido"). Esta constitución fija las reglas de ingeniería no negociables del
+proyecto. Las palabras
 DEBE, NO DEBE y DEBERÍA se interpretan como obligación, prohibición y recomendación fuerte
 (con justificación documentada para apartarse), respectivamente.
 
@@ -16,16 +20,23 @@ DEBE, NO DEBE y DEBERÍA se interpretan como obligación, prohibición y recomen
   organismo emisor, referencia oficial (p. ej., norma y boletín de publicación), URL o
   procedencia de obtención, fecha de obtención, versión y huella SHA-256 del fichero.
 - Todo elemento derivado (módulo, unidad formativa, capacidad, criterio de evaluación,
-  contenido, material didáctico, actividad, pregunta de evaluación, elemento publicado en
-  Moodle) DEBE conservar referencias de procedencia que indiquen documento, sección
+  contenido, entrada del índice propuesto, material didáctico, actividad, pregunta de
+  evaluación, elemento incluido en un paquete exportado) DEBE conservar referencias de
+  procedencia que indiquen documento, sección
   (código normativo cuando exista: MF, UF, capacidad, criterio) y página o rango de páginas.
 - Cuando sea técnicamente posible, la referencia DEBE incluir el fragmento literal citado para
   permitir su verificación sin abrir el PDF.
 - El contenido didáctico que amplíe o desarrolle la norma DEBE distinguirse explícitamente del
-  contenido normativo y declarar el elemento normativo en el que se apoya.
-- Un elemento sin procedencia verificable NO DEBE avanzar a revisión ni a publicación; se marca
-  como "sin respaldo normativo" y se muestra así al docente.
-- Las referencias DEBEN sobrevivir a ediciones, regeneraciones y publicaciones, y apuntar a la
+  contenido normativo y declarar el elemento normativo en el que se apoya. Esa distinción
+  entre requisitos extraídos del documento oficial y desarrollo didáctico generado DEBE ser
+  visible para el docente durante la revisión y conservarse en el paquete exportado.
+- Un elemento sin procedencia verificable NO DEBE avanzar a revisión ni a exportación como
+  requisito normativo; se marca como "sin respaldo normativo" y se muestra así al docente.
+- La cobertura de los requisitos obligatorios del documento oficial DEBE calcularse y
+  mostrarse. Un elemento marcado como "sin respaldo normativo" no cuenta como cobertura, y esa
+  etiqueta NO DEBE usarse para ocultar, compensar ni dar por atendido un requisito obligatorio
+  sin cubrir.
+- Las referencias DEBEN sobrevivir a ediciones, regeneraciones y exportaciones, y apuntar a la
   versión concreta del documento fuente utilizada.
 - El docente DEBE poder navegar desde cualquier elemento hasta la sección y página de origen.
 
@@ -42,27 +53,31 @@ versionado y contratos explícitos con la capa anterior:
    formativas, capacidades, criterios, contenidos, duraciones) validada por esquema.
 3. **Contenido didáctico generado**: materiales, actividades y evaluaciones derivados de la
    interpretación.
-4. **Publicación en Moodle**: la correspondencia entre contenido aprobado y cursos, secciones,
-   recursos y actividades de Moodle.
+4. **Exportación**: la transformación del índice y del contenido aprobados en un paquete
+   descargable en el formato de exportación vigente (ver "Restricciones técnicas, de datos y
+   de contenido").
 
 - La fuente normativa NO DEBE modificarse; las correcciones de interpretación se registran como
   anotaciones trazables en la capa de interpretación.
 - Cada capa solo consume la capa anterior a través de su contrato público; NO DEBE acceder al
   almacenamiento interno de otra capa.
-- La capa de publicación NO DEBE generar ni alterar contenido didáctico: solo transforma
-  contenido aprobado al formato de Moodle.
+- La capa de exportación NO DEBE generar ni alterar contenido didáctico: solo transforma
+  contenido aprobado al formato de exportación.
 - La estructura de módulos del código DEBE reflejar estas capas.
 
-**Justificación**: separar fuente, interpretación, generación y publicación permite revisar,
-regenerar o republicar cada nivel de forma independiente y localizar el origen de un error.
+**Justificación**: separar fuente, interpretación, generación y exportación permite revisar,
+regenerar o volver a exportar cada nivel de forma independiente y localizar el origen de un
+error.
 
 ### III. Human-in-the-loop obligatorio (NO NEGOCIABLE)
 
-- Ningún contenido DEBE publicarse en Moodle sin revisión y aprobación explícita de un docente
-  autorizado.
-- Todo elemento publicable DEBE seguir un ciclo de estados explícito, como mínimo: borrador
-  generado → en revisión → aprobado o rechazado → publicado. Solo los elementos en estado
-  "aprobado" son publicables.
+- Ningún contenido DEBE exportarse ni ofrecerse para su descarga sin revisión y aprobación
+  explícita de un docente autorizado.
+- El índice propuesto DEBE revisarse y aprobarse como elemento propio. Un paquete solo puede
+  generarse a partir de un índice aprobado y vigente, y solo con contenido aprobado.
+- Todo elemento exportable DEBE seguir un ciclo de estados explícito, como mínimo: borrador
+  generado → en revisión → aprobado o rechazado → exportado. Solo los elementos en estado
+  "aprobado" son exportables.
 - Cada aprobación DEBE registrar la identidad del docente, la fecha y hora, y la versión exacta
   del contenido aprobado.
 - Cualquier modificación posterior a la aprobación, humana o automática, DEBE invalidar la
@@ -71,18 +86,22 @@ regenerar o republicar cada nivel de forma independiente y localizar el origen d
   correcciones quedan registradas.
 - NO DEBEN existir rutas, parámetros, scripts, tareas programadas ni modos por lotes que omitan
   la aprobación. Las pruebas automatizadas ejercitan el flujo de aprobación con usuarios
-  sintéticos contra un Moodle de pruebas o un doble de prueba, nunca contra producción.
+  sintéticos; la importación de paquetes se comprueba en un Moodle de pruebas, nunca en
+  producción.
+- La incorporación del paquete a Moodle la realiza el usuario, fuera de AulaNorma. La
+  aprobación docente cubre el contenido del paquete, no lo que ocurra después en Moodle.
 - La IA propone; el docente decide.
 
 **Justificación**: la responsabilidad pedagógica y normativa del curso recae en el docente. La
-IA puede cometer errores o inventar contenido, y la publicación tiene efecto sobre alumnado real.
+IA puede cometer errores o inventar contenido, y un paquete exportado acaba ante alumnado real.
 
 ### IV. Salidas estructuradas y validadas por esquema (NO NEGOCIABLE)
 
 - Toda salida de IA utilizada en un proceso crítico (extracción normativa, interpretación
-  estructurada, estructura del curso, evaluaciones, referencias de procedencia, correspondencia
-  con Moodle) DEBE producirse en formato estructurado conforme a un esquema versionado
-  (p. ej., JSON Schema) y validarse antes de persistirse o usarse.
+  estructurada, índice propuesto, estructura del curso, evaluaciones, referencias de
+  procedencia, estructura del paquete de exportación) DEBE producirse en formato estructurado
+  conforme a un esquema versionado (p. ej., JSON Schema) y validarse antes de persistirse o
+  usarse.
 - Una salida inválida DEBE rechazarse o reintentarse un número acotado de veces; NO DEBE
   repararse con heurísticas silenciosas. Cada fallo de validación queda registrado.
 - Las expresiones regulares, heurísticas o modelos de IA pueden utilizarse para proponer
@@ -95,13 +114,13 @@ IA puede cometer errores o inventar contenido, y la publicación tiene efecto so
   acompañado de migración de los datos existentes.
 
 **Justificación**: los procesos críticos necesitan datos verificables por máquina. Depender de
-texto libre hace frágil la trazabilidad, la revisión y la publicación.
+texto libre hace frágil la trazabilidad, la revisión y la exportación.
 
 ### V. Seguridad y privacidad por defecto (NO NEGOCIABLE)
 
-- **Mínimo privilegio**: cada rol de usuario, credencial de servicio y token de Moodle DEBE
-  tener solo los permisos imprescindibles. El servicio web de Moodle DEBE limitarse a las
-  funciones que AulaNorma usa.
+- **Mínimo privilegio**: cada rol de usuario y credencial de servicio DEBE tener solo los
+  permisos imprescindibles. AulaNorma NO DEBE solicitar, almacenar ni usar credenciales ni
+  tokens de Moodle.
 - **Secretos**: las claves, tokens y contraseñas NO DEBEN incluirse en el repositorio, en logs
   ni en mensajes de error. Se gestionan mediante variables de entorno o un gestor de secretos;
   el repositorio solo contiene plantillas sin valores (p. ej., `.env.example`). La integración
@@ -113,7 +132,8 @@ texto libre hace frágil la trazabilidad, la revisión y la publicación.
 - **Control de acceso**: toda operación que acceda, modifique o exponga información de negocio,
   datos personales, contenido protegido o acciones privilegiadas DEBE requerir autenticación y
   autorización comprobadas en el servidor, con denegación por defecto. Cualquier otra operación
-  está sujeta a la misma exigencia, salvo la excepción del apartado siguiente.
+  está sujeta a la misma exigencia, salvo la excepción y el inicio de sesión de los apartados
+  siguientes.
 - **Excepción: comprobación técnica pública de estado**: puede existir excepcionalmente una
   comprobación técnica de disponibilidad o estado accesible sin autenticación, únicamente si
   cumple simultáneamente todas estas condiciones:
@@ -130,38 +150,64 @@ texto libre hace frágil la trazabilidad, la revisión y la publicación.
   Toda operación que no cumpla todas estas condiciones sigue sujeta a autenticación y
   autorización. Esta excepción NO DEBE extenderse por analogía a operaciones ni endpoints de
   producto.
+- **Inicio de sesión**: el formulario de entrada y las operaciones estrictamente necesarias
+  para iniciar sesión pueden ser accesibles sin autenticación previa, porque son el propio
+  mecanismo de autenticación. NO DEBEN conceder acceso a documentos, proyectos, generación,
+  aprobaciones ni descargas, ni a ningún otro dato u operación de producto. DEBEN protegerse
+  frente a intentos repetidos y frente a la falsificación de peticiones, y NO DEBEN extenderse
+  por analogía a otras operaciones.
 - **Auditoría**: los eventos sensibles (inicio de sesión, cambios de permisos, subida de
-  documentos, aprobaciones, rechazos, publicaciones) DEBEN registrarse en un registro de
+  documentos, aprobaciones, rechazos, exportaciones y descargas) DEBEN registrarse en un registro de
   auditoría de solo inserción.
 - **Privacidad**: se aplican minimización de datos y la normativa de protección de datos
   aplicable (RGPD). NO DEBEN enviarse datos personales al proveedor de IA.
 - **Contenido no confiable**: el texto de los PDF y las salidas de la IA se tratan como datos no
   confiables; las instrucciones contenidas en ellos NO DEBEN ejecutarse (defensa frente a
-  inyección de instrucciones) y el HTML generado DEBE sanearse antes de mostrarse o publicarse.
+  inyección de instrucciones) y el HTML generado DEBE sanearse antes de mostrarse o exportarse.
+- **Paquete exportado**: un paquete exportado se ejecuta en un entorno ajeno, ante alumnado.
+  NO DEBE contener secretos, credenciales ni datos personales de usuarios, y NO DEBE
+  comunicarse con AulaNorma ni con ningún servicio externo. Su único intercambio de datos es
+  con la plataforma que lo ejecuta, a través de la interfaz del formato de exportación; ese
+  intercambio está permitido y es necesario para guardar el seguimiento. El código que incluya
+  DEBE limitarse al necesario para la navegación y para esa interfaz. Los registros internos
+  de aprobación de AulaNorma y el seguimiento que guarde la plataforma que ejecuta el paquete
+  tienen un alcance distinto y no forman parte del paquete.
 
-**Justificación**: la plataforma maneja credenciales de Moodle, documentos subidos y cuentas de
-docentes; una brecha afectaría a centros formativos y alumnado. La única excepción al control de
+**Justificación**: la plataforma maneja documentos subidos y cuentas de docentes, y sus
+paquetes se ejecutan en plataformas de terceros; una brecha afectaría a centros formativos y
+alumnado. La única excepción al control de
 acceso se limita a una comprobación técnica sin datos ni efectos, necesaria para verificar de
 forma automática que el servicio está operativo.
 
-### VI. Publicación idempotente y recuperable en Moodle (NO NEGOCIABLE)
+### VI. Exportación reproducible, autónoma y verificable (NO NEGOCIABLE)
 
-- Cada operación de publicación DEBE identificarse con una clave de idempotencia derivada del
-  elemento y de su versión aprobada.
-- El sistema DEBE mantener una correspondencia persistente entre identificadores internos e
-  identificadores de Moodle, y actualizar lo existente en lugar de crear duplicados.
-- Ejecutar dos veces la misma publicación DEBE producir el mismo estado final en Moodle.
-- La publicación DEBE ejecutarse por pasos con estado registrado, reanudable desde el último
-  paso confirmado, con reintentos acotados y espera progresiva ante errores transitorios.
-- Los fallos parciales DEBEN detectarse, registrarse y poder reconciliarse; NO DEBEN dejar
-  estados inconsistentes silenciosos.
-- DEBE existir un modo de simulación que muestre los cambios previstos en Moodle antes de
-  aplicarlos.
-- La integración con Moodle DEBE cumplir la regla de integración de la sección "Restricciones
-  técnicas, de datos y de contenido".
+- Cada paquete exportado DEBE identificar la versión aprobada de la que procede y el formato
+  de exportación, de modo que esa versión pueda reconocerse desde el propio paquete.
+- El fichero entregado DEBE ser íntegro: su huella SHA-256 se registra al generarlo y DEBE
+  poder comprobarse sobre el fichero descargado.
+- Exportar de nuevo la misma versión aprobada DEBE producir un paquete con el mismo contenido
+  aprobado y una estructura equivalente. No se exige identidad binaria entre dos ficheros
+  generados por separado.
+- Un paquete DEBE ser **autónomo**: incluye todos los recursos de su contenido y, una vez
+  importado, funciona sin depender de AulaNorma ni hacer peticiones a servicios externos. La
+  comunicación con la plataforma que lo ejecuta, a través de la interfaz del formato, no es
+  una dependencia externa.
+- El paquete DEBE validarse contra las reglas del formato de exportación antes de ofrecerse
+  para su descarga. Un paquete inválido o incompleto NO DEBE poder descargarse.
+- Un fallo durante la generación DEBE detectarse y registrarse, y NO DEBE dejar disponible un
+  paquete parcial. La generación DEBE poder repetirse sin efectos acumulados.
+- El docente DEBE poder previsualizar lo que se va a exportar. Una vista previa fuera de una
+  plataforma que ejecute el formato muestra el contenido, pero NO acredita que el seguimiento
+  se guarde.
+- NO DEBE declararse la compatibilidad con una plataforma o una versión concreta sin haber
+  verificado la importación y el funcionamiento del paquete en una instancia real de pruebas
+  de esa plataforma, mediante un procedimiento reproducible. La evidencia DEBE registrar la
+  versión exacta y la configuración verificadas. La comprobación puede hacerla el mantenedor.
+- La exportación DEBE cumplir las reglas de la sección "Restricciones técnicas, de datos y de
+  contenido".
 
-**Justificación**: las redes y Moodle fallan; un reintento no debe duplicar cursos ni
-actividades ni exigir limpieza manual.
+**Justificación**: el paquete sale del control de AulaNorma en cuanto se descarga. Debe poder
+demostrarse qué versión aprobada contiene, que funciona por sí solo y dónde se ha comprobado.
 
 ### VII. Desarrollo incremental por porciones verticales (NO NEGOCIABLE)
 
@@ -169,8 +215,9 @@ actividades ni exigir limpieza manual.
   necesarias y produzca un resultado verificable por un docente.
 - El primer alcance DEBE ser la unidad formativa UF0517 del certificado de profesionalidad
   ADGG0408. NO DEBE ampliarse al certificado ADGG0408 completo hasta que el flujo extremo a
-  extremo de UF0517 (ingesta, interpretación, generación, revisión y publicación en un Moodle de
-  pruebas) funcione y haya sido validado por un docente.
+  extremo de UF0517 (ingesta, interpretación, índice propuesto, generación, revisión,
+  exportación del paquete e importación manual verificada en un Moodle de pruebas) funcione y
+  haya sido validado por un docente.
 - El código NO DEBE contener lógica específica de UF0517 ni de ADGG0408: la especificidad reside
   en los datos y en las pruebas, no en el código.
 - Cada pull request DEBERÍA ser revisable en una sola sesión; se evitan las ramas de larga
@@ -185,10 +232,17 @@ retroalimentación docente temprana antes de escalar.
   - lógica normativa: extracción, interpretación, duraciones y referencias de procedencia;
   - transformaciones entre capas y validación de esquemas;
   - permisos y autorización, incluidos los casos denegados;
-  - publicación en Moodle: idempotencia, reintentos, fallos parciales y reconciliación;
-  - flujo de aprobación, incluida la invalidación tras una modificación.
+  - exportación: validez y estructura del paquete, equivalencia entre exportaciones de una
+    misma versión, autonomía (ausencia de peticiones externas), fallos de generación, y el
+    contrato de seguimiento y reanudación contra un doble de la interfaz del formato;
+  - flujo de aprobación, del índice y del contenido, incluida la invalidación tras una
+    modificación.
 - Las pruebas DEBEN combinar, según corresponda, pruebas unitarias, de contrato (esquemas,
-  API de Moodle, adaptadores de IA), de integración y extremo a extremo de cada porción vertical.
+  formato de exportación, adaptadores de IA), de integración y extremo a extremo de cada porción
+  vertical.
+- La importación y el funcionamiento del paquete en un Moodle de pruebas se comprueban con un
+  procedimiento manual reproducible y su evidencia se registra. Esa comprobación no forma parte
+  de la integración continua, que NO DEBE depender de una instancia de Moodle.
 - Las pruebas de integración continua NO DEBEN depender de respuestas no deterministas de un
   proveedor de IA: se usan dobles deterministas o respuestas grabadas. La evaluación de calidad
   de la IA se realiza en conjuntos de evaluación separados y versionados.
@@ -197,7 +251,7 @@ retroalimentación docente temprana antes de escalar.
 - Todo defecto corregido DEBE incluir una prueba de regresión.
 - Un pull request con pruebas fallidas NO DEBE integrarse en `main`.
 
-**Justificación**: los errores en normativa, permisos o publicación tienen consecuencias
+**Justificación**: los errores en normativa, permisos o exportación tienen consecuencias
 externas; las pruebas son la única garantía repetible.
 
 ### IX. Independencia del proveedor de IA (NO NEGOCIABLE)
@@ -210,7 +264,10 @@ externas; las pruebas son la única garantía repetible.
   coste estimado, latencia, resultado de validación y entidad asociada.
 - DEBEN existir límites de coste configurables por operación y por periodo; al alcanzarse, el
   sistema detiene la generación y lo notifica. Las generaciones masivas DEBEN mostrar una
-  estimación de coste previa.
+  estimación de coste previa. Mientras no se defina otro periodo, el periodo es el ciclo
+  completo de cada proyecto, desde su creación hasta su cierre, sin reinicios automáticos: el
+  límite por periodo es entonces un límite acumulado del proyecto, que se suma al máximo por
+  operación.
 - Cambiar de proveedor o de modelo NO DEBE requerir cambios en el dominio; los adaptadores se
   verifican con pruebas de contrato comunes.
 
@@ -220,8 +277,11 @@ quedar atado a un proveedor ni sufrir costes imprevistos.
 ### X. Accesibilidad, usabilidad y lenguaje claro (NO NEGOCIABLE)
 
 - La interfaz DEBE cumplir WCAG 2.2 nivel AA (referencia europea EN 301 549).
-- El contenido publicado en Moodle DEBE ser accesible: jerarquía de encabezados, texto
-  alternativo en imágenes, contraste suficiente y información que no dependa solo del color.
+- El contenido exportado DEBE ser accesible: jerarquía de encabezados, texto alternativo en
+  imágenes, contraste suficiente, información que no dependa solo del color y navegación
+  utilizable con teclado.
+- Las instrucciones para incorporar el paquete a Moodle DEBEN estar escritas para un docente,
+  paso a paso, e indicar en qué versión de Moodle se han comprobado.
 - Textos de interfaz, mensajes y ayudas DEBEN redactarse en español claro para docentes, sin
   jerga técnica; los mensajes de error DEBEN indicar qué ocurrió y qué puede hacer el usuario.
 - La revisión DEBE permitir ver cada elemento junto a su fuente normativa, comparar versiones y
@@ -235,18 +295,19 @@ el control humano se degrada.
 ### XI. Observabilidad y registro de decisiones (NO NEGOCIABLE)
 
 - El sistema DEBE emitir logs estructurados con un identificador de correlación que siga cada
-  elemento a través de ingesta, interpretación, generación, revisión y publicación.
+  elemento a través de ingesta, interpretación, generación, revisión y exportación.
 - DEBEN registrarse de forma consultable:
   - generaciones: entrada, versión de prompt, modelo, salida y resultado de validación;
   - revisiones: docente, fecha, decisión, comentario y versión revisada;
-  - publicaciones: elemento, versión, destino, resultado e identificadores de Moodle;
+  - exportaciones: elemento, versión aprobada, formato, huella del paquete, docente,
+    resultado de la validación y descargas;
   - decisiones arquitectónicas: mediante ADR.
 - Los registros NO DEBEN contener secretos ni datos personales innecesarios.
-- DEBEN existir métricas mínimas de errores, latencia, coste de IA y estado de publicaciones.
+- DEBEN existir métricas mínimas de errores, latencia, coste de IA y estado de exportaciones.
 - Docentes y administradores DEBEN poder consultar el historial de cada elemento.
 
 **Justificación**: sin registros no es posible explicar por qué un contenido es como es,
-diagnosticar fallos ni rendir cuentas de lo publicado.
+diagnosticar fallos ni rendir cuentas de lo exportado.
 
 ### XII. Simplicidad arquitectónica (NO NEGOCIABLE)
 
@@ -273,27 +334,33 @@ fácil de operar; la complejidad solo se añade cuando está justificada.
   documentos normativos sin registro de procedencia (organismo emisor, referencia oficial, URL o
   fuente, fecha de obtención y huella SHA-256).
 - **Datos de prueba**: los usuarios, centros y alumnado de prueba DEBEN ser sintéticos.
-- **Entornos**: los entornos de desarrollo y pruebas DEBEN usar instancias de Moodle separadas
-  de producción, con credenciales distintas.
-- **Integración con Moodle**:
-  - Los servicios web externos de Moodle son la única frontera de integración: toda lectura y
-    escritura en Moodle DEBE pasar por funciones externas de su servicio web.
-  - Se permite MCP (Model Context Protocol) como capa de transporte y orquestación hacia esas
-    funciones externas; MCP NO DEBE eludir la frontera ni los controles de los principios III,
-    V y VI.
-  - Se permite un plugin local de Moodle, denominado provisionalmente `local_aulanorma`, para
-    exponer como funciones externas las capacidades que Moodle no proporcione de serie.
-  - Toda función utilizada para publicar, nativa o del plugin, DEBE estar expresamente
-    autorizada en el servicio web de AulaNorma y exigir solo las capacidades mínimas necesarias.
-  - Queda prohibida sin excepción la escritura directa en la base de datos de Moodle, tanto
-    desde AulaNorma como desde `local_aulanorma`, que DEBE usar exclusivamente las API internas
-    de Moodle.
+- **Entornos**: la importación de paquetes se comprueba en una instancia de Moodle de pruebas,
+  separada de cualquier instancia de producción y sin datos personales reales.
+- **Formato de exportación**:
+  - El formato de exportación vigente es **SCORM 1.2**. Cambiar de formato o añadir otro exige
+    un ADR.
+  - El paquete DEBE incluir un temario navegable y comunicar a la plataforma que lo ejecuta,
+    como mínimo, el estado de finalización y el punto de reanudación, usando solo el modelo de
+    datos del formato y dentro de sus límites.
+  - El seguimiento que comunica el paquete NO DEBE presentarse como evaluación, calificación
+    ni prueba de aprendizaje mientras el paquete no incluya una evaluación revisada y
+    aprobada.
+  - El paquete DEBE ir acompañado de instrucciones para incorporarlo manualmente a Moodle.
+- **Relación con Moodle**:
+  - En el alcance vigente, AulaNorma NO DEBE conectarse a Moodle: no usa sus servicios web, no
+    emplea MCP (Model Context Protocol) como transporte hacia ellos y no incluye ningún plugin
+    de Moodle. La incorporación del paquete es manual y la realiza el usuario.
+  - Reintroducir cualquier forma de publicación automática en Moodle exige enmendar antes esta
+    constitución y registrar la decisión en un ADR. Esa enmienda DEBE restablecer reglas
+    equivalentes a las de la versión 1.1.0 sobre frontera de integración, mínimo privilegio,
+    idempotencia y recuperación.
+  - Queda prohibida sin excepción la escritura directa en la base de datos de Moodle.
 
 ## Flujo de desarrollo y puertas de calidad
 
 - **Flujo oficial**: GitHub Spec Kit es el flujo oficial de desarrollo.
 - **Funcionalidades críticas**: se consideran críticas las que afectan a trazabilidad
-  normativa, interpretación estructurada, aprobación docente, publicación en Moodle, esquemas,
+  normativa, interpretación estructurada, aprobación docente, exportación, esquemas,
   seguridad o permisos, o integración con IA. Para ellas es obligatoria la secuencia completa:
   `specify` → `clarify` → `plan` → `checklist` → `tasks` → `analyze` → `implement` → `converge`.
 - **Funcionalidades no críticas**: requieren como mínimo `specify` → `plan` → `tasks` →
@@ -324,19 +391,22 @@ fácil de operar; la complejidad solo se añade cuando está justificada.
   alternativas consideradas y consecuencias.
 - **Puertas de verificación constitucional** (base del apartado "Constitution Check" de cada
   plan; todas DEBEN responderse con evidencia):
-  1. ¿Todo elemento nuevo o modificado conserva documento, sección y página de origen? (I)
+  1. ¿Todo elemento nuevo o modificado conserva documento, sección y página de origen, y se
+     muestra la cobertura de los requisitos obligatorios sin ocultar los no cubiertos? (I)
   2. ¿Se respetan las cuatro capas y sus contratos? (II)
-  3. ¿Es imposible publicar sin aprobación docente explícita y vigente? (III)
+  3. ¿Es imposible exportar o descargar sin aprobación docente explícita y vigente, del índice
+     y del contenido? (III)
   4. ¿Las salidas críticas se validan contra esquemas versionados? (IV)
   5. ¿Se aplican mínimo privilegio, gestión de secretos, validación de archivos, control de
      acceso y auditoría? Si existe una comprobación técnica pública de estado, ¿cumple todas las
      condiciones de la excepción? (V)
-  6. ¿La publicación es idempotente, reanudable y sin duplicados? (VI)
+  6. ¿El paquete es autónomo, íntegro, identifica su versión aprobada y se valida antes de la
+     descarga, y no se declara ninguna compatibilidad sin verificar? (VI)
   7. ¿Es una porción vertical pequeña dentro del alcance vigente (UF0517 primero)? (VII)
   8. ¿Están planificadas las pruebas obligatorias? (VIII)
   9. ¿El acceso a IA pasa por adaptadores, con límites de coste y registro de uso? (IX)
   10. ¿Se cumplen accesibilidad y lenguaje claro? (X)
-  11. ¿Se registran generaciones, revisiones, publicaciones y decisiones? (XI)
+  11. ¿Se registran generaciones, revisiones, exportaciones y decisiones? (XI)
   12. ¿Se evita complejidad no justificada o está documentada en un ADR? (XII)
 
 ## Gobernanza
@@ -363,4 +433,4 @@ fácil de operar; la complejidad solo se añade cuando está justificada.
   DEBE verificar el cumplimiento; al cerrar cada porción vertical DEBE revisarse si la
   constitución sigue siendo adecuada.
 
-**Version**: 1.1.0 | **Ratified**: 2026-09-24 | **Last Amended**: 2026-09-26
+**Version**: 2.0.0 | **Ratified**: 2026-09-24 | **Last Amended**: 2026-10-07

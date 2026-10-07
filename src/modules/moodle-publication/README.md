@@ -1,14 +1,22 @@
-# Capa: publicación en Moodle (`moodle-publication`)
+# Capa: exportación (`moodle-publication`, nombre transitorio)
 
-**Responsabilidad**: correspondencia entre el contenido aprobado y Moodle.
+**Responsabilidad**: transformar el índice y el contenido aprobados en un paquete descargable
+en el formato de exportación vigente, SCORM 1.2.
 
 Es la cuarta de las cuatro capas del principio II de la constitución. No genera ni altera
-contenido didáctico: solo transforma contenido aprobado al formato de Moodle.
+contenido didáctico: solo transforma contenido aprobado al formato de exportación.
+
+**Nombre transitorio**. Esta capa era la publicación automática en Moodle hasta la versión
+1.1.0 de la constitución. El
+[ADR 0003](../../../docs/adr/0003-scorm-export-instead-of-automatic-moodle-publication.md) la
+sustituye por la exportación y fija como ubicación objetivo `src/modules/content-export`. El
+directorio, las reglas de importación y las pruebas conservan el nombre `moodle-publication`
+hasta que se haga esa migración; este documento describe ya la responsabilidad vigente.
 
 ## Estado
 
 Vacía en esta funcionalidad. `index.ts` solo contiene `export {};`: no hay lógica de producto,
-datos de ningún certificado ni integración con Moodle.
+datos de ningún certificado ni exportación.
 
 ## Dependencias permitidas
 
