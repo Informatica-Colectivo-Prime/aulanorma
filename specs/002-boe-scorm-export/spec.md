@@ -161,6 +161,14 @@ del mantenedor, recibidas ese mismo día sin pregunta previa.
   nombres, los correos si existen, los perfiles y las atribuciones de revisión o aprobación.
   Las contraseñas, las claves y las sesiones son además secretos de autenticación. Es una
   definición operativa, no una evaluación jurídica de protección de datos.
+- Decisión del mantenedor (conflicto de edición): ante un conflicto se conserva el cambio del
+  usuario, se le muestra que existe una versión más reciente y se le permite revisarla y
+  reenviar su cambio de forma explícita contra esa versión. Nada se sobrescribe ni se fusiona
+  en silencio.
+- Decisión del mantenedor (criterios de éxito pendientes): el saneamiento (FR-020), el cambio
+  de proveedor y el registro de cada generación (FR-055) y la ausencia de comportamiento
+  específico del piloto (FR-056) reciben un criterio de éxito propio; el envío de datos de
+  usuarios al servicio de generación (FR-029) queda cubierto por SC-015, que ya lo incluye.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -596,7 +604,16 @@ las instrucciones, se recorre con un alumno de prueba, se abandona, se reanuda y
 - **FR-063**: El sistema NO DEBE permitir sobrescrituras silenciosas. Si otro usuario u otra
   sesión ha modificado un elemento desde que se abrió, DEBE rechazar el guardado sobre esa
   versión, mostrar el conflicto y conservar las modificaciones del usuario para que las
-  concilie de forma explícita.
+  concilie de forma explícita. Ante un conflicto, el sistema DEBE:
+  - no guardar nada y decir que existe una versión más reciente del elemento;
+  - mostrar esa versión más reciente junto al cambio que el usuario intentó guardar, que
+    sigue en el formulario tal como lo envió;
+  - permitir al usuario revisarla y reenviar su cambio de forma explícita contra esa versión,
+    o descartarlo.
+
+  El sistema NO DEBE fusionar los dos cambios ni reenviar el del usuario por su cuenta. Lo
+  mismo se aplica a validar, aprobar o rechazar: si el elemento cambió desde que se abrió, la
+  decisión se rechaza y el usuario debe revisar la versión más reciente antes de repetirla.
 - **FR-025**: NO DEBE existir ninguna vía que permita aprobar, exportar o descargar sin los
   pasos anteriores.
 
@@ -780,6 +797,17 @@ Esta funcionalidad los necesita; su elección técnica corresponde al plan.
   indicada existe y la cita coincide con el texto de esa página.
 - **SC-005**: El 100 % de las propuestas que no cumplen el formato exigido se rechazan y
   quedan registradas, sin guardarse.
+- **SC-044**: El 100 % de las generaciones registradas indican el proveedor, el modelo, la
+  versión del prompt, el coste estimado y si el resultado fue válido. Todos los adaptadores
+  de generación disponibles superan el mismo conjunto de pruebas de contrato, y sustituir
+  uno por otro no exige cambiar ningún módulo de dominio.
+- **SC-045**: Una comprobación automática no encuentra los códigos del certificado ni de la
+  unidad formativa del piloto en el código del producto ni en sus pruebas genéricas, y las
+  pruebas automáticas del recorrido se ejecutan con una unidad sintética distinta de la del
+  piloto.
+- **SC-046**: Con un tema de prueba cuyo texto contiene marcado HTML y código de script, el
+  100 % de las vistas del producto y el paquete exportado lo muestran como texto literal:
+  ninguna contiene un elemento activo procedente de ese texto.
 - **SC-032**: Al alcanzar el límite de coste en una prueba preparada, no se inicia ninguna
   operación de generación más, los temas terminados siguen disponibles como borradores, los
   pendientes o fallidos están identificados y la versión no puede aprobarse ni exportarse. Al
@@ -856,7 +884,10 @@ Esta funcionalidad los necesita; su elección técnica corresponde al plan.
   del inventario contra la sección original de la unidad, y no es posible validar sin ella.
 - **SC-033**: En una prueba con dos sesiones que modifican el mismo elemento, el segundo
   guardado se rechaza en el 100 % de los casos, se muestra el conflicto y las modificaciones
-  de ambas sesiones siguen disponibles.
+  de ambas sesiones siguen disponibles: la primera, guardada como versión más reciente y
+  mostrada al segundo usuario; la segunda, en su formulario, sin guardar. El cambio del
+  segundo usuario solo se guarda si lo reenvía de forma explícita contra la versión más
+  reciente, y en ningún caso el sistema fusiona los dos cambios.
 - **SC-009**: Desde el 100 % de los requisitos mostrados, el acceso a la fuente lleva
   directamente a la página registrada.
 - **SC-010**: Cada validación y cada aprobación consultables muestran docente, fecha, hora y

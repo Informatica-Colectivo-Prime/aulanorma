@@ -41,6 +41,11 @@ type Rejection = 400 | 404 | 405 | 505;
 // Lista cerrada de rutas que se delegan. `maxBody` es el tamaño máximo del
 // cuerpo en bytes; con 0, la petición no puede llevar cuerpo. Cualquier otro
 // destino recibe el 404 cerrado.
+//
+// Un destino es exacto, salvo por dos clases de segmento con forma cerrada:
+// `:id`, un identificador opaco de 32 cifras hexadecimales en minúscula, y
+// `:n`, un número de página decimal de 1 a 99999, sin ceros iniciales. No hay
+// comodines, parámetros de consulta ni barra final.
 export interface Route {
   readonly target: string;
   readonly methods: readonly string[];
@@ -48,16 +53,77 @@ export interface Route {
 }
 
 const FORM_BODY = 4096;
+// Formularios con el texto de un requisito y su cita.
+const TEXT_FORM_BODY = 65_536;
+// Subida de un PDF. El límite configurado, que no puede superar este, lo
+// aplica la ruta.
+const UPLOAD_BODY = 64 * 1024 * 1024;
+
+const page = (target: string): Route => ({
+  target,
+  methods: ["GET"],
+  maxBody: 0,
+});
+const action = (target: string, maxBody: number): Route => ({
+  target,
+  methods: ["POST"],
+  maxBody,
+});
 
 export const ROUTES: readonly Route[] = Object.freeze([
   { target: "/api/health", methods: ["GET", "HEAD", "OPTIONS"], maxBody: 0 },
-  { target: "/", methods: ["GET"], maxBody: 0 },
-  { target: "/login", methods: ["GET"], maxBody: 0 },
-  { target: "/account/password", methods: ["GET"], maxBody: 0 },
-  { target: "/api/session/sign-in", methods: ["POST"], maxBody: FORM_BODY },
-  { target: "/api/session/sign-out", methods: ["POST"], maxBody: FORM_BODY },
-  { target: "/api/account/password", methods: ["POST"], maxBody: FORM_BODY },
+  page("/"),
+  page("/login"),
+  page("/account/password"),
+  action("/api/session/sign-in", FORM_BODY),
+  action("/api/session/sign-out", FORM_BODY),
+  action("/api/account/password", FORM_BODY),
+  page("/documents"),
+  page("/documents/new"),
+  page("/documents/:id"),
+  page("/documents/:id/file"),
+  page("/documents/:id/pages/:n"),
+  page("/interpretations/:id"),
+  page("/interpretations/:id/unit"),
+  page("/interpretations/:id/requirements/new"),
+  page("/interpretations/:id/requirements/:id"),
+  action("/api/documents/upload", UPLOAD_BODY),
+  action("/api/documents/resolve-page", FORM_BODY),
+  action("/api/interpretations/request", FORM_BODY),
+  action("/api/interpretations/correct", TEXT_FORM_BODY),
+  action("/api/interpretations/validate", FORM_BODY),
+  action("/api/interpretations/reject", TEXT_FORM_BODY),
+  action("/api/interpretations/resubmit", FORM_BODY),
 ]);
+
+const SEGMENTS: Readonly<Record<string, string>> = {
+  ":id": "[0-9a-f]{32}",
+  ":n": "[1-9][0-9]{0,4}",
+};
+
+// Expresión que reconoce exactamente los destinos crudos de una ruta.
+function matcher(target: string): RegExp {
+  const source = target
+    .split("/")
+    .map(
+      (segment) =>
+        SEGMENTS[segment] ?? segment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+    )
+    .join("/");
+  return new RegExp(`^${source}$`);
+}
+
+const MATCHERS: readonly (readonly [RegExp, Route])[] = ROUTES.map(
+  (route) => [matcher(route.target), route] as const,
+);
+
+// Ruta de la lista que corresponde a un destino crudo, si la hay.
+export function findRoute(url: string | undefined): Route | undefined {
+  if (url === undefined) {
+    return undefined;
+  }
+  return MATCHERS.find(([expression]) => expression.test(url))?.[1];
+}
 
 // Rechazo cerrado: cuerpo vacío y la conexión se cierra después. `Allow` solo
 // acompaña al 405, con los métodos de la ruta.
@@ -175,7 +241,7 @@ function decide(req: IncomingMessage, tunnel: boolean): Decision | undefined {
   if (!hostAdmitted(rawHeaders, version)) {
     return rejection(400);
   }
-  const route = ROUTES.find(({ target }) => target === req.url);
+  const route = findRoute(req.url);
   if (route === undefined) {
     return rejection(404);
   }

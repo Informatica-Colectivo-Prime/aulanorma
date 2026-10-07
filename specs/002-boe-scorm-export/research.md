@@ -170,6 +170,14 @@ con API JSON (más código de cliente y peor accesibilidad de partida).
 > que sigue describe el plan original de detección; **queda sustituido** por el apartado
 > "Inspección estructural" de más abajo. La extracción de texto no cambia.
 
+> **Resultado de la implementación (2026-10-07)**, en [us1-check.md](./us1-check.md).
+> Implementado como describe "Inspección estructural", con cuatro precisiones: qpdf se
+> instala como herramienta verificada de varios ficheros, para las cuatro plataformas; el
+> cifrado lo declara qpdf a partir de la estructura, antes de pedirle el resto, sin depender
+> de su proveedor criptográfico; el número de páginas que ve qpdf debe coincidir con el que ve
+> `pdfjs-dist`, o el documento se rechaza; y una página se considera sin texto extraíble sin
+> ningún umbral, como fija FR-064.
+
 Son tres problemas distintos. Resolver uno no acredita los otros.
 
 **Extracción de texto**. `pdfjs-dist` obtiene el texto página a página y el número de

@@ -60,6 +60,192 @@
           "binarySha256": "72715e768ed9eda0fb7ace42ce50168c99c9146246710858fd2daf9b31ab14b1"
         }
       }
+    },
+    "qpdf": {
+      "version": "12.4.2",
+      "archiveSha256Source": "release-checksums-file",
+      "platforms": {
+        "darwin-arm64": {
+          "url": "https://github.com/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-bin-macos-arm64.zip",
+          "archiveSha256": "62e46987a30ea167cbc530ccb22690aec3d8c812ed09979a941bcee92e504b79",
+          "files": [
+            {
+              "member": "bin/qpdf",
+              "path": "bin/qpdf",
+              "sha256": "46b699e2560a8c092a07a8a1e7107c59ac72f5cc51939d3f693f3d23e8027e83",
+              "executable": true
+            },
+            {
+              "member": "lib/libqpdf.30.4.2.dylib",
+              "path": "lib/libqpdf.30.dylib",
+              "sha256": "216e5544708b39781a2b65f3750adbcee96582e05ea2e47d892201f266b10e8f",
+              "executable": false
+            }
+          ]
+        },
+        "darwin-x64": {
+          "url": "https://github.com/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-bin-macos-x86_64.zip",
+          "archiveSha256": "dd3b01f4414d198529bb0f13bba59c2f016a328bb3506695087a96fb80fc1481",
+          "files": [
+            {
+              "member": "bin/qpdf",
+              "path": "bin/qpdf",
+              "sha256": "f3fffcdafe64d06fcb9218c80c4d65c41d7a41b7cd08afef1a062c252f8fa65f",
+              "executable": true
+            },
+            {
+              "member": "lib/libqpdf.30.4.2.dylib",
+              "path": "lib/libqpdf.30.dylib",
+              "sha256": "78af3f0aa1f11ee7a8f4a41121d9c0e8a5315a05d633e33266d1ad8c1fd1e96f",
+              "executable": false
+            }
+          ]
+        },
+        "linux-x64": {
+          "url": "https://github.com/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-bin-linux-x86_64.zip",
+          "archiveSha256": "db367d897829f22c4198ce1094143c9d467bd6ee7dfabc44ba6f02056b24f8b1",
+          "files": [
+            {
+              "member": "bin/qpdf",
+              "path": "bin/qpdf",
+              "sha256": "9ac787a28597e8428289a12ba3fedafd74bdfb4b4da1be814722faf76f14f21b",
+              "executable": true
+            },
+            {
+              "member": "lib/libffi.so.8",
+              "path": "lib/libffi.so.8",
+              "sha256": "1ae3d582f75ac136e9ff223acf7e1a1c6fcea7dfd792f4b3b401888082e47ec8",
+              "executable": false
+            },
+            {
+              "member": "lib/libgnutls.so.30",
+              "path": "lib/libgnutls.so.30",
+              "sha256": "1333e5627c3e0c9c67079abf8f46df1e9369e4d6aed800723e852b657467fbb9",
+              "executable": false
+            },
+            {
+              "member": "lib/libhogweed.so.6",
+              "path": "lib/libhogweed.so.6",
+              "sha256": "5cf6f6da565d6f8132918f7c9b3558239e4193ea2299eb53082d92458f56b42e",
+              "executable": false
+            },
+            {
+              "member": "lib/libidn2.so.0",
+              "path": "lib/libidn2.so.0",
+              "sha256": "a8e6f7c0d5770294830db63b7dc8fd005362e20b109c74ee600689d5f8317324",
+              "executable": false
+            },
+            {
+              "member": "lib/libjpeg.so.8",
+              "path": "lib/libjpeg.so.8",
+              "sha256": "21661bf728676700a61be235403cedc0c6f61247b45baa685904414a5ecd8f69",
+              "executable": false
+            },
+            {
+              "member": "lib/libnettle.so.8",
+              "path": "lib/libnettle.so.8",
+              "sha256": "250d19ee04109927927fbbe8a3be63572cd242481dc6cb7106279461244ccf33",
+              "executable": false
+            },
+            {
+              "member": "lib/libp11-kit.so.0",
+              "path": "lib/libp11-kit.so.0",
+              "sha256": "6f908a6c1cc40d0da1df4f921acedc39cab2a84e92146cbbecfeb58354f0ddc3",
+              "executable": false
+            },
+            {
+              "member": "lib/libqpdf.so.30.4.2",
+              "path": "lib/libqpdf.so.30",
+              "sha256": "370dbb25c047c6b2a954c378f9c80c6e7072d3b220a95897d43f3283a31049e4",
+              "executable": false
+            },
+            {
+              "member": "lib/libtasn1.so.6",
+              "path": "lib/libtasn1.so.6",
+              "sha256": "28a1d44689c3e88c0b8004d97387b75880e8d75e9d7ea8c968b29a3653caec52",
+              "executable": false
+            },
+            {
+              "member": "lib/libunistring.so.2",
+              "path": "lib/libunistring.so.2",
+              "sha256": "a821050079d149d6f0a0e58fd90c27eba52f259da80075c6b96c965af0b4a224",
+              "executable": false
+            }
+          ]
+        },
+        "linux-arm64": {
+          "url": "https://github.com/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-bin-linux-aarch64.zip",
+          "archiveSha256": "8fd9d009eb0838398180a603f2cf76531e5c68a4ecc8847598e0a1ccb1d3b600",
+          "files": [
+            {
+              "member": "bin/qpdf",
+              "path": "bin/qpdf",
+              "sha256": "1f7ee95ad87f210d8c95702e4c74bda5bd9181cf3f3f6eb1e16b7f4889f34d0f",
+              "executable": true
+            },
+            {
+              "member": "lib/libffi.so.8",
+              "path": "lib/libffi.so.8",
+              "sha256": "0bfda3b12fab63e86690b1aa42e4c0303ee9a95a4e6595b4459985a16e7eb9c3",
+              "executable": false
+            },
+            {
+              "member": "lib/libgnutls.so.30",
+              "path": "lib/libgnutls.so.30",
+              "sha256": "265c33b0942dd6af10cfb57d554696c569fbe8428cf8ece69ab5c399accc7890",
+              "executable": false
+            },
+            {
+              "member": "lib/libhogweed.so.6",
+              "path": "lib/libhogweed.so.6",
+              "sha256": "fc8acec3222274c3b09ce90cd4a0bee3e373c81ebcb030ecb934b0c30e8e8afb",
+              "executable": false
+            },
+            {
+              "member": "lib/libidn2.so.0",
+              "path": "lib/libidn2.so.0",
+              "sha256": "97a787330dd838ef85ad613a919576e79354fd649a1daf3ca41361ba822896db",
+              "executable": false
+            },
+            {
+              "member": "lib/libjpeg.so.8",
+              "path": "lib/libjpeg.so.8",
+              "sha256": "55ac291ddcfc6634826c87f607343e55a1cccd843657a4d0a122c33a0a728ef5",
+              "executable": false
+            },
+            {
+              "member": "lib/libnettle.so.8",
+              "path": "lib/libnettle.so.8",
+              "sha256": "2c333e92132dc185394e5e7706548138f12ca7f4065470fe91b0e2ac4b4f34d1",
+              "executable": false
+            },
+            {
+              "member": "lib/libp11-kit.so.0",
+              "path": "lib/libp11-kit.so.0",
+              "sha256": "0e0308533a494adf0ba63ad629c6a27dd978043e4c00be55b94501d977f99d21",
+              "executable": false
+            },
+            {
+              "member": "lib/libqpdf.so.30.4.2",
+              "path": "lib/libqpdf.so.30",
+              "sha256": "f9ad1421fb961969f9b7766e9b92ce2433ea3a4dd9353ca42a11e87ea6f054f7",
+              "executable": false
+            },
+            {
+              "member": "lib/libtasn1.so.6",
+              "path": "lib/libtasn1.so.6",
+              "sha256": "c20f4d102cfd8f215230753aef77f90f9e8814fe26c37e44e9a14a333dd379ec",
+              "executable": false
+            },
+            {
+              "member": "lib/libunistring.so.2",
+              "path": "lib/libunistring.so.2",
+              "sha256": "4a2fcb5d743f1e0057476ace35c728503745635582d129dc09544730cdbe9e48",
+              "executable": false
+            }
+          ]
+        }
+      }
     }
   }
 }

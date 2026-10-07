@@ -1,8 +1,9 @@
-// Instalador de Gitleaks y zizmor (`npm run tools:install`; research.md, R11
-// y R13; ADR 0002). Node.js sin dependencias: funciona sin `npm ci` y sin
-// credenciales. Además de Node.js necesita `tar` en el `PATH`, que macOS y
-// Linux incluyen. Instala `.tools/bin/gitleaks` y `.tools/bin/zizmor`, que
-// usan `check:secrets` y `check:workflows`.
+// Instalador de Gitleaks, zizmor y qpdf (`npm run tools:install`;
+// research.md, R11 y R13; ADR 0002; specs/002-boe-scorm-export, T032). Node.js
+// sin dependencias: funciona sin `npm ci` y sin credenciales. Además de
+// Node.js necesita `tar` en el `PATH`, que macOS y Linux incluyen. Instala
+// `.tools/bin/gitleaks` y `.tools/bin/zizmor`, que usan `check:secrets` y
+// `check:workflows`, y `.tools/qpdf`, que usa la inspección de los PDF.
 //
 // `tools.lock.json` (junto a este script) fija cada herramienta:
 //
@@ -12,6 +13,15 @@
 //       "archiveSha256Source": "release-checksums-file" | "github-asset-digest",
 //       "platforms": { "<darwin-arm64|darwin-x64|linux-x64|linux-arm64>": {
 //         "url", "archiveSha256", "member", "binarySha256" } } } } }
+//
+// qpdf no es un único binario: su publicación es un `.zip` con el ejecutable
+// y sus bibliotecas. Su entrada de cada plataforma es
+// `{ "url", "archiveSha256", "files" }`, y cada elemento de `files` es
+// `{ "member", "path", "sha256", "executable" }`: la ruta dentro del archivo,
+// la ruta con la que se instala bajo `.tools/qpdf`, su hash y si lleva
+// permiso de ejecución. Los enlaces simbólicos del archivo no se extraen: la
+// biblioteca se instala directamente con el nombre que carga el ejecutable.
+// El `.zip` se lee con código de este fichero y `node:zlib`, sin `unzip`.
 //
 // Procedencia de los valores:
 // - `url`: el asset de la release oficial de cada proyecto.
@@ -25,6 +35,10 @@
 // - `member`: ruta exacta del binario dentro del archivo.
 // - `binarySha256`: calculado tras extraer `member` del archivo cuyo hash ya
 //   se había verificado.
+// - qpdf: `archiveSha256` procede del fichero de sumas que publica el
+//   proyecto junto a la versión (`release-checksums-file`); el `sha256` de
+//   cada fichero, de extraerlo del archivo ya verificado. La firma de ese
+//   fichero de sumas no se ha verificado criptográficamente.
 //
 // Este instalador verifica la integridad contra los valores fijados en el
 // lock; no verifica firmas ni la procedencia del proceso de compilación.
@@ -45,6 +59,11 @@
 //   el miembro exacto en un temporal aislado dentro de `.tools`, exige un
 //   fichero regular sin nada más extraído, comprueba `binarySha256` y solo
 //   entonces lo publica con permisos de ejecución mediante `rename`.
+// - qpdf se instala como un directorio completo: se extraen solo los ficheros
+//   fijados, se comprueba el hash de cada uno y el directorio se publica con
+//   un único `rename`. Se da por instalado solo si `.tools/qpdf` es un
+//   directorio real que contiene exactamente esos ficheros, regulares y con
+//   su hash; en otro caso se aparta, se borra y se reinstala.
 // - Los temporales se eliminan siempre. Los mensajes no muestran rutas
 //   absolutas ni respuestas remotas. Código 0 si todo queda verificado; 1 en
 //   cualquier otro caso.
@@ -61,15 +80,21 @@ import {
   rename,
   rm,
   unlink,
+  writeFile,
 } from "node:fs/promises";
 import https from "node:https";
 import path from "node:path";
+import { crc32, inflateRawSync } from "node:zlib";
 
 const LOCK_FILE = path.join(import.meta.dirname, "tools.lock.json");
 const TOOLS_DIR = path.join(import.meta.dirname, "..", "..", ".tools");
 const BIN_DIR = path.join(TOOLS_DIR, "bin");
 
 const TOOLS = ["gitleaks", "zizmor"];
+// Herramientas que se instalan como un directorio con varios ficheros.
+const BUNDLES = ["qpdf"];
+const MAX_BUNDLE_FILES = 32;
+const MAX_MEMBER_BYTES = 32 * 1024 * 1024;
 const PLATFORMS = ["darwin-arm64", "darwin-x64", "linux-x64", "linux-arm64"];
 const SOURCES = ["release-checksums-file", "github-asset-digest"];
 
@@ -143,14 +168,38 @@ function isValidEntry(entry) {
   );
 }
 
-function isValidTool(tool) {
+function isValidBundleFile(file) {
+  return (
+    hasExactKeys(file, ["member", "path", "sha256", "executable"]) &&
+    isSafeMember(file.member) &&
+    isSafeMember(file.path) &&
+    isHash(file.sha256) &&
+    typeof file.executable === "boolean"
+  );
+}
+
+function isValidBundleEntry(entry) {
+  return (
+    hasExactKeys(entry, ["url", "archiveSha256", "files"]) &&
+    isHttpsUrl(entry.url) &&
+    isHash(entry.archiveSha256) &&
+    Array.isArray(entry.files) &&
+    entry.files.length > 0 &&
+    entry.files.length <= MAX_BUNDLE_FILES &&
+    entry.files.every(isValidBundleFile) &&
+    new Set(entry.files.map((file) => file.path)).size === entry.files.length &&
+    new Set(entry.files.map((file) => file.member)).size === entry.files.length
+  );
+}
+
+function isValidTool(tool, isEntry) {
   return (
     hasExactKeys(tool, ["version", "archiveSha256Source", "platforms"]) &&
     typeof tool.version === "string" &&
     VERSION.test(tool.version) &&
     SOURCES.includes(tool.archiveSha256Source) &&
     hasExactKeys(tool.platforms, PLATFORMS) &&
-    PLATFORMS.every((platform) => isValidEntry(tool.platforms[platform]))
+    PLATFORMS.every((platform) => isEntry(tool.platforms[platform]))
   );
 }
 
@@ -164,8 +213,9 @@ async function readLock() {
   const valid =
     hasExactKeys(lock, ["schemaVersion", "tools"]) &&
     lock.schemaVersion === 1 &&
-    hasExactKeys(lock.tools, TOOLS) &&
-    TOOLS.every((tool) => isValidTool(lock.tools[tool]));
+    hasExactKeys(lock.tools, [...TOOLS, ...BUNDLES]) &&
+    TOOLS.every((tool) => isValidTool(lock.tools[tool], isValidEntry)) &&
+    BUNDLES.every((tool) => isValidTool(lock.tools[tool], isValidBundleEntry));
   if (!valid) {
     throw new InstallError("tools.lock.json no tiene la estructura esperada.");
   }
@@ -432,6 +482,259 @@ async function installTool(name, version, entry) {
   }
 }
 
+// --- Herramientas de varios ficheros ---
+
+const ZIP_END = 0x06054b50;
+const ZIP_CENTRAL = 0x02014b50;
+const ZIP_LOCAL = 0x04034b50;
+const SYMLINK_MODE = 0o120000;
+const FILE_TYPE_MASK = 0o170000;
+
+// Lee de un `.zip` en memoria los miembros pedidos, y solo esos. Exige que
+// cada uno aparezca exactamente una vez, que sea un fichero regular sin
+// cifrar, almacenado o comprimido con deflate, y que su tamaño y su CRC
+// coincidan con los declarados. No admite ZIP64 ni archivos en varios discos.
+function readZipMembers(data, members) {
+  const invalid = () => new InstallError("el archivo .zip no es válido");
+  let end = -1;
+  for (
+    let offset = data.length - 22;
+    offset >= Math.max(0, data.length - 22 - 0xffff);
+    offset -= 1
+  ) {
+    if (data.readUInt32LE(offset) === ZIP_END) {
+      end = offset;
+      break;
+    }
+  }
+  if (end < 0) {
+    throw invalid();
+  }
+  const total = data.readUInt16LE(end + 10);
+  const directorySize = data.readUInt32LE(end + 12);
+  let cursor = data.readUInt32LE(end + 16);
+  if (
+    data.readUInt16LE(end + 4) !== 0 ||
+    data.readUInt16LE(end + 8) !== total ||
+    total === 0xffff ||
+    cursor === 0xffffffff ||
+    cursor + directorySize > end
+  ) {
+    throw invalid();
+  }
+  const found = new Map();
+  for (let index = 0; index < total; index += 1) {
+    if (cursor + 46 > end || data.readUInt32LE(cursor) !== ZIP_CENTRAL) {
+      throw invalid();
+    }
+    const nameLength = data.readUInt16LE(cursor + 28);
+    const name = data.toString("utf8", cursor + 46, cursor + 46 + nameLength);
+    if (members.includes(name)) {
+      if (found.has(name)) {
+        throw new InstallError(
+          "el archivo contiene un miembro repetido con esa ruta",
+        );
+      }
+      found.set(name, {
+        flags: data.readUInt16LE(cursor + 8),
+        method: data.readUInt16LE(cursor + 10),
+        crc: data.readUInt32LE(cursor + 16),
+        compressedSize: data.readUInt32LE(cursor + 20),
+        size: data.readUInt32LE(cursor + 24),
+        mode: data.readUInt32LE(cursor + 38) >>> 16,
+        localOffset: data.readUInt32LE(cursor + 42),
+      });
+    }
+    cursor +=
+      46 +
+      nameLength +
+      data.readUInt16LE(cursor + 30) +
+      data.readUInt16LE(cursor + 32);
+  }
+  return members.map((member) => {
+    const entry = found.get(member);
+    if (entry === undefined) {
+      throw new InstallError("el archivo no contiene un miembro esperado");
+    }
+    if (
+      (entry.flags & 1) !== 0 ||
+      (entry.method !== 0 && entry.method !== 8) ||
+      (entry.mode & FILE_TYPE_MASK) === SYMLINK_MODE ||
+      entry.size > MAX_MEMBER_BYTES ||
+      entry.compressedSize === 0xffffffff ||
+      entry.localOffset + 30 > data.length ||
+      data.readUInt32LE(entry.localOffset) !== ZIP_LOCAL
+    ) {
+      throw new InstallError(
+        "un miembro del archivo no es un fichero admitido",
+      );
+    }
+    const start =
+      entry.localOffset +
+      30 +
+      data.readUInt16LE(entry.localOffset + 26) +
+      data.readUInt16LE(entry.localOffset + 28);
+    if (start + entry.compressedSize > data.length) {
+      throw invalid();
+    }
+    const raw = data.subarray(start, start + entry.compressedSize);
+    let content;
+    try {
+      content =
+        entry.method === 0
+          ? raw
+          : inflateRawSync(raw, { maxOutputLength: MAX_MEMBER_BYTES });
+    } catch {
+      throw invalid();
+    }
+    if (content.length !== entry.size || crc32(content) !== entry.crc) {
+      throw invalid();
+    }
+    return content;
+  });
+}
+
+// Rutas relativas de todo lo que hay bajo `directory`, sin seguir enlaces.
+// Los directorios aparecen con una barra final.
+async function listTree(directory, prefix = "") {
+  const names = [];
+  for (const name of (await readdir(directory)).sort()) {
+    const relative = `${prefix}${name}`;
+    const stats = await lstat(path.join(directory, name));
+    if (stats.isDirectory()) {
+      names.push(`${relative}/`);
+      names.push(
+        ...(await listTree(path.join(directory, name), `${relative}/`)),
+      );
+    } else {
+      names.push(relative);
+    }
+  }
+  return names;
+}
+
+function expectedTree(files) {
+  const names = new Set();
+  for (const { path: relative } of files) {
+    const segments = relative.split("/");
+    names.add(relative);
+    for (let depth = 1; depth < segments.length; depth += 1) {
+      names.add(`${segments.slice(0, depth).join("/")}/`);
+    }
+  }
+  return [...names].sort();
+}
+
+// `verified` si `target` es un directorio real que contiene exactamente los
+// ficheros fijados, regulares y con su hash; `absent` si no existe; y
+// `removed` si había otra cosa, que se aparta sin seguirla y se borra.
+async function checkInstalledBundle(target, files) {
+  let stats;
+  try {
+    stats = await lstat(target);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return "absent";
+    }
+    throw new InstallError("no se pudo comprobar el directorio instalado");
+  }
+  if (stats.isDirectory()) {
+    const tree = await listTree(target);
+    let verified =
+      JSON.stringify([...tree].sort()) === JSON.stringify(expectedTree(files));
+    for (const file of verified ? files : []) {
+      const installed = path.join(target, file.path);
+      if (
+        !(await lstat(installed)).isFile() ||
+        sha256(await readFile(installed)) !== file.sha256
+      ) {
+        verified = false;
+        break;
+      }
+    }
+    if (verified) {
+      for (const file of files) {
+        await chmod(
+          path.join(target, file.path),
+          file.executable ? 0o755 : 0o644,
+        );
+      }
+      return "verified";
+    }
+    const aside = await mkdtemp(path.join(TOOLS_DIR, "tmp-"));
+    try {
+      await rename(target, path.join(aside, "anterior"));
+    } finally {
+      await rm(aside, { recursive: true, force: true });
+    }
+    return "removed";
+  }
+  await unlink(target);
+  return "removed";
+}
+
+async function installBundleFromArchive(entry, target) {
+  const temp = await mkdtemp(path.join(TOOLS_DIR, "tmp-"));
+  try {
+    const archive = path.join(temp, "archive.zip");
+    if ((await download(entry.url, archive)) !== entry.archiveSha256) {
+      throw new InstallError(
+        "el SHA-256 del archivo no coincide con tools.lock.json",
+      );
+    }
+    const contents = readZipMembers(
+      await readFile(archive),
+      entry.files.map((file) => file.member),
+    );
+    const staged = path.join(temp, "extracted");
+    await mkdir(staged);
+    for (const [index, file] of entry.files.entries()) {
+      const content = contents[index];
+      if (sha256(content) !== file.sha256) {
+        throw new InstallError(
+          "el SHA-256 de un fichero extraído no coincide con tools.lock.json",
+        );
+      }
+      const destination = path.join(staged, file.path);
+      await mkdir(path.dirname(destination), { recursive: true });
+      await writeFile(destination, content, {
+        flag: "wx",
+        mode: file.executable ? 0o755 : 0o644,
+      });
+      await chmod(destination, file.executable ? 0o755 : 0o644);
+    }
+    await rename(staged, target);
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+  }
+}
+
+async function installBundle(name, version, entry) {
+  const label = `${name} ${version}`;
+  const shown = `.tools/${name}`;
+  const target = path.join(TOOLS_DIR, name);
+  try {
+    const installed = await checkInstalledBundle(target, entry.files);
+    if (installed === "verified") {
+      process.stdout.write(
+        `${label}: ya instalado y verificado en ${shown}.\n`,
+      );
+      return;
+    }
+    if (installed === "removed") {
+      process.stdout.write(
+        `${label}: lo instalado no coincide con tools.lock.json; se retira y se reinstala.\n`,
+      );
+    }
+    await installBundleFromArchive(entry, target);
+    process.stdout.write(`${label}: instalado y verificado en ${shown}.\n`);
+  } catch (error) {
+    throw new InstallError(
+      `${label}: ${error instanceof InstallError ? error.message : "error inesperado durante la instalación"}.`,
+    );
+  }
+}
+
 async function main() {
   const lock = await readLock();
   const platform = currentPlatform();
@@ -440,6 +743,10 @@ async function main() {
   for (const name of TOOLS) {
     const tool = lock.tools[name];
     await installTool(name, tool.version, tool.platforms[platform]);
+  }
+  for (const name of BUNDLES) {
+    const tool = lock.tools[name];
+    await installBundle(name, tool.version, tool.platforms[platform]);
   }
 }
 

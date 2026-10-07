@@ -31,14 +31,23 @@ export const getServerSideProps = protectedPage(
           </dl>
           <h2>Qué puedes hacer ahora</h2>
           <ul>
+            ${
+              roles.includes("teacher")
+                ? html`<li>
+                    <a href="/documents">Subir un documento oficial</a>,
+                    comprobar su registro y revisar y validar su interpretación.
+                  </li>`
+                : null
+            }
             <li><a href="/account/password">Cambiar tu contraseña</a></li>
             <li>Salir, con el botón de la cabecera.</li>
           </ul>
           <h2>Qué no está disponible todavía</h2>
           <p class="muted">
-            Esta versión solo incluye el acceso. Subir el documento oficial,
-            revisar su interpretación, aprobar el índice y el temario y exportar
-            el paquete llegarán en entregas posteriores.
+            Proponer y aprobar el índice, desarrollar y aprobar el temario y
+            exportar el paquete llegarán en entregas posteriores. La
+            interpretación se obtiene, por ahora, de respuestas grabadas: no hay
+            ningún servicio de generación real conectado.
           </p>`,
       }),
     };

@@ -31,15 +31,18 @@ operación, quién puede ejecutarla y sus condiciones.
   cerrar sesión, cambiar la contraseña, desactivar la cuenta o cambiar sus permisos (FR-068).
 - **Generación de pago**: toda solicitud muestra antes la estimación y el presupuesto
   disponible; sin una reserva dentro de los límites no se envía (FR-021).
-- **Revisión**: guardar un elemento editable exige la revisión abierta. Si no es la actual, la
-  respuesta es 409 con la revisión actual y el contenido enviado, sin guardar nada.
+- **Revisión**: guardar un elemento editable, y validarlo, aprobarlo o rechazarlo, exige la
+  revisión abierta. Si no es la actual, la respuesta es 409, sin guardar nada: dice que hay
+  una versión más reciente, la muestra junto al contenido enviado, que sigue en el
+  formulario, y permite reenviarlo de forma explícita contra esa versión o descartarlo. Nada
+  se fusiona ni se reenvía solo (FR-063).
 - **Bloqueos de negocio** (cobertura incompleta, aprobación no vigente, páginas sin resolver,
   presupuesto insuficiente): 422 con el motivo y la lista de pendientes, cada uno con su
   referencia normativa cuando aplica.
 - **Cuerpos**: tamaño máximo por operación, aplicado en la frontera.
 - **Sin borrado**: no existe ninguna operación `DELETE`.
 
-## Rutas implementadas (cimientos, fase 3)
+## Rutas implementadas (cimientos e historia 1)
 
 | Destino                 | Métodos                  | Operación                                 |
 | ----------------------- | ------------------------ | ----------------------------------------- |
@@ -50,10 +53,43 @@ operación, quién puede ejecutarla y sus condiciones.
 | `/account/password`     | `GET`                    | Ver el formulario de cambio de contraseña |
 | `/api/session/sign-out` | `POST`                   | Cerrar sesión                             |
 | `/api/account/password` | `POST`                   | Cambiar la contraseña                     |
+| `/documents`            | `GET`                    | Ver los documentos registrados            |
+| `/documents/new`        | `GET`                    | Ver el formulario de subida               |
+| `/api/documents/upload` | `POST`                   | Registrar documento, también un sustituto |
+| `/documents/:id`        | `GET`                    | Ver el registro de un documento           |
+| `/documents/:id/file`   | `GET`                    | Abrir el PDF original                     |
+| `/documents/:id/pages/:n` | `GET`                  | Ver una página y su texto extraído        |
+| `/api/documents/resolve-page` | `POST`             | Resolver página sin texto                 |
+| `/api/interpretations/request` | `POST`            | Pedir interpretación                      |
+| `/interpretations/:id`  | `GET`                    | Ver la interpretación y su registro       |
+| `/interpretations/:id/unit` | `GET`                | Ver el formulario de la unidad            |
+| `/interpretations/:id/requirements/new` | `GET`    | Ver el formulario de un requisito nuevo   |
+| `/interpretations/:id/requirements/:id` | `GET`    | Ver el formulario de un requisito         |
+| `/api/interpretations/correct` | `POST`            | Corregir interpretación                   |
+| `/api/interpretations/validate` | `POST`           | Validar interpretación                    |
+| `/api/interpretations/reject` | `POST`             | Rechazar interpretación                   |
+| `/api/interpretations/resubmit` | `POST`           | Devolver a revisión una rechazada         |
 
-Las demás operaciones de la tabla siguiente todavía no existen. Las páginas responden con HTML
-completo o con una redirección; las acciones, siempre con una redirección o con un rechazo sin
-cuerpo. Los destinos son exactos: no admiten parámetros de consulta.
+Las demás operaciones de la tabla siguiente todavía no existen. Los destinos son exactos: no
+admiten parámetros de consulta ni barra final. `:id` es un identificador opaco de 32 cifras
+hexadecimales en minúscula y `:n`, un número de página de 1 a 99999 sin ceros iniciales;
+cualquier otra forma recibe el 404 cerrado de la frontera.
+
+Las páginas responden con HTML completo o con una redirección. Las acciones responden con una
+redirección o con un rechazo sin cuerpo, con tres excepciones:
+
+- **Conflicto de revisión (409) y bloqueo de negocio o dato inválido (422)**: la acción
+  responde con una página que lo explica y conserva lo enviado, sin guardar nada.
+- **Subida**: el cuerpo es el PDF (`application/pdf`), así que el testigo de la sesión y los
+  datos de procedencia viajan en cabeceras. La respuesta es un JSON mínimo, `{"location"}`,
+  con 201 si el documento se registró y 422 si se rechazó; el motivo se muestra en la página
+  indicada. Sin sesión responde 401 sin cuerpo.
+- **PDF original**: se sirve con `Content-Type: application/pdf`, `nosniff`, sin caché y con
+  una política de contenido que no le permite cargar nada.
+
+Cada acción admite un cuerpo máximo: 4 KiB los formularios simples, 64 KiB los que llevan el
+texto de un requisito o un motivo, y 64 MiB la subida, sobre la que la ruta aplica además el
+tamaño máximo configurado.
 
 ## Operaciones
 

@@ -112,20 +112,21 @@ con pruebas automáticas y con un navegador real: ver
 **Independent Test**: con un PDF de prueba, un docente obtiene la interpretación, abre la
 página de origen de varios elementos, corrige uno y valida.
 
-- [ ] T031 [P] [US1] Crear la migración y el repositorio de `Document`, `DocumentPage` y `PageResolution` en `src/modules/normative-source/` (documento inmutable, `sha256` único, `replaces_document_id`, una fila por página aunque no tenga texto), con pruebas en `tests/unit/normative-source/repository.test.ts`
-- [ ] T032 [US1] Incorporar `qpdf` como herramienta verificada (binario oficial con huella fijada en `scripts/tools/tools.lock.json`, instalado por `npm run tools:install`) e implementar en `src/modules/normative-source/pdf/` la validación del fichero: firma, tamaño y páginas; inspección estructural con la salida JSON versión 2 de qpdf y la política propia sobre esa estructura (rechazo de JavaScript, XFA, acciones automáticas, lanzamientos y ficheros incrustados; formulario admitido solo si todos sus campos son de firma y sin acciones; rechazo ante error, avisos, límite excedido o referencia no resoluble); y extracción por página con `pdfjs-dist`, todo en procesos hijos con entorno vacío y límites, con la salida validada por esquema y sin modificar el original; pruebas en `tests/unit/normative-source/pdf.test.ts`, un caso por cada fichero de `tests/fixtures/pdf/synthetic/` (SC-042)
-- [ ] T033 [US1] Exponer en `src/modules/normative-source/index.ts` registrar documento, registrar sustituto, leer página y resolver página sin texto, con auditoría
-- [ ] T034 [P] [US1] Crear la migración y el repositorio de `Interpretation`, `Requirement` (`kind`: `capability`, `criterion`, `content`, `subcontent`; `parent_id`; referencia normativa), `Correction` e `InterpretationValidation` en `src/modules/structured-interpretation/`, con pruebas en `tests/unit/structured-interpretation/repository.test.ts`
-- [ ] T035 [P] [US1] Crear `src/platform/generation/` con la interfaz `GenerationProvider`, el adaptador determinista con respuestas grabadas en `tests/fixtures/generation/`, `GenerationRun` y `GenerationCall`, y el prompt versionado `prompts/interpretation/v1.md`; pruebas de contrato en `tests/contract/generation-provider.contract.test.ts` (salida inválida rechazada y registrada; texto con instrucciones incrustadas tratado como dato; ninguna identidad ni registro de usuarios en la entrada enviada)
-- [ ] T036 [US1] Implementar en `src/modules/structured-interpretation/` la obtención de la interpretación con su esquema Zod versionado y las comprobaciones posteriores (la página existe, la cita aparece en el texto de su página); pruebas en `tests/unit/structured-interpretation/interpret.test.ts`
-- [ ] T037 [US1] Implementar correcciones con control de revisión y la validación (exige todas las páginas sin texto resueltas y la confirmación de la revisión del inventario); el rechazo con motivo obligatorio (`Rejection`), que conserva el contenido y permite volver a revisión; la vigencia se deriva de `interpretation_revision`; pruebas en `tests/unit/structured-interpretation/validation.test.ts`
-- [ ] T038 [US1] Abrir la regla de la entrega para que las rutas de producto importen las capas `normative-source` y `structured-interpretation` (ESLint y `import-boundaries.test.ts`), y crear las páginas `src/pages/documents/` (subida con cuerpo `application/pdf`, registro con huella y procedencia, páginas sin texto y su resolución) y la ruta que sirve el PDF autorizado en su página con `nosniff` y política de contenido restrictiva
-- [ ] T039 [US1] Crear las páginas `src/pages/interpretation/` (inventario con jerarquía, duración como metadato, acceso a la página de origen junto al texto extraído, corrección, validación con confirmación expresa)
-- [ ] T040 [US1] Implementar el documento sustituto (FR-067): interpretación nueva sin validación ni aprobaciones, sin mezclar páginas ni reasignar referencias, sin iniciar generación; pruebas en `tests/integration/substitute-document.test.ts`
-- [ ] T041 [US1] Escribir `tests/integration/us1-document-interpretation.test.ts` con los escenarios de aceptación 1 a 10 de la historia 1 y las denegaciones por perfil
-- [ ] T042 [US1] Ejecutar el tratamiento completo sobre el PDF real del piloto, localizado por su ruta y verificado contra la huella de `specs/002-boe-scorm-export/pilot-source.md`, y registrar los resultados esperados y obtenidos de la unidad en `specs/002-boe-scorm-export/pilot/`; el PDF no se añade al repositorio y esta comprobación no forma parte de la integración continua
+- [X] T031 [P] [US1] Crear la migración y el repositorio de `Document`, `DocumentPage` y `PageResolution` en `src/modules/normative-source/` (documento inmutable, `sha256` único, `replaces_document_id`, una fila por página aunque no tenga texto), con pruebas en `tests/unit/normative-source/repository.test.ts`. Hecho con dos precisiones: las migraciones están en la lista única y ordenada de `src/platform/persistence`, porque `server.mjs` las aplica antes de cargar Next.js y solo importa módulos portables; y el repositorio y el servicio de la capa están en su `index.ts`
+- [X] T032 [US1] Incorporar `qpdf` como herramienta verificada (binario oficial con huella fijada en `scripts/tools/tools.lock.json`, instalado por `npm run tools:install`) e implementar en `src/modules/normative-source/pdf/` la validación del fichero: firma, tamaño y páginas; inspección estructural con la salida JSON versión 2 de qpdf y la política propia sobre esa estructura (rechazo de JavaScript, XFA, acciones automáticas, lanzamientos y ficheros incrustados; formulario admitido solo si todos sus campos son de firma y sin acciones; rechazo ante error, avisos, límite excedido o referencia no resoluble); y extracción por página con `pdfjs-dist`, todo en procesos hijos con entorno vacío y límites, con la salida validada por esquema y sin modificar el original; pruebas en `tests/unit/normative-source/pdf.test.ts`, un caso por cada fichero de `tests/fixtures/pdf/synthetic/` (SC-042). Hecho. El instalador y el fichero de huellas admiten ahora una herramienta de varios ficheros en un `.zip`, para las cuatro plataformas. El cifrado lo declara qpdf a partir de la estructura, con la clave dada en hexadecimal, sin depender de su proveedor criptográfico: el binario oficial de macOS no puede cargar los algoritmos antiguos y antes rechazaba el documento por ese fallo
+- [X] T033 [US1] Exponer en `src/modules/normative-source/index.ts` registrar documento, registrar sustituto, leer página y resolver página sin texto, con auditoría. Hecho en `src/modules/normative-source/index.ts`
+- [X] T034 [P] [US1] Crear la migración y el repositorio de `Interpretation`, `Requirement` (`kind`: `capability`, `criterion`, `content`, `subcontent`; `parent_id`; referencia normativa), `Correction` e `InterpretationValidation` en `src/modules/structured-interpretation/`, con pruebas en `tests/unit/structured-interpretation/repository.test.ts`. Hecho, con el rechazo en `interpretation_rejection` (la entidad `Rejection` del modelo, para la interpretación), la sección original de la unidad en `Interpretation` y la marca `withdrawn` en `Requirement`: nada se borra, un requisito erróneo se retira
+- [X] T035 [P] [US1] Crear `src/platform/generation/` con la interfaz `GenerationProvider`, el adaptador determinista con respuestas grabadas en `tests/fixtures/generation/`, `GenerationRun` y `GenerationCall`, y el prompt versionado `prompts/interpretation/v1.md`; pruebas de contrato en `tests/contract/generation-provider.contract.test.ts` (salida inválida rechazada y registrada; texto con instrucciones incrustadas tratado como dato; ninguna identidad ni registro de usuarios en la entrada enviada, SC-015; cada llamada registra proveedor, modelo, versión del prompt, coste estimado y resultado de la validación, SC-044). Hecho. El presupuesto y sus reservas siguen en T049; el coste estimado de cada llamada ya se registra. Las grabaciones del adaptador se leen de `tests/fixtures/generation/` en las pruebas y, en ejecución, de `generation-recordings` dentro del directorio de datos
+- [X] T036 [US1] Implementar en `src/modules/structured-interpretation/` la obtención de la interpretación con su esquema Zod versionado y las comprobaciones posteriores (la página existe, la cita aparece en el texto de su página); pruebas en `tests/unit/structured-interpretation/interpret.test.ts`. Hecho en `src/modules/structured-interpretation/index.ts`, con las pruebas en `tests/unit/structured-interpretation/interpretation.test.ts`
+- [X] T037 [US1] Implementar correcciones con control de revisión, con el conflicto de FR-063 (versión más reciente mostrada junto al cambio enviado y reenvío explícito, SC-033), y la validación (exige todas las páginas sin texto resueltas y la confirmación de la revisión del inventario); el rechazo con motivo obligatorio (`Rejection`), que conserva el contenido y permite volver a revisión; la vigencia se deriva de `interpretation_revision`; pruebas en `tests/unit/structured-interpretation/validation.test.ts`. Hecho, con las pruebas en `tests/unit/structured-interpretation/interpretation.test.ts`
+- [X] T038 [US1] Abrir la regla de la entrega para que las rutas de producto importen las capas `normative-source` y `structured-interpretation` (ESLint y `import-boundaries.test.ts`), y crear las páginas `src/pages/documents/` (subida con cuerpo `application/pdf`, registro con huella y procedencia, páginas sin texto y su resolución) y la ruta que sirve el PDF autorizado en su página con `nosniff` y política de contenido restrictiva. Hecho. La entrega se abre solo a esas dos capas; las vistas que comparten páginas y acciones están en `src/views`. Los datos de procedencia viajan en una cabecera de la subida, porque el cuerpo es el PDF, y la respuesta de la subida es un JSON mínimo con la página a la que ir
+- [X] T039 [US1] Crear las páginas `src/pages/interpretation/` (inventario con jerarquía, duración como metadato, acceso a la página de origen junto al texto extraído, corrección, validación con confirmación expresa). Hecho
+- [X] T040 [US1] Implementar el documento sustituto (FR-067): interpretación nueva sin validación ni aprobaciones, sin mezclar páginas ni reasignar referencias, sin iniciar generación; pruebas en `tests/integration/substitute-document.test.ts`. Hecho. La comprobación de referencias heredadas de índices y temas es T058
+- [X] T041 [US1] Escribir `tests/integration/us1-document-interpretation.test.ts` con los escenarios de aceptación 1 a 10 de la historia 1 y las denegaciones por perfil. Hecho, con 77 casos
+- [X] T042 [US1] Ejecutar el tratamiento completo sobre el PDF real del piloto, localizado por su ruta y verificado contra la huella de `specs/002-boe-scorm-export/pilot-source.md`, y registrar los resultados esperados y obtenidos de la unidad en `specs/002-boe-scorm-export/pilot/`; el PDF no se añade al repositorio y esta comprobación no forma parte de la integración continua. Hecho: ver [pilot/README.md](./pilot/README.md)
 
-**Checkpoint**: subir un PDF y validar su interpretación desde el navegador.
+**Checkpoint**: subir un PDF y validar su interpretación desde el navegador. Verificado con
+pruebas automáticas y con un navegador real: ver [us1-check.md](./us1-check.md).
 
 ---
 
@@ -157,7 +158,7 @@ los temas, aprueba la versión y comprueba la invalidación al editar el índice
 - [ ] T049 [P] [US3] Añadir a `src/platform/generation/` `Budget`, `BudgetChange`, `BudgetReservation` (`state`: `reserved`, `sent`, `settled`, `released`, `uncertain`) y `Reconciliation`, con la reserva atómica contra el máximo por operación y el límite acumulado; pruebas en `tests/unit/platform/budget.test.ts`
 - [ ] T050 [US3] Implementar el ciclo de la reserva: anotar el envío antes de llamar, liquidar con el consumo real, liberar solo si no se envió, pasar a `uncertain` sin consumo confirmado, y al arrancar convertir en `uncertain` lo enviado sin liquidar; pruebas en `tests/unit/platform/budget-lifecycle.test.ts` (dos operaciones simultáneas, tiempo agotado, respuesta sin datos de uso, caída entre envío y liquidación, reducción del límite con operaciones en curso)
 - [ ] T051 [P] [US3] Crear la migración y el repositorio de `Topic` (`status`: `pending`, `failed`, `draft`, `in_review`, `approved`, `rejected`), `TopicBlock` (`kind`: `requirement`, `development`), `BlockRequirement`, `TopicApproval`, `SyllabusVersion`, `SyllabusVersionTopic` y `ReferenceCheck` en `src/modules/didactic-content/`
-- [ ] T052 [US3] Definir el esquema Zod de los bloques estructurados y el renderizador que escapa todo el texto en `src/modules/didactic-content/render/`, con etiqueta de texto para distinguir norma y desarrollo; pruebas en `tests/unit/didactic-content/render.test.ts` con texto hostil
+- [ ] T052 [US3] Definir el esquema Zod de los bloques estructurados y el renderizador que escapa todo el texto en `src/modules/didactic-content/render/`, con etiqueta de texto para distinguir norma y desarrollo; pruebas en `tests/unit/didactic-content/render.test.ts` con texto hostil (SC-046)
 - [ ] T053 [US3] Implementar la generación del temario tema a tema con `prompts/topic/v1.md`: estimación y presupuesto disponible mostrados antes de cada solicitud, incluida la reanudación; estimación separada del coste máximo reservado; ninguna operación enviada sin una reserva dentro de los límites; reserva por tema, temas terminados como borradores, pendientes o fallidos identificados, estado `incomplete`, y reanudación explícita que solo procesa pendientes o fallidos; pruebas en `tests/unit/didactic-content/syllabus-generation.test.ts`
 - [ ] T054 [US3] Implementar la edición de temas con control de revisión y conflicto 409 que conserva lo enviado, y la aprobación de cada tema (exige índice aprobado y vigente) y su rechazo con motivo obligatorio, sin borrar ni regenerar; la vigencia de `TopicApproval` se deriva de `topic_revision` y de su `OutlineApproval`; pruebas en `tests/unit/didactic-content/topic-approval.test.ts`
 - [ ] T055 [US3] Implementar la aprobación de la versión: exige índice aprobado y vigente, todos los temas desarrollados y aprobados, y cada requisito del inventario citado por un bloque `requirement` y desarrollado por al menos un bloque `development`; guarda una instantánea inmutable con `content_sha256`; pruebas en `tests/unit/didactic-content/syllabus-version.test.ts`
@@ -238,7 +239,7 @@ recorre, se abandona, se reanuda y se finaliza con un alumno de prueba.
 - [ ] T082 [P] Ejecutar la lista de comprobación WCAG 2.2 AA sobre la interfaz y sobre el paquete, registrarla en `specs/002-boe-scorm-export/accessibility.md` y corregir lo que falle
 - [ ] T083 [P] Revisar todos los textos de interfaz, errores e instrucciones: español claro, sin jerga, sin afirmar compatibilidad, calificación, acreditación ni evaluación pedagógica
 - [ ] T084 [P] Actualizar `README.md`, `docs/engineering/architecture.md` y `docs/engineering/quality-controls.md` con la estructura y los controles nuevos
-- [ ] T085 Ampliar `tests/architecture/no-domain-specifics.test.ts` para las áreas y módulos nuevos, y añadir las métricas mínimas del principio XI (errores, latencia, coste de generación y estado de exportaciones) a partir de los registros existentes
+- [ ] T085 Ampliar `tests/architecture/no-domain-specifics.test.ts` para las áreas y módulos nuevos (SC-045), y añadir las métricas mínimas del principio XI (errores, latencia, coste de generación y estado de exportaciones) a partir de los registros existentes
 - [ ] T086 Ejecutar `npm run check` y `npm run verify:negative`, y completar en `acceptance.md` los criterios automáticos con su evidencia, dejando en «Pendiente» los que dependan de tareas bloqueadas; esta tarea no cierra la aceptación mientras quede alguna
 - [ ] T087 Crear `src/pages/history/` con el historial consultable de cada elemento (correcciones, validaciones, aprobaciones, rechazos con su motivo, generaciones, exportaciones y descargas) para `teacher` y `admin`, con pruebas en `tests/integration/history.test.ts`
 
@@ -258,14 +259,17 @@ documental antes de empezar la fase indicada.
 
 | Punto  | Qué falta definir                                                              | Antes de |
 | ------ | ------------------------------------------------------------------------------ | -------- |
-| CHK007 | Qué ve el usuario en un conflicto de edición y cómo reenvía su cambio          | Fase 4   |
-| CHK047 | Criterios de éxito propios para FR-020, FR-029, FR-055 y FR-056                | Fase 4   |
 | CHK032 | Cuándo un tema es «fallido», cuántos reintentos hay y qué ve el docente        | Fase 6   |
 
-Ninguno impide la fase 3.
+CHK007 (conflicto de edición: FR-063 y SC-033) y CHK047 (criterios SC-044, SC-045 y SC-046, y
+SC-015 para FR-029) se cerraron antes de la fase 4; ver la revisión de
+`checklists/pilot-readiness.md`.
+
+No impide las fases 4 ni 5.
 
 - **Fase 1** no depende de ninguna otra tarea. **Fase 2** puede hacerse a la vez.
 - **Fase 3**, completada, dependía de las fases 1 y 2.
+- **Fase 4**, completada, dependía de la fase 3.
 - **Fases 4 → 5 → 6 → 7** van en ese orden: cada historia usa lo aprobado en la anterior.
 - **T058** se apoya en T040 y condiciona la aprobación de T046 y T054 tras un sustituto.
 - **Fase 8**: T070 a T073 dependen de T014 a T016; T072 necesita además T050 y T066.
@@ -280,14 +284,14 @@ bloqueada.
 
 | Estado                                        | Tareas                                                                 |
 | --------------------------------------------- | ---------------------------------------------------------------------- |
-| Completadas                                   | T001–T030                                                              |
-| Ejecutables, en este orden                    | T031–T073, T078, T082–T087                                             |
+| Completadas                                   | T001–T042                                                              |
+| Ejecutables, en este orden                    | T043–T073, T078, T082–T087                                             |
 | Bloqueada por el dominio y el servidor        | T074                                                                   |
 | Bloqueadas por el proveedor de generación     | T075; y por depender de ella, T076 y T077                              |
 | Bloqueadas por el Moodle de pruebas           | T079; y por depender de ella, T080                                     |
 | Bloqueada por las tres anteriores             | T081, que depende de T074, T077 y T079                                 |
 
-De las 87 tareas, 30 están completadas (T001 a T030), 50 son ejecutables y 7 están
+De las 87 tareas, 42 están completadas (T001 a T042), 38 son ejecutables y 7 están
 bloqueadas. T086 no cierra la aceptación mientras quede alguna bloqueada. Ninguna evidencia
 de las tareas bloqueadas se simula: el recorrido con respuestas deterministas se registra
 como ensayo.
@@ -301,7 +305,8 @@ Salen de [feasibility.md](./feasibility.md). No son tareas de código.
 | Campo de firma digital pasivo                                              | Admitido por su estructura               |
 | Método de detección de contenido activo                                    | qpdf JSON versión 2 y política propia    |
 | Ubicación de los datos del piloto                                          | `specs/002-boe-scorm-export/`            |
-| Instalación de qpdf en el servidor de destino y en la integración continua | Pendiente; se resuelve en T032 y en T074 |
+| Instalación de qpdf en la integración continua, en Linux y en macOS        | Hecha en T032, como herramienta verificada |
+| Instalación de qpdf en el servidor de destino                              | Pendiente; se resuelve en T074           |
 | Origen de referencia y redistribución de los esquemas de SCORM 1.2         | Pendiente; antes de la fase 7            |
 | Límite de memoria total y corte de red de los procesos de análisis         | Pendiente; fase 8                        |
 

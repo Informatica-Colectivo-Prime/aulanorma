@@ -2,9 +2,9 @@
 // contracts/http-surface.md). Es, con su envío, lo único accesible sin sesión,
 // y no concede acceso a nada más.
 import { entryPage, html, layout, noticeBox } from "@/platform/web";
-import type { Html, Notice } from "@/platform/web";
+import type { Html, NoticeCode } from "@/platform/web";
 
-const MESSAGES: Partial<Record<Notice, Html>> = {
+const MESSAGES: Partial<Record<NoticeCode, Html>> = {
   signin_refused: noticeBox(
     "bad",
     "No hemos podido iniciar la sesión. Revisa el nombre de usuario y la contraseña e inténtalo de nuevo.",
@@ -26,7 +26,7 @@ export const getServerSideProps = entryPage(({ entry, notice }) => ({
     title: "Entrar",
     session: null,
     content: html`<h1>Entrar en AulaNorma</h1>
-      ${notice === undefined ? null : MESSAGES[notice]}
+      ${notice === undefined ? null : MESSAGES[notice.code]}
       <form method="post" action="/api/session/sign-in">
         <input type="hidden" name="csrf" value="${entry.csrfToken}" />
         <label for="username">Nombre de usuario</label>

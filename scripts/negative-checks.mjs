@@ -45,7 +45,7 @@
 // La categoría de dependencias necesita el registro de npm; las demás usan la
 // caché de npm ya poblada (`npm_config_cache` o la de por defecto).
 import { spawn } from "node:child_process";
-import { randomBytes, randomInt } from "node:crypto";
+import { createHash, randomBytes, randomInt } from "node:crypto";
 import { constants } from "node:fs";
 import {
   chmod,
@@ -92,6 +92,7 @@ const IGNORED_PATHS = [
   ".tools/bin",
   ".tools/bin/gitleaks",
   ".tools/bin/zizmor",
+  ".tools/qpdf",
 ];
 
 const GIT_CONFIG = [
@@ -452,7 +453,55 @@ async function copyTool(copy, name) {
   await chmod(destination, 0o755);
 }
 
-async function prepareCopy(work, files, cache, tool) {
+// Copia `.tools/<name>`, una herramienta de varios ficheros, comprobando cada
+// fichero contra `scripts/tools/tools.lock.json` sin seguir enlaces. Las
+// pruebas del tratamiento de los PDF la necesitan.
+async function copyBundle(copy, name) {
+  const missing = `Falta .tools/${name} o no coincide con tools.lock.json: ejecuta npm run tools:install.`;
+  let files;
+  try {
+    const lock = JSON.parse(
+      await readFile(path.join(ROOT, "scripts/tools/tools.lock.json"), "utf8"),
+    );
+    files =
+      lock.tools[name].platforms[`${process.platform}-${process.arch}`].files;
+  } catch {
+    throw new NegativeError(missing);
+  }
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new NegativeError(missing);
+  }
+  for (const file of files) {
+    let handle;
+    try {
+      handle = await open(
+        path.join(ROOT, ".tools", name, file.path),
+        constants.O_RDONLY | constants.O_NOFOLLOW,
+      );
+    } catch {
+      throw new NegativeError(missing);
+    }
+    let data;
+    try {
+      if (!(await handle.stat()).isFile()) {
+        throw new NegativeError(missing);
+      }
+      data = await handle.readFile();
+    } finally {
+      await handle.close();
+    }
+    if (createHash("sha256").update(data).digest("hex") !== file.sha256) {
+      throw new NegativeError(missing);
+    }
+    const destination = path.join(copy.dir, ".tools", name, file.path);
+    const mode = file.executable === true ? 0o755 : 0o644;
+    await mkdir(path.dirname(destination), { recursive: true });
+    await writeFile(destination, data, { mode, flag: "wx" });
+    await chmod(destination, mode);
+  }
+}
+
+async function prepareCopy(work, files, cache, tool, bundle) {
   const dir = path.join(work, "repo");
   const copy = { dir, env: copyEnvironment(work, cache) };
   for (const directory of ["home", "tmp", "npm-logs", "repo"]) {
@@ -472,6 +521,9 @@ async function prepareCopy(work, files, cache, tool) {
   await gitCopy(copy, ["commit", "--quiet", "--no-verify", "-m", "base"]);
   if (tool !== undefined) {
     await copyTool(copy, tool);
+  }
+  if (bundle !== undefined) {
+    await copyBundle(copy, bundle);
   }
   await checked(
     "npm ci",
@@ -653,6 +705,7 @@ const CASES = {
   test: () => ({
     label: "test",
     command: "check:test",
+    bundle: "qpdf",
     alter: (copy) =>
       writeInCopy(
         copy,
@@ -699,6 +752,7 @@ const CASES = {
   "test-undeclared-route": () => ({
     label: "test (b) ruta de producto sin declarar",
     command: "check:test",
+    bundle: "qpdf",
     alter: (copy) =>
       writeInCopy(
         copy,
@@ -1010,7 +1064,7 @@ async function runCase(session, files, cache, name) {
   const spec = CASES[name]();
   const work = await mkdtemp(path.join(session, `${name}-`));
   try {
-    const copy = await prepareCopy(work, files, cache, spec.tool);
+    const copy = await prepareCopy(work, files, cache, spec.tool, spec.bundle);
     copy.realDir = await realpath(copy.dir);
     await spec.alter(copy);
     throwIfStopping();

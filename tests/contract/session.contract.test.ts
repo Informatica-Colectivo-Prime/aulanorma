@@ -404,9 +404,16 @@ describe("con sesión", () => {
     expect(home.body.match(/<h1>/g)).toHaveLength(1);
     expect(home.body).toContain('<nav aria-label="Principal">');
     expect(home.body).toMatch(/action="\/api\/session\/sign-out"/);
-    expect(home.body).not.toMatch(
-      /href="\/(?:documents|outline|syllabus|export)/,
-    );
+    // Lo que ya existe para un docente se ofrece; lo que no existe, no.
+    expect(home.body).toMatch(/href="\/documents"/);
+    expect(home.body).not.toMatch(/href="\/(?:outline|syllabus|export)/);
+  });
+
+  test("a una cuenta sin el perfil de docente no se le ofrecen los documentos", async () => {
+    await enter("admin1", ["admin"]);
+    const home = await client.get(homePage);
+    expect(home.status).toBe(200);
+    expect(home.body).not.toMatch(/href="\/documents/);
   });
 
   test("una cuenta sin perfiles entra, ve el inicio y se le dice que no puede usar las funciones", async () => {

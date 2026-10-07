@@ -126,8 +126,12 @@ export function migrate(
 
 // --- Migraciones de la plataforma ---
 //
-// Cada tabla pertenece a un único módulo, que es el único que la consulta:
-// `audit_event`, a `audit`; el resto, a `identity`.
+// Todas las migraciones están aquí, en una única lista ordenada, porque
+// `server.mjs` las aplica antes de cargar Next.js y solo puede importar
+// módulos portables. Cada tabla pertenece a un único módulo, que es el único
+// que la consulta: `audit_event`, a `audit`; las de `0002`, a `identity`; las
+// de `0003`, a la capa `normative-source`; las de `0004`, a
+// `structured-interpretation`; y las de `0005`, a `generation`.
 
 const AUDIT_EVENT = `
 CREATE TABLE audit_event (
@@ -185,9 +189,187 @@ CREATE TABLE sign_in_throttle (
 ) STRICT;
 `;
 
+// Disparadores que hacen una tabla de solo inserción: ni `UPDATE` ni
+// `DELETE`. Un `INSERT OR REPLACE` borra la fila anterior sin activar el
+// disparador de borrado: lo impide un tercer disparador, que rechaza la
+// inserción si ya existe la fila que identifica la expresión `existing`.
+function appendOnly(table: string, existing?: string): string {
+  const abort = `BEGIN SELECT RAISE(ABORT, '${table} is append-only'); END;`;
+  return (
+    `CREATE TRIGGER ${table}_no_update BEFORE UPDATE ON ${table} ${abort}\n` +
+    `CREATE TRIGGER ${table}_no_delete BEFORE DELETE ON ${table} ${abort}\n` +
+    (existing === undefined
+      ? ""
+      : `CREATE TRIGGER ${table}_no_replace BEFORE INSERT ON ${table} ` +
+        `WHEN EXISTS (SELECT 1 FROM ${table} WHERE ${existing}) ${abort}\n`)
+  );
+}
+
+// Fuente normativa (data-model.md). El documento y sus páginas son
+// inmutables; una resolución de página solo se inserta.
+const NORMATIVE_SOURCE = `
+CREATE TABLE document (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  issuer TEXT NOT NULL,
+  official_reference TEXT NOT NULL,
+  source TEXT NOT NULL,
+  obtained_on TEXT NOT NULL,
+  version TEXT NOT NULL,
+  sha256 TEXT NOT NULL UNIQUE,
+  size_bytes INTEGER NOT NULL,
+  page_count INTEGER NOT NULL,
+  has_signature_field INTEGER NOT NULL CHECK (has_signature_field IN (0, 1)),
+  replaces_document_id TEXT REFERENCES document (id),
+  registered_by TEXT NOT NULL,
+  registered_at INTEGER NOT NULL
+) STRICT;
+CREATE TABLE document_page (
+  document_id TEXT NOT NULL REFERENCES document (id),
+  page_number INTEGER NOT NULL CHECK (page_number >= 1),
+  text TEXT NOT NULL,
+  has_extractable_text INTEGER NOT NULL CHECK (has_extractable_text IN (0, 1)),
+  has_images INTEGER NOT NULL CHECK (has_images IN (0, 1)),
+  PRIMARY KEY (document_id, page_number)
+) STRICT;
+CREATE TABLE page_resolution (
+  id TEXT PRIMARY KEY,
+  document_id TEXT NOT NULL,
+  page_number INTEGER NOT NULL,
+  resolved_by TEXT NOT NULL,
+  resolved_at INTEGER NOT NULL,
+  statement TEXT NOT NULL,
+  UNIQUE (document_id, page_number),
+  FOREIGN KEY (document_id, page_number)
+    REFERENCES document_page (document_id, page_number)
+) STRICT;
+${appendOnly("document", "id = NEW.id OR sha256 = NEW.sha256")}
+${appendOnly("document_page", "document_id = NEW.document_id AND page_number = NEW.page_number")}
+${appendOnly("page_resolution", "id = NEW.id OR (document_id = NEW.document_id AND page_number = NEW.page_number)")}
+`;
+
+// Interpretación estructurada (data-model.md). La interpretación y sus
+// requisitos se editan con control de revisión; correcciones, validaciones y
+// rechazos solo se insertan. Nada se borra: un requisito erróneo se retira.
+const STRUCTURED_INTERPRETATION = `
+CREATE TABLE interpretation (
+  id TEXT PRIMARY KEY,
+  document_id TEXT NOT NULL,
+  unit_code TEXT NOT NULL,
+  unit_title TEXT NOT NULL,
+  duration_hours INTEGER CHECK (duration_hours IS NULL OR duration_hours >= 1),
+  duration_section TEXT NOT NULL,
+  duration_page INTEGER,
+  duration_quote TEXT,
+  section_page_from INTEGER NOT NULL,
+  section_page_to INTEGER NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('in_review', 'validated', 'rejected')),
+  revision INTEGER NOT NULL CHECK (revision >= 1),
+  generation_run_id TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  UNIQUE (document_id, unit_code),
+  CHECK (section_page_from >= 1 AND section_page_to >= section_page_from)
+) STRICT;
+CREATE TRIGGER interpretation_no_delete BEFORE DELETE ON interpretation
+BEGIN SELECT RAISE(ABORT, 'interpretation cannot be deleted'); END;
+CREATE TABLE requirement (
+  id TEXT PRIMARY KEY,
+  interpretation_id TEXT NOT NULL REFERENCES interpretation (id),
+  kind TEXT NOT NULL
+    CHECK (kind IN ('capability', 'criterion', 'content', 'subcontent')),
+  parent_id TEXT REFERENCES requirement (id),
+  position INTEGER NOT NULL,
+  code TEXT NOT NULL,
+  text TEXT NOT NULL,
+  section TEXT NOT NULL,
+  page_from INTEGER NOT NULL CHECK (page_from >= 1),
+  page_to INTEGER NOT NULL,
+  quote TEXT,
+  origin TEXT NOT NULL CHECK (origin IN ('generated', 'correction')),
+  withdrawn INTEGER NOT NULL CHECK (withdrawn IN (0, 1)),
+  CHECK (page_to >= page_from)
+) STRICT;
+CREATE INDEX requirement_interpretation ON requirement (interpretation_id);
+CREATE TRIGGER requirement_no_delete BEFORE DELETE ON requirement
+BEGIN SELECT RAISE(ABORT, 'requirement cannot be deleted'); END;
+CREATE TABLE correction (
+  id TEXT PRIMARY KEY,
+  interpretation_id TEXT NOT NULL REFERENCES interpretation (id),
+  requirement_id TEXT REFERENCES requirement (id),
+  kind TEXT NOT NULL CHECK (kind IN ('edit', 'add', 'withdraw', 'unit')),
+  author TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  before TEXT NOT NULL,
+  after TEXT NOT NULL,
+  resulting_revision INTEGER NOT NULL
+) STRICT;
+CREATE TABLE interpretation_validation (
+  id TEXT PRIMARY KEY,
+  interpretation_id TEXT NOT NULL REFERENCES interpretation (id),
+  interpretation_revision INTEGER NOT NULL,
+  validated_by TEXT NOT NULL,
+  validated_at INTEGER NOT NULL,
+  inventory_reviewed_statement TEXT NOT NULL
+) STRICT;
+CREATE TABLE interpretation_rejection (
+  id TEXT PRIMARY KEY,
+  interpretation_id TEXT NOT NULL REFERENCES interpretation (id),
+  interpretation_revision INTEGER NOT NULL,
+  rejected_by TEXT NOT NULL,
+  rejected_at INTEGER NOT NULL,
+  reason TEXT NOT NULL CHECK (length(trim(reason)) > 0)
+) STRICT;
+${appendOnly("correction", "id = NEW.id")}
+${appendOnly("interpretation_validation", "id = NEW.id")}
+${appendOnly("interpretation_rejection", "id = NEW.id")}
+`;
+
+// Generación (data-model.md). Una ejecución cambia de estado; cada llamada
+// solo se inserta. Los importes son enteros, en millonésimas de la moneda.
+const GENERATION = `
+CREATE TABLE generation_run (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('interpretation', 'outline', 'syllabus')),
+  target_id TEXT NOT NULL,
+  requested_by TEXT NOT NULL,
+  requested_at INTEGER NOT NULL,
+  status TEXT NOT NULL
+    CHECK (status IN ('running', 'succeeded', 'failed', 'incomplete')),
+  estimated_cost INTEGER NOT NULL CHECK (estimated_cost >= 0),
+  finished_at INTEGER
+) STRICT;
+CREATE TRIGGER generation_run_no_delete BEFORE DELETE ON generation_run
+BEGIN SELECT RAISE(ABORT, 'generation_run cannot be deleted'); END;
+CREATE TABLE generation_call (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES generation_run (id),
+  at INTEGER NOT NULL,
+  task TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL,
+  prompt_version TEXT NOT NULL,
+  tokens_in INTEGER NOT NULL,
+  tokens_out INTEGER NOT NULL,
+  latency_ms INTEGER NOT NULL,
+  estimated_cost INTEGER NOT NULL CHECK (estimated_cost >= 0),
+  validation_result TEXT NOT NULL CHECK (
+    validation_result IN
+      ('valid', 'invalid_output', 'provider_error', 'rejected_by_domain')
+  )
+) STRICT;
+${appendOnly("generation_call", "id = NEW.id")}
+`;
+
 export const PLATFORM_MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ id: "0001_audit_event", sql: AUDIT_EVENT }),
   Object.freeze({ id: "0002_identity", sql: IDENTITY }),
+  Object.freeze({ id: "0003_normative_source", sql: NORMATIVE_SOURCE }),
+  Object.freeze({
+    id: "0004_structured_interpretation",
+    sql: STRUCTURED_INTERPRETATION,
+  }),
+  Object.freeze({ id: "0005_generation", sql: GENERATION }),
 ]);
 
 // --- Almacén de ficheros direccionado por huella ---

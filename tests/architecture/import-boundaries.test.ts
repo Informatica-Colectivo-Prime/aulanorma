@@ -48,6 +48,11 @@ const PORTABLE_MODULES = [
   "src/platform/audit/index.ts",
   "src/platform/identity/index.ts",
 ] as const;
+const DELIVERY_LAYERS: readonly Layer[] = [
+  "normative-source",
+  "structured-interpretation",
+];
+const VIEWS = "src/views/index.ts";
 const PRODUCT_PAGE = "src/pages/login.ts";
 const PRODUCT_ACTION = "src/pages/api/session/sign-in.ts";
 const NETWORK_MODULES = [
@@ -308,14 +313,43 @@ for (const file of [PRODUCT_PAGE, PRODUCT_ACTION]) {
       code: importOf(`@/platform/${area}`),
     });
   }
+  // La entrega se abre a las capas una a una, con la primera ruta que las
+  // necesita (ADR 0004): por ahora, la fuente normativa y la interpretación.
   for (const layer of LAYERS) {
-    forbidden.push({
+    (DELIVERY_LAYERS.includes(layer) ? allowed : forbidden).push({
       name: `${file} → @/modules/${layer}`,
       file,
       code: importOf(`@/modules/${layer}`),
     });
+    forbidden.push(
+      {
+        name: `${file} → @/modules/${layer}/<interno>`,
+        file,
+        code: importOf(`@/modules/${layer}/internal`),
+      },
+      {
+        name: `${file} → ruta relativa a ${layer}`,
+        file,
+        code: importOf(`../modules/${layer}/index.ts`),
+      },
+    );
   }
+  allowed.push({
+    name: `${file} → @/views`,
+    file,
+    code: importOf("@/views"),
+  });
   forbidden.push(
+    {
+      name: `${file} → @/views/<interno>`,
+      file,
+      code: importOf("@/views/internal"),
+    },
+    {
+      name: `${file} → @/platform/generation`,
+      file,
+      code: importOf("@/platform/generation"),
+    },
     {
       name: `${file} → @/platform/web/<interno>`,
       file,
@@ -330,6 +364,147 @@ for (const file of [PRODUCT_PAGE, PRODUCT_ACTION]) {
       name: `${file} usa fetch`,
       file,
       code: "export const reference = fetch;\n",
+    },
+  );
+}
+
+// La comprobación de estado sigue sin poder importar las vistas.
+forbidden.push({
+  name: `${API_ROUTE} → @/views`,
+  file: API_ROUTE,
+  code: importOf("@/views"),
+});
+
+// Vistas: solo componen HTML con `@/platform/web` a partir de lo que exponen
+// las dos capas abiertas a la entrega. No alcanzan la persistencia, la
+// identidad, la auditoría, la generación ni el entorno del proceso.
+allowed.push({
+  name: `${VIEWS} → @/platform/web`,
+  file: VIEWS,
+  code: importOf("@/platform/web"),
+});
+for (const layer of LAYERS) {
+  (DELIVERY_LAYERS.includes(layer) ? allowed : forbidden).push({
+    name: `${VIEWS} → @/modules/${layer}`,
+    file: VIEWS,
+    code: importOf(`@/modules/${layer}`),
+  });
+}
+for (const area of [
+  "identity",
+  "persistence",
+  "audit",
+  "generation",
+  "config",
+  "http-boundary",
+]) {
+  forbidden.push({
+    name: `${VIEWS} → @/platform/${area}`,
+    file: VIEWS,
+    code: importOf(`@/platform/${area}`),
+  });
+}
+forbidden.push(
+  {
+    name: `${VIEWS} → @/modules/normative-source/<interno>`,
+    file: VIEWS,
+    code: importOf("@/modules/normative-source/internal"),
+  },
+  {
+    name: `${VIEWS} → ../pages/index.ts`,
+    file: VIEWS,
+    code: importOf("../pages/index.ts"),
+  },
+  {
+    name: `process.env en ${VIEWS}`,
+    file: VIEWS,
+    code: "export const value = process.env.AULANORMA_DATA_DIR;\n",
+  },
+  {
+    name: `${VIEWS} usa fetch`,
+    file: VIEWS,
+    code: "export const reference = fetch;\n",
+  },
+);
+// Ni `platform` ni las capas de dominio importan las vistas.
+for (const file of [
+  "src/platform/web/index.ts",
+  "src/modules/normative-source/index.ts",
+  "src/modules/structured-interpretation/index.ts",
+]) {
+  forbidden.push({
+    name: `${file} → @/views`,
+    file,
+    code: importOf("@/views"),
+  });
+}
+
+// Generación: un área de `platform`, que no depende de ninguna capa. Las
+// capas la usan por su API pública; no hay ningún SDK de proveedor ni acceso
+// a la red.
+const GENERATION = "src/platform/generation/index.ts";
+allowed.push(
+  {
+    name: `${GENERATION} → @/platform/persistence`,
+    file: GENERATION,
+    code: importOf("@/platform/persistence"),
+  },
+  {
+    name: "structured-interpretation → @/platform/generation",
+    file: "src/modules/structured-interpretation/index.ts",
+    code: importOf("@/platform/generation"),
+  },
+  {
+    name: "src/platform/web/index.ts → @/platform/generation",
+    file: "src/platform/web/index.ts",
+    code: importOf("@/platform/generation"),
+  },
+);
+forbidden.push(
+  {
+    name: `${GENERATION} → @/modules/structured-interpretation`,
+    file: GENERATION,
+    code: importOf("@/modules/structured-interpretation"),
+  },
+  {
+    name: `${GENERATION} usa fetch`,
+    file: GENERATION,
+    code: "export const reference = fetch;\n",
+  },
+  {
+    name: `${GENERATION} → node:https`,
+    file: GENERATION,
+    code: importOf("node:https"),
+  },
+  {
+    name: `process.env en ${GENERATION}`,
+    file: GENERATION,
+    code: "export const value = process.env.AULANORMA_DATA_DIR;\n",
+  },
+);
+// El tratamiento del PDF no accede a la red ni al entorno del proceso.
+for (const file of [
+  "src/modules/normative-source/pdf/analyze.ts",
+  "src/modules/normative-source/pdf/extract-child.ts",
+  "src/modules/normative-source/pdf/policy-child.ts",
+  "src/modules/normative-source/pdf/policy.ts",
+]) {
+  forbidden.push(
+    {
+      name: `${file} usa fetch`,
+      file,
+      code: "export const reference = fetch;\n",
+    },
+    { name: `${file} → node:net`, file, code: importOf("node:net") },
+    {
+      name: `process.env en ${file}`,
+      file,
+      code: "export const value = process.env.PATH;\n",
+    },
+    {
+      name: `${file} → @/modules/structured-interpretation`,
+      file,
+      code: importOf("@/modules/structured-interpretation"),
     },
   );
 }

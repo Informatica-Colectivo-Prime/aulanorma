@@ -6,10 +6,12 @@ revisará y aprobará el índice y el contenido, y la plataforma entregará un p
 descargable para incorporarlo manualmente a Moodle. La publicación automática en Moodle queda
 fuera del alcance vigente ([ADR 0003](docs/adr/0003-scorm-export-instead-of-automatic-moodle-publication.md)).
 
-Por ahora, este repositorio contiene su base de ingeniería y los cimientos del producto: una
-aplicación Next.js sin llamadas a servicios externos, con una base de datos SQLite, cuentas,
-sesiones y permisos, y una interfaz mínima para entrar, ver el inicio, cambiar la contraseña y
-salir. **Todavía no hay ninguna función de documentos, índice, temario ni exportación.** Una
+Por ahora, este repositorio contiene su base de ingeniería, los cimientos del producto y su
+primera historia: una aplicación Next.js sin llamadas a servicios externos, con una base de
+datos SQLite, cuentas, sesiones y permisos, en la que un docente sube el PDF oficial, comprueba
+su registro, y revisa, corrige y valida la interpretación de una unidad formativa. La
+interpretación sale de respuestas grabadas: no hay ningún servicio de generación conectado.
+**Todavía no hay índice, temario ni exportación.** Una
 frontera HTTP rechaza de forma cerrada cualquier petición que no sea de su lista de rutas. La
 configuración se valida al arrancar y, si no es válida, la aplicación no arranca.
 
@@ -49,6 +51,16 @@ Si te indican un commit concreto, como en la aceptación, fíjalo con `git check
 después de `cd aulanorma` y no trabajes sobre una rama que pueda cambiar. En la aceptación,
 `node --version` debe mostrar `v24.21.0`.
 
+Para subir documentos hace falta además qpdf, que inspecciona la estructura de cada PDF:
+
+```bash
+npm run tools:install
+```
+
+Lo descarga en su versión fijada, comprueba la huella de cada fichero y lo instala en `.tools`,
+que Git ignora. Sin él, la aplicación arranca, pero rechaza todo documento como no
+comprobable.
+
 `npm ci` instala exactamente las versiones de `package-lock.json` y no ejecuta scripts de
 instalación. Con una versión de Node.js o npm fuera de rango termina antes de instalar, con un
 error `EBADDEVENGINES` o `EBADENGINE` que indica el rango requerido.
@@ -59,9 +71,9 @@ error `EBADDEVENGINES` o `EBADENGINE` que indica el rango requerido.
 cp .env.example .env.development.local
 ```
 
-[`.env.example`](.env.example) documenta las seis variables con valores de ejemplo válidos:
-el nivel de registro, el entorno, el directorio de datos, el origen público y los dos tiempos
-de caducidad de la sesión. Ninguna es un secreto y no hace falta cambiarlas para probar. El
+[`.env.example`](.env.example) documenta las ocho variables con valores de ejemplo válidos:
+el nivel de registro, el entorno, el directorio de datos, el origen público, los dos tiempos
+de caducidad de la sesión y los dos límites de un PDF, de tamaño y de páginas. Ninguna es un secreto y no hace falta cambiarlas para probar. El
 directorio de datos de ejemplo está en un temporal del sistema, que puede vaciarse al reiniciar
 el equipo: cámbialo si quieres conservar las cuentas. `.env.development.local` está excluido de Git y solo lo carga `npm run dev`. Una
 variable definida en la terminal prevalece sobre el fichero, aunque esté vacía.
@@ -162,6 +174,61 @@ asigna otra contraseña inicial, `disable` y `enable` desactivan y reactivan la 
 `revoke` cierra sus sesiones. Cambiar los perfiles, la contraseña o el estado de una cuenta
 cierra todas sus sesiones.
 
+### 3 ter. Subir y revisar un documento oficial
+
+Necesitas `npm run tools:install`, el servidor en marcha con `npm run dev` y una cuenta con el
+perfil `teacher`.
+
+**Con cualquier PDF.** Entra, abre «Documentos» y «Subir un documento oficial». Elige el
+fichero, rellena su procedencia y envíalo. En unos segundos verás su registro, con su huella
+SHA-256, o el motivo por el que no se admite: cifrado, dañado, con contenido activo, demasiado
+grande o con demasiadas páginas. Desde el registro puedes abrir el PDF original y el texto de
+cada página, y resolver las páginas sin texto.
+
+Los ficheros de `tests/fixtures/pdf/synthetic/` sirven para probar cada caso: por ejemplo,
+`encrypted.pdf` y `javascript.pdf` se rechazan, e `image-only-page.pdf` se admite con una
+página sin texto.
+
+**Con el documento del piloto.** El PDF no está en el repositorio. Descárgalo de la dirección
+que indica [`pilot-source.md`](specs/002-boe-scorm-export/pilot-source.md) y comprueba su
+huella:
+
+```bash
+shasum -a 256 BOE-A-2011-9930.pdf
+```
+
+Debe coincidir con la de ese fichero. Después:
+
+1. Sube el PDF con los datos de procedencia de `pilot-source.md`. La huella que muestra el
+   registro debe ser la misma.
+2. Para poder pedir su interpretación, copia la respuesta grabada del piloto al directorio de
+   datos. Con el valor de ejemplo de `AULANORMA_DATA_DIR`:
+
+   ```bash
+   mkdir -p /tmp/aulanorma-desarrollo/generation-recordings
+   cp specs/002-boe-scorm-export/pilot/interpretation-recording.json \
+     /tmp/aulanorma-desarrollo/generation-recordings/
+   ```
+
+   No hace falta reiniciar.
+
+3. En el registro del documento, pide la interpretación de la unidad con las páginas de su
+   sección, que están en `pilot-source.md`: de la 27 a la 29.
+4. Revisa el inventario contra esas páginas: cada elemento enlaza a la suya. Corrige lo que
+   veas mal, añade lo que falte y retira lo que sobre.
+5. Valida, marcando la confirmación de que has revisado el inventario contra la sección
+   original; o rechaza, con un motivo.
+
+La respuesta grabada no es una generación: es una transcripción mecánica de la sección,
+preparada para ensayar el recorrido, y la interfaz lo indica. Solo responde a ese documento,
+esa unidad y esas páginas; con cualquier otra petición, el producto dice que no hay respuesta
+y no guarda nada. Qué acredita y qué no está en
+[`pilot/README.md`](specs/002-boe-scorm-export/pilot/README.md).
+
+Para ver un conflicto de edición, abre el formulario de un requisito en dos pestañas, guarda
+en una y después en la otra: la segunda no guarda nada, muestra la versión más reciente junto
+a tu cambio y te deja reenviarlo o descartarlo.
+
 Detén el servidor con `Ctrl+C`.
 
 La configuración solo se valida al arrancar. Cualquier cambio en los ficheros `.env*` exige
@@ -205,9 +272,9 @@ npm run tools:install
 npm run check
 ```
 
-`npm run tools:install` descarga Gitleaks y zizmor en sus versiones fijadas, verifica su SHA-256
-y los instala en `.tools/bin`, que Git ignora. Necesita acceso a Internet y `tar`, incluido en
-macOS y Linux. `npm run check` ejecuta las ocho categorías: formato, lint, tipos, pruebas,
+`npm run tools:install` descarga Gitleaks, zizmor y qpdf en sus versiones fijadas, verifica su
+SHA-256 y los instala en `.tools`, que Git ignora. Necesita acceso a Internet y `tar`, incluido
+en macOS y Linux. Las pruebas del tratamiento de los PDF usan qpdf: sin instalarlo, fallan. `npm run check` ejecuta las ocho categorías: formato, lint, tipos, pruebas,
 construcción con prueba de humo, secretos, dependencias y workflows.
 
 Resultado esperado: cada control informa de su éxito y el comando termina con código 0. En el

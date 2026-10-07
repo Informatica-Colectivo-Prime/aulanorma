@@ -102,6 +102,8 @@ const PRODUCT_CONFIG = {
   AULANORMA_PUBLIC_ORIGIN: "https://aulanorma.example",
   AULANORMA_SESSION_IDLE_MINUTES: "30",
   AULANORMA_SESSION_MAX_HOURS: "12",
+  AULANORMA_PDF_MAX_MIB: "32",
+  AULANORMA_PDF_MAX_PAGES: "600",
 };
 const VALID_CONFIG = {
   AULANORMA_LOG_LEVEL: "info",
@@ -1129,7 +1131,37 @@ async function checkProductSurface(secure) {
     return true;
   };
 
-  for (const target of ["/", "/account/password"]) {
+  // Los destinos con un segmento variable solo admiten su forma exacta.
+  for (const target of [
+    "/documents/",
+    "/documents/x",
+    `/documents/${"A".repeat(32)}`,
+    `/documents/${"a".repeat(32)}/pages/0`,
+    `/documents/${"a".repeat(32)}/pages/1?x=1`,
+    `/interpretations/${"a".repeat(32)}/requirements/`,
+    "/api/documents",
+  ]) {
+    const response = await rawRequest("GET", target, { persistent: true });
+    problems.push(
+      ...rejectionProblems(response, 404).map(
+        (problem) => `GET ${target}: ${problem}`,
+      ),
+    );
+  }
+
+  for (const target of [
+    "/",
+    "/account/password",
+    "/documents",
+    "/documents/new",
+    `/documents/${"a".repeat(32)}`,
+    `/documents/${"a".repeat(32)}/file`,
+    `/documents/${"a".repeat(32)}/pages/1`,
+    `/interpretations/${"a".repeat(32)}`,
+    `/interpretations/${"a".repeat(32)}/unit`,
+    `/interpretations/${"a".repeat(32)}/requirements/new`,
+    `/interpretations/${"a".repeat(32)}/requirements/${"b".repeat(32)}`,
+  ]) {
     const name = `GET ${target} sin sesión`;
     const response = await rawRequest("GET", target, {
       limitMs: PRODUCT_LIMIT_MS,
@@ -1224,6 +1256,13 @@ async function checkProductSurface(secure) {
     "/api/session/sign-in",
     "/api/session/sign-out",
     "/api/account/password",
+    "/api/documents/upload",
+    "/api/documents/resolve-page",
+    "/api/interpretations/request",
+    "/api/interpretations/correct",
+    "/api/interpretations/validate",
+    "/api/interpretations/reject",
+    "/api/interpretations/resubmit",
   ]) {
     const noLength = await rawRequest("POST", target, { persistent: true });
     problems.push(
@@ -1268,7 +1307,35 @@ async function checkProductSurface(secure) {
       }
     }
   }
-  for (const target of ["/api/session/sign-out", "/api/account/password"]) {
+  // La subida de un PDF sin sesión se rechaza sin cuerpo, y el fichero no se
+  // guarda.
+  const upload = await rawRequest("POST", "/api/documents/upload", {
+    headers: [
+      "Content-Type: application/pdf",
+      "Content-Length: 0",
+      `Origin: ${origin}`,
+    ],
+    limitMs: PRODUCT_LIMIT_MS,
+  });
+  if (expectStatus("POST de subida sin sesión", upload, 401)) {
+    if (
+      upload.body.length > 0 ||
+      headerValues(upload, "set-cookie").length > 0
+    ) {
+      problems.push("POST de subida sin sesión: devuelve cuerpo o cookies");
+    }
+  }
+
+  for (const target of [
+    "/api/session/sign-out",
+    "/api/account/password",
+    "/api/documents/resolve-page",
+    "/api/interpretations/request",
+    "/api/interpretations/correct",
+    "/api/interpretations/validate",
+    "/api/interpretations/reject",
+    "/api/interpretations/resubmit",
+  ]) {
     const response = await rawRequest("POST", target, {
       headers: [...FORM_HEADERS, `Origin: ${origin}`],
       limitMs: PRODUCT_LIMIT_MS,
@@ -2932,6 +2999,8 @@ const CASES = [
           AULANORMA_ENVIRONMENT: "ci",
           AULANORMA_SESSION_IDLE_MINUTES: "30",
           AULANORMA_SESSION_MAX_HOURS: "12",
+          AULANORMA_PDF_MAX_MIB: "32",
+          AULANORMA_PDF_MAX_PAGES: "600",
         },
         "AULANORMA_PUBLIC_ORIGIN",
         "missing",

@@ -4,11 +4,18 @@
 implementa los cimientos del producto (fase 3 de `002-boe-scorm-export`). La aceptación
 confirma lo implementado y verificado en ese cambio: las decisiones 1 a 5, la parte de la
 decisión 7 que corresponde a la aplicación y, de la decisión 9, las áreas `persistence`,
-`identity`, `audit` y `web`. **No están implementadas**, y quedan registradas como la
-dirección acordada, la decisión 6 (generación), la decisión 8 (tratamiento de los PDF), el
-despliegue real de la decisión 7 y, de la decisión 9, el área `generation` y la apertura de la
-entrega a las capas de dominio. Si su implementación las desmiente, se sustituirán con un ADR
-nuevo.
+`identity`, `audit` y `web`.
+
+Con la historia 1 (fase 4) quedan además implementadas y verificadas: la decisión 8
+(tratamiento de los PDF); de la decisión 6, la interfaz `GenerationProvider`, el adaptador
+determinista y el registro de cada llamada; y, de la decisión 9, el área `generation` y la
+apertura de la entrega a las capas `normative-source` y `structured-interpretation`.
+
+**No están implementadas**, y quedan registradas como la dirección acordada: de la decisión
+6, el presupuesto, sus reservas y su conciliación, y cualquier proveedor real, que sigue sin
+seleccionar; el despliegue real de la decisión 7; y la apertura de la entrega a las capas
+`didactic-content` y `content-export`. Si su implementación las desmiente, se sustituirán con
+un ADR nuevo.
 
 **Fecha**: 2026-10-07
 

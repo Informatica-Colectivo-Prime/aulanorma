@@ -6,6 +6,7 @@
 // Prepara un directorio de datos temporal con las migraciones aplicadas y las
 // variables de entorno de la configuración, y lo deshace todo al terminar.
 import { mkdtempSync, rmSync } from "node:fs";
+import { Readable } from "node:stream";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { GetServerSideProps, NextApiHandler } from "next";
@@ -28,12 +29,16 @@ const ENVIRONMENT: Readonly<Record<string, string>> = {
   AULANORMA_PUBLIC_ORIGIN: ORIGIN,
   AULANORMA_SESSION_IDLE_MINUTES: "30",
   AULANORMA_SESSION_MAX_HOURS: "12",
+  AULANORMA_PDF_MAX_MIB: "32",
+  AULANORMA_PDF_MAX_PAGES: "600",
 };
 
 export interface Reply {
   readonly status: number;
   readonly headers: Readonly<Record<string, string | string[]>>;
   readonly body: string;
+  // Cuerpo tal como se envió, para las respuestas que no son texto.
+  readonly raw: Buffer;
   readonly location: string | undefined;
   readonly setCookies: readonly string[];
 }
@@ -43,6 +48,7 @@ class ResponseDouble {
   status = 0;
   headers: Record<string, string | string[]> = {};
   body = "";
+  raw: Buffer = Buffer.alloc(0);
   ended = false;
   destroyed = false;
   private pending: Record<string, string | string[]> = {};
@@ -75,11 +81,12 @@ class ResponseDouble {
     return this;
   }
 
-  end(body?: string): this {
+  end(body?: string | Buffer): this {
     if (this.ended) {
       throw new Error("La respuesta ya terminó.");
     }
-    this.body = body ?? "";
+    this.raw = Buffer.from(body ?? "");
+    this.body = this.raw.toString("utf8");
     this.ended = true;
     return this;
   }
@@ -99,6 +106,8 @@ export interface RequestOptions {
   readonly cookies?: Readonly<Record<string, string>>;
   // Cabeceras añadidas a la petición, en minúsculas.
   readonly headers?: Readonly<Record<string, string>>;
+  // Segmentos variables del destino de una página.
+  readonly params?: Readonly<Record<string, string>>;
 }
 
 export interface WebClientOptions {
@@ -118,6 +127,14 @@ export interface WebClient {
     action: { default: NextApiHandler },
     fields: Readonly<Record<string, string>>,
     options?: RequestOptions,
+  ): Promise<Reply>;
+  // Envía un fichero como cuerpo, con el testigo y los demás campos en
+  // cabeceras, como hace el formulario de subida.
+  upload(
+    action: { default: NextApiHandler },
+    file: Buffer,
+    fields: Readonly<Record<string, string>>,
+    options?: RequestOptions & { readonly csrf?: string },
   ): Promise<Reply>;
   // Testigo del formulario de la última página recibida.
   csrfOf(reply: Reply): string;
@@ -176,6 +193,7 @@ export function createWebClient(options: WebClientOptions = {}): WebClient {
       status: response.status,
       headers: response.headers,
       body: response.body,
+      raw: response.raw,
       location: typeof location === "string" ? location : undefined,
       setCookies,
     };
@@ -202,6 +220,7 @@ export function createWebClient(options: WebClientOptions = {}): WebClient {
       await page.getServerSideProps({
         req: { method: "GET", headers: headersOf(options) },
         res: response,
+        params: options.params ?? {},
         query: {},
         resolvedUrl: "/",
       } as never);
@@ -228,6 +247,29 @@ export function createWebClient(options: WebClientOptions = {}): WebClient {
         } as never,
         response as never,
       );
+      return finish(response);
+    },
+    async upload(action, file, fields, options = {}) {
+      const response = new ResponseDouble();
+      const request = Object.assign(Readable.from([file]), {
+        method: options.method ?? "POST",
+        headers: {
+          ...headersOf(options),
+          "content-type": options.contentType ?? "application/pdf",
+          "content-length": String(file.length),
+          ...(options.origin === null
+            ? {}
+            : { origin: options.origin ?? origin }),
+          ...(options.csrf === undefined
+            ? {}
+            : { "x-aulanorma-csrf": options.csrf }),
+          "x-aulanorma-document": Buffer.from(
+            JSON.stringify(fields),
+            "utf8",
+          ).toString("base64url"),
+        },
+      });
+      await action.default(request as never, response as never);
       return finish(response);
     },
     csrfOf(reply) {

@@ -28,6 +28,8 @@ export interface Config {
   readonly publicOrigin: string;
   readonly sessionIdleMinutes: number;
   readonly sessionMaxHours: number;
+  readonly pdfMaxMib: number;
+  readonly pdfMaxPages: number;
 }
 
 export type ConfigResult =
@@ -98,6 +100,10 @@ function boundedInteger(maximum: number) {
 }
 const SESSION_IDLE_MINUTES = boundedInteger(1440);
 const SESSION_MAX_HOURS = boundedInteger(168);
+// Tamaño máximo de un PDF, en MiB, y número máximo de páginas. El tamaño no
+// puede superar el máximo de cuerpo que la frontera HTTP admite en la subida.
+const PDF_MAX_MIB = boundedInteger(64);
+const PDF_MAX_PAGES = boundedInteger(2000);
 
 // Esquema: cada variable de entorno con los valores que admite.
 const SCHEMA = {
@@ -107,6 +113,8 @@ const SCHEMA = {
   AULANORMA_PUBLIC_ORIGIN: PUBLIC_ORIGIN,
   AULANORMA_SESSION_IDLE_MINUTES: SESSION_IDLE_MINUTES,
   AULANORMA_SESSION_MAX_HOURS: SESSION_MAX_HOURS,
+  AULANORMA_PDF_MAX_MIB: PDF_MAX_MIB,
+  AULANORMA_PDF_MAX_PAGES: PDF_MAX_PAGES,
 } as const;
 
 const PREFIX = "AULANORMA_";
@@ -144,6 +152,12 @@ export function validateConfig(source: ConfigSource): ConfigResult {
   const sessionMaxHours = SCHEMA.AULANORMA_SESSION_MAX_HOURS.safeParse(
     source.AULANORMA_SESSION_MAX_HOURS,
   );
+  const pdfMaxMib = SCHEMA.AULANORMA_PDF_MAX_MIB.safeParse(
+    source.AULANORMA_PDF_MAX_MIB,
+  );
+  const pdfMaxPages = SCHEMA.AULANORMA_PDF_MAX_PAGES.safeParse(
+    source.AULANORMA_PDF_MAX_PAGES,
+  );
   for (const [key, parsed] of [
     ["AULANORMA_LOG_LEVEL", logLevel],
     ["AULANORMA_ENVIRONMENT", environment],
@@ -151,6 +165,8 @@ export function validateConfig(source: ConfigSource): ConfigResult {
     ["AULANORMA_PUBLIC_ORIGIN", publicOrigin],
     ["AULANORMA_SESSION_IDLE_MINUTES", sessionIdleMinutes],
     ["AULANORMA_SESSION_MAX_HOURS", sessionMaxHours],
+    ["AULANORMA_PDF_MAX_MIB", pdfMaxMib],
+    ["AULANORMA_PDF_MAX_PAGES", pdfMaxPages],
   ] as const) {
     const value = source[key];
     if (value === undefined || value === "") {
@@ -171,6 +187,8 @@ export function validateConfig(source: ConfigSource): ConfigResult {
     !publicOrigin.success ||
     !sessionIdleMinutes.success ||
     !sessionMaxHours.success ||
+    !pdfMaxMib.success ||
+    !pdfMaxPages.success ||
     problems.length > 0
   ) {
     return failure(problems);
@@ -184,6 +202,8 @@ export function validateConfig(source: ConfigSource): ConfigResult {
       publicOrigin: publicOrigin.data,
       sessionIdleMinutes: sessionIdleMinutes.data,
       sessionMaxHours: sessionMaxHours.data,
+      pdfMaxMib: pdfMaxMib.data,
+      pdfMaxPages: pdfMaxPages.data,
     }),
   };
 }
