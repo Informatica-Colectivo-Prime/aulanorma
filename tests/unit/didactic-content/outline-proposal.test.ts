@@ -199,6 +199,43 @@ describe("condiciones para pedirlo", () => {
   });
 });
 
+describe("cifras mostradas antes de pedirlo", () => {
+  test("si ya no son las actuales, no se envía nada; si lo son, se pide", async () => {
+    fixture.outlineMaxCost = 700;
+    const input = { ...TEACHER, interpretationId: fixture.interpretationId };
+    for (const shown of [
+      { estimatedCost: 0, maxCost: 600 },
+      { estimatedCost: 1, maxCost: 700 },
+      { estimatedCost: Number.NaN, maxCost: Number.NaN },
+    ]) {
+      expect(await fixture.outlines.request({ ...input, shown })).toEqual({
+        ok: false,
+        reason: "estimate_changed",
+      });
+    }
+    expect(fixture.sent).toEqual([]);
+    nothingStored();
+    expect(
+      (
+        await fixture.outlines.request({
+          ...input,
+          shown: { estimatedCost: 0, maxCost: 700 },
+        })
+      ).ok,
+    ).toBe(true);
+    // Estimación, reserva máxima y consumo confirmado, por separado.
+    const outline = fixture.outlines.getForInterpretation(
+      fixture.interpretationId,
+    );
+    expect(fixture.generation.runCost(outline?.generationRunId ?? "")).toEqual({
+      estimatedCost: 0,
+      reservedCost: 700,
+      confirmedCost: 0,
+      uncertain: 0,
+    });
+  });
+});
+
 describe("validación de la propuesta", () => {
   test.each([
     ["no es un objeto", "texto"],

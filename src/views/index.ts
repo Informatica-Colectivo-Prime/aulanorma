@@ -30,6 +30,7 @@ import { html, noticeBox } from "@/platform/web";
 import type { Html, Notice, PageReply, SessionContext } from "@/platform/web";
 import {
   budgetNote,
+  runCostNote,
   KIND_NAMES,
   moment,
   pageLink,
@@ -38,12 +39,22 @@ import {
   reply,
   who,
 } from "./shared";
-import type { BudgetFigures, Names } from "./shared";
+import type {
+  BudgetFigures,
+  CostFigures,
+  Names,
+  RunCostFigures,
+} from "./shared";
 
 import { outlineNotice } from "./outline";
 
 export * from "./outline";
-export type { BudgetFigures, CostFigures, Names } from "./shared";
+export type {
+  BudgetFigures,
+  CostFigures,
+  Names,
+  RunCostFigures,
+} from "./shared";
 
 // --- Textos ---
 
@@ -414,9 +425,6 @@ export function documentView(input: {
   readonly pages: readonly PageSummary[];
   readonly interpretations: readonly Interpretation[];
   readonly names: Names;
-  readonly budget: BudgetFigures;
-  // Nombre del adaptador de generación en uso.
-  readonly provider: string;
 }): PageReply {
   const { session, document, pages, interpretations, substitutes } = input;
   const withoutText = pages.filter((page) => !page.hasExtractableText);
@@ -597,17 +605,13 @@ export function documentView(input: {
                   generación el texto de esas páginas, sin ningún dato de
                   usuarios.
                 </p>
-                ${budgetNote({
-                  budget: input.budget,
-                  cost: undefined,
-                  provider: input.provider,
-                })}
                 <p class="hint">
-                  El coste máximo de esta operación depende de las páginas que
-                  indiques: se calcula y se reserva al enviarla.
+                  Todavía no se envía nada: en el paso siguiente verás la
+                  estimación del coste y el presupuesto disponible, y podrás
+                  confirmar la solicitud o cambiarla.
                 </p>
-                <button type="submit" data-busy="Obteniendo la interpretación…">
-                  Pedir la interpretación
+                <button type="submit" data-busy="Calculando la estimación…">
+                  Ver la estimación
                 </button>
               </fieldset>
             </form>`
@@ -794,6 +798,8 @@ export function interpretationView(input: {
   // Motivo escrito en un rechazo que no llegó a guardarse.
   readonly reason?: string;
   readonly problem?: string;
+  // Importes de la operación de la que procede.
+  readonly cost?: RunCostFigures;
   // Apartado del índice de esta interpretación (`outlineSection`).
   readonly outlineSection?: Html | null;
 }): PageReply {
@@ -868,6 +874,11 @@ export function interpretationView(input: {
             input.provider === "deterministic"
               ? "Respuesta grabada del adaptador determinista. No es una generación real y no sirve para aceptar el recorrido."
               : input.provider
+          }
+          ${
+            input.cost === undefined
+              ? null
+              : runCostNote(input.cost, input.provider)
           }
         </dd>
       </dl>
@@ -1082,6 +1093,76 @@ ${input.reason ?? ""}</textarea>
               )}
             </ul>`
       }`,
+  );
+}
+
+// Paso de confirmación de una petición de interpretación (FR-021): con la
+// unidad y las páginas ya indicadas, muestra la estimación, el máximo que se
+// reserva y lo disponible. Nada se ha enviado todavía.
+export function interpretationConfirmView(input: {
+  readonly session: SessionContext;
+  readonly document: DocumentRecord;
+  readonly unitCode: string;
+  readonly pageFrom: number;
+  readonly pageTo: number;
+  readonly cost: CostFigures;
+  readonly budget: BudgetFigures;
+  readonly provider: string;
+  // `true` si las cifras han cambiado desde las que el usuario vio.
+  readonly changed?: boolean;
+}): PageReply {
+  const { session, document, cost } = input;
+  return reply(
+    input.changed === true ? 409 : 200,
+    "Confirmar la solicitud de interpretación",
+    session,
+    html`<p class="crumbs">
+        <a href="/documents">Documentos</a> ›
+        <a href="/documents/${document.id}">${document.title}</a>
+      </p>
+      <h1>Confirmar la solicitud de interpretación</h1>
+      ${
+        input.changed === true
+          ? noticeBox(
+              "bad",
+              "La estimación o el coste máximo han cambiado desde que los viste. No se ha enviado nada: revisa las cifras actuales antes de confirmar.",
+            )
+          : null
+      }
+      <p>Todavía no se ha enviado nada al servicio de generación.</p>
+      <dl>
+        <dt>Unidad formativa</dt>
+        <dd>${input.unitCode}</dd>
+        <dt>Sección</dt>
+        <dd>${pageLinks(document.id, input.pageFrom, input.pageTo)}</dd>
+      </dl>
+      ${budgetNote({ budget: input.budget, cost, provider: input.provider })}
+      <form method="post" action="/api/interpretations/request">
+        <input type="hidden" name="csrf" value="${session.csrfToken}" />
+        <input type="hidden" name="document" value="${document.id}" />
+        <input type="hidden" name="unit_code" value="${input.unitCode}" />
+        <input type="hidden" name="page_from" value="${input.pageFrom}" />
+        <input type="hidden" name="page_to" value="${input.pageTo}" />
+        <input type="hidden" name="confirmed" value="yes" />
+        <input
+          type="hidden"
+          name="shown_estimate"
+          value="${cost.estimatedCost}"
+        />
+        <input type="hidden" name="shown_max" value="${cost.maxCost}" />
+        <div class="actions">
+          <button type="submit" data-busy="Obteniendo la interpretación…">
+            Confirmar y pedir la interpretación
+          </button>
+          <a href="/documents/${document.id}"
+            >Cambiar la unidad o las páginas</a
+          >
+        </div>
+      </form>
+      <p class="hint">
+        Si cambias la unidad o las páginas, la estimación se calcula de nuevo
+        antes de confirmar.
+      </p>`,
   );
 }
 

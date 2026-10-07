@@ -30,6 +30,10 @@ export const getServerSideProps = protectedPage(
       review,
       document,
       provider: runtime.generation.provider,
+      cost: {
+        ...runtime.generation.runCost(review.outline.generationRunId),
+        currency: runtime.generation.budget.status().currency,
+      },
       names: new Map(
         runtime.identity.listUsers().map((user) => [user.id, user.username]),
       ),

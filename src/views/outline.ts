@@ -23,6 +23,7 @@ import { html, noticeBox } from "@/platform/web";
 import type { Html, Notice, PageReply, SessionContext } from "@/platform/web";
 import {
   budgetNote,
+  runCostNote,
   KIND_NAMES,
   moment,
   pageLinks,
@@ -30,7 +31,12 @@ import {
   reply,
   who,
 } from "./shared";
-import type { BudgetFigures, CostFigures, Names } from "./shared";
+import type {
+  BudgetFigures,
+  CostFigures,
+  Names,
+  RunCostFigures,
+} from "./shared";
 
 // --- Textos ---
 
@@ -55,6 +61,8 @@ const REQUEST_REFUSALS: Readonly<Record<string, string>> = {
     "La propuesta del servicio de generación se apoya en requisitos que no existen en el inventario, o tiene entradas sin requisitos que no están marcadas «sin respaldo normativo». Se ha rechazado y registrado, y no se ha guardado nada.",
   budget_exceeded:
     "No hay presupuesto de generación disponible para esta operación, o supera el máximo por operación. No se ha enviado ni guardado nada.",
+  estimate_changed:
+    "La estimación o el coste máximo han cambiado desde que los viste, porque el inventario ha cambiado. No se ha enviado nada: revisa las cifras actuales antes de pedir el índice.",
 };
 
 const CHANGE_PROBLEMS: Readonly<Record<ChangeRejection, string>> = {
@@ -211,6 +219,16 @@ export function outlineSection(input: {
           cost: input.cost,
           provider: input.provider,
         })}
+        <input
+          type="hidden"
+          name="shown_estimate"
+          value="${input.cost?.estimatedCost ?? ""}"
+        />
+        <input
+          type="hidden"
+          name="shown_max"
+          value="${input.cost?.maxCost ?? ""}"
+        />
         <button type="submit" data-busy="Obteniendo la propuesta…">
           Pedir la propuesta de índice
         </button>
@@ -309,6 +327,8 @@ export function outlineView(input: {
   readonly review: OutlineReview;
   readonly document: DocumentRecord;
   readonly provider: string;
+  // Importes de la operación de la que procede.
+  readonly cost?: RunCostFigures;
   readonly names: Names;
   readonly status?: number;
   readonly problem?: string;
@@ -405,6 +425,11 @@ export function outlineView(input: {
             input.provider === "deterministic"
               ? DETERMINISTIC_ORIGIN
               : input.provider
+          }
+          ${
+            input.cost === undefined
+              ? null
+              : runCostNote(input.cost, input.provider)
           }
         </dd>
       </dl>

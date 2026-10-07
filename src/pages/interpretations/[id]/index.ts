@@ -34,6 +34,10 @@ export const getServerSideProps = protectedPage(
       notice,
       interpretation,
       document,
+      cost: {
+        ...runtime.generation.runCost(interpretation.generationRunId),
+        currency: runtime.generation.budget.status().currency,
+      },
       outlineSection: outlineSection({
         session,
         interpretation,

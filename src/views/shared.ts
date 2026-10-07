@@ -99,9 +99,30 @@ export function budgetNote(input: {
     <p class="hint">
       ${
         input.provider === "deterministic"
-          ? "Estas cifras son del adaptador determinista, que responde con una grabación y no cuesta nada. No son precios de ningún proveedor."
+          ? "Coste simulado: estas cifras son del adaptador determinista, que responde con una grabación y no cuesta nada. No son precios de ningún proveedor."
           : "La operación solo se envía si su coste máximo cabe en lo disponible y no supera el máximo por operación."
       }
       Sin una reserva dentro de los límites, no se envía nada.
     </p>`;
+}
+
+// Los tres importes de una operación ya hecha, sin mezclarlos.
+export interface RunCostFigures {
+  readonly estimatedCost: number;
+  readonly reservedCost: number;
+  readonly confirmedCost: number;
+  readonly uncertain: number;
+  readonly currency: string;
+}
+
+export function runCostNote(cost: RunCostFigures, provider: string): Html {
+  return html`<br /><span class="hint"
+      >Estimación: ${amount(cost.estimatedCost, cost.currency)} · Reserva
+      máxima: ${amount(cost.reservedCost, cost.currency)} · Consumo confirmado:
+      ${
+        cost.uncertain > 0
+          ? "sin confirmar; la reserva sigue contando hasta que se concilie"
+          : amount(cost.confirmedCost, cost.currency)
+      }${provider === "deterministic" ? " · Coste simulado" : ""}</span
+    >`;
 }

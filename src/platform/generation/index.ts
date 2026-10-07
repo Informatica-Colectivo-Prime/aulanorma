@@ -128,6 +128,17 @@ export interface GenerationRun {
   readonly finishedAt: number | null;
 }
 
+// Los tres importes de una ejecución, que no se mezclan: lo estimado, lo
+// reservado como máximo y lo confirmado como consumo.
+export interface RunCost {
+  readonly estimatedCost: number;
+  readonly reservedCost: number;
+  // Consumo confirmado de las operaciones liquidadas.
+  readonly confirmedCost: number;
+  // Operaciones cuyo consumo no está confirmado y siguen contando.
+  readonly uncertain: number;
+}
+
 export interface Generation {
   readonly provider: string;
   readonly budget: Budget;
@@ -147,6 +158,7 @@ export interface Generation {
     status: Exclude<GenerationRunStatus, "running">,
   ): void;
   getRun(runId: string): GenerationRun | undefined;
+  runCost(runId: string): RunCost;
   listCalls(runId: string): readonly GenerationCall[];
 }
 
@@ -344,6 +356,29 @@ export function createGeneration({
           RUN_STATUSES.find((status) => status === row.status) ?? "failed",
         estimatedCost: integer(row.estimated_cost),
         finishedAt: row.finished_at === null ? null : integer(row.finished_at),
+      };
+    },
+
+    runCost(runId) {
+      const reservations = budget
+        .list()
+        .filter((item) => item.runId === runId && item.state !== "released");
+      return {
+        estimatedCost: integer(
+          db
+            .prepare("SELECT estimated_cost FROM generation_run WHERE id = ?")
+            .get(runId)?.estimated_cost ?? 0,
+        ),
+        reservedCost: reservations.reduce(
+          (total, item) => total + item.reservedCost,
+          0,
+        ),
+        confirmedCost: reservations.reduce(
+          (total, item) => total + (item.settledCost ?? 0),
+          0,
+        ),
+        uncertain: reservations.filter((item) => item.state === "uncertain")
+          .length,
       };
     },
 

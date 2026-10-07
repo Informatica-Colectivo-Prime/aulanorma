@@ -103,10 +103,15 @@ una decisión sobre una revisión que ya no es la actual responde 409 con la ver
 reciente: el formulario de una entrada conserva lo enviado, y aprobar, rechazar, reordenar o
 quitar muestran el índice actual para repetir la decisión. La vista previa no genera ningún
 fichero; sin aprobación vigente o con cobertura incompleta se identifica como borrador no
-entregable. Las peticiones de interpretación y de índice muestran antes lo disponible del
-presupuesto; la del índice, además, su estimación y el máximo que se reserva. En la de
-interpretación el coste depende de las páginas indicadas, así que se calcula y se reserva al
-enviarla.
+entregable.
+
+**Estimación previa (FR-021)**. Pedir una interpretación tiene dos pasos sobre el mismo
+destino: el envío con la unidad y las páginas no manda nada y responde 200 con la estimación,
+el máximo que se reserva y lo disponible; el envío de confirmación lleva las cifras mostradas
+y, si ya no son las actuales, responde 409 con las nuevas, sin enviar nada. La página de la
+interpretación muestra esas cifras para el índice, y su solicitud las lleva con la misma
+regla. Estimación, reserva máxima y consumo confirmado se muestran por separado; con el
+adaptador determinista son cero y figuran como coste simulado.
 
 Cada acción admite un cuerpo máximo: 4 KiB los formularios simples, 64 KiB los que llevan el
 texto de un requisito o un motivo, y 64 MiB la subida, sobre la que la ruta aplica además el

@@ -127,7 +127,9 @@ export type RequestRejection =
   | "invalid_output"
   | "rejected_by_domain"
   // No había presupuesto para reservar la operación: no se envió nada.
-  | "budget_exceeded";
+  | "budget_exceeded"
+  // Las cifras que el usuario vio ya no son las actuales: no se envió nada.
+  | "estimate_changed";
 
 export type RequestResult =
   | { readonly ok: true; readonly outlineId: string }
@@ -175,7 +177,12 @@ export interface Outlines {
   // enviar nada. `undefined` si no hay interpretación.
   estimate(interpretationId: string): CostEstimate | undefined;
   request(
-    input: Actor & { readonly interpretationId: string },
+    input: Actor & {
+      readonly interpretationId: string;
+      // Estimación y coste máximo que el usuario vio antes de pedirlo. Si se
+      // indican y ya no son los actuales, no se envía nada (FR-021).
+      readonly shown?: CostEstimate;
+    },
   ): Promise<RequestResult>;
   get(id: string): Outline | undefined;
   getForInterpretation(interpretationId: string): Outline | undefined;
@@ -606,7 +613,7 @@ export function createOutlines({
           );
     },
 
-    async request({ interpretationId, actorId, correlationId }) {
+    async request({ interpretationId, shown, actorId, correlationId }) {
       const actor = { actorId, correlationId };
       const refuse = (reason: RequestRejection): RequestResult => {
         record(actor, "outline.request", null, "failed", { reason });
@@ -633,6 +640,14 @@ export function createOutlines({
       }
 
       const { input, ids } = proposalInput(interpretation);
+      const current = generation.estimate(providerRequest(input));
+      if (
+        shown !== undefined &&
+        (shown.estimatedCost !== current.estimatedCost ||
+          shown.maxCost !== current.maxCost)
+      ) {
+        return refuse("estimate_changed");
+      }
       const runId = generation.startRun({
         kind: "outline",
         targetId: interpretationId,

@@ -1074,3 +1074,43 @@ describe("lo que no existe", () => {
     ).toMatchObject({ ok: false, reason: "not_found" });
   });
 });
+
+describe("estimación previa (FR-021)", () => {
+  const section = {
+    documentId: DOCUMENT,
+    unitCode: UNIT,
+    pageFrom: 1,
+    pageTo: 3,
+  };
+
+  test("devuelve la estimación y el coste máximo sin enviar ni reservar nada", () => {
+    expect(interpretations.estimate(section)).toEqual({
+      ok: true,
+      cost: { estimatedCost: 0, maxCost: 0 },
+    });
+    expect(sent).toEqual([]);
+    expect(generation.budget.list()).toEqual([]);
+    expect(
+      db.prepare("SELECT COUNT(*) AS n FROM generation_run").get()?.n,
+    ).toBe(0);
+  });
+
+  test("aplica las mismas comprobaciones que la petición", () => {
+    expect(interpretations.estimate({ ...section, unitCode: "ux 1" })).toEqual({
+      ok: false,
+      reason: "invalid_unit",
+    });
+    expect(interpretations.estimate({ ...section, pageTo: 9 })).toEqual({
+      ok: false,
+      reason: "invalid_pages",
+    });
+    expect(
+      interpretations.estimate({ ...section, documentId: "f".repeat(32) }),
+    ).toEqual({ ok: false, reason: "document_not_found" });
+    superseded.add(DOCUMENT);
+    expect(interpretations.estimate(section)).toEqual({
+      ok: false,
+      reason: "superseded",
+    });
+  });
+});

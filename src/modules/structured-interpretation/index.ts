@@ -21,7 +21,7 @@ import type {
   SourceServices,
 } from "@/modules/normative-source";
 import type { Audit } from "@/platform/audit";
-import type { Generation } from "@/platform/generation";
+import type { CostEstimate, Generation } from "@/platform/generation";
 import { transaction } from "@/platform/persistence";
 import type { Database } from "@/platform/persistence";
 
@@ -177,7 +177,21 @@ interface Target extends Actor {
   readonly revision: number;
 }
 
+export type EstimateResult =
+  | { readonly ok: true; readonly cost: CostEstimate }
+  | { readonly ok: false; readonly reason: RequestRejection };
+
+interface Section {
+  readonly documentId: string;
+  readonly unitCode: string;
+  readonly pageFrom: number;
+  readonly pageTo: number;
+}
+
 export interface StructuredInterpretation {
+  // Estimación y coste máximo de pedir esa interpretación, sin enviar nada ni
+  // reservar. Aplica las mismas comprobaciones que la petición.
+  estimate(input: Section): EstimateResult;
   request(
     input: Actor & {
       readonly documentId: string;
@@ -627,7 +641,81 @@ export function createStructuredInterpretation({
     withdrawn: requirement.withdrawn,
   });
 
+  // Comprueba una petición y reúne su entrada: solo la unidad pedida y el
+  // texto de las páginas de su sección, como dato. Ningún dato de usuarios.
+  const prepare = ({
+    documentId,
+    unitCode,
+    pageFrom,
+    pageTo,
+  }: Section):
+    | {
+        readonly ok: true;
+        readonly pages: readonly { number: number; text: string }[];
+      }
+    | { readonly ok: false; readonly reason: RequestRejection } => {
+    const document = source.getDocument(documentId);
+    if (document === undefined) {
+      return { ok: false, reason: "document_not_found" };
+    }
+    if (source.substitutesOf(documentId).length > 0) {
+      return { ok: false, reason: "superseded" };
+    }
+    if (!UNIT_CODE.test(unitCode)) {
+      return { ok: false, reason: "invalid_unit" };
+    }
+    if (
+      !Number.isSafeInteger(pageFrom) ||
+      !Number.isSafeInteger(pageTo) ||
+      pageFrom < 1 ||
+      pageTo < pageFrom ||
+      pageTo > document.pageCount ||
+      pageTo - pageFrom + 1 > MAX_SECTION_PAGES
+    ) {
+      return { ok: false, reason: "invalid_pages" };
+    }
+    const existing = db
+      .prepare(
+        "SELECT id FROM interpretation WHERE document_id = ? AND unit_code = ?",
+      )
+      .get(documentId, unitCode);
+    if (existing !== undefined) {
+      return { ok: false, reason: "already_exists" };
+    }
+    const pages: { number: number; text: string }[] = [];
+    for (let number = pageFrom; number <= pageTo; number += 1) {
+      pages.push({
+        number,
+        text: source.getPage(documentId, number)?.text ?? "",
+      });
+    }
+    return { ok: true, pages };
+  };
+
+  const providerRequest = (
+    unitCode: string,
+    pages: readonly { number: number; text: string }[],
+  ) => ({
+    task: "interpretation" as const,
+    promptVersion: prompt.version,
+    instructions: prompt.instructions,
+    input: { unitCode, pages },
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
+  });
+
   return {
+    estimate(input) {
+      const prepared = prepare(input);
+      return prepared.ok
+        ? {
+            ok: true,
+            cost: generation.estimate(
+              providerRequest(input.unitCode, prepared.pages),
+            ),
+          }
+        : prepared;
+    },
+
     async request({
       documentId,
       unitCode,
@@ -641,55 +729,18 @@ export function createStructuredInterpretation({
         record(actor, "interpretation.request", null, "failed", { reason });
         return { ok: false, reason };
       };
-      const document = source.getDocument(documentId);
-      if (document === undefined) {
-        return refuse("document_not_found");
+      const prepared = prepare({ documentId, unitCode, pageFrom, pageTo });
+      if (!prepared.ok) {
+        return refuse(prepared.reason);
       }
-      if (source.substitutesOf(documentId).length > 0) {
-        return refuse("superseded");
-      }
-      if (!UNIT_CODE.test(unitCode)) {
-        return refuse("invalid_unit");
-      }
-      if (
-        !Number.isSafeInteger(pageFrom) ||
-        !Number.isSafeInteger(pageTo) ||
-        pageFrom < 1 ||
-        pageTo < pageFrom ||
-        pageTo > document.pageCount ||
-        pageTo - pageFrom + 1 > MAX_SECTION_PAGES
-      ) {
-        return refuse("invalid_pages");
-      }
-      const existing = db
-        .prepare(
-          "SELECT id FROM interpretation WHERE document_id = ? AND unit_code = ?",
-        )
-        .get(documentId, unitCode);
-      if (existing !== undefined) {
-        return refuse("already_exists");
-      }
-
-      // Entrada de la generación: solo la unidad pedida y el texto de las
-      // páginas de su sección, como dato. Ningún dato de usuarios.
-      const pages: { number: number; text: string }[] = [];
-      for (let number = pageFrom; number <= pageTo; number += 1) {
-        pages.push({
-          number,
-          text: source.getPage(documentId, number)?.text ?? "",
-        });
-      }
+      const { pages } = prepared;
       const runId = generation.startRun({
         kind: "interpretation",
         targetId: documentId,
         requestedBy: actorId,
       });
       const result = await generation.call(runId, {
-        task: "interpretation",
-        promptVersion: prompt.version,
-        instructions: prompt.instructions,
-        input: { unitCode, pages },
-        maxOutputTokens: MAX_OUTPUT_TOKENS,
+        ...providerRequest(unitCode, pages),
         outputSchema: INTERPRETATION_OUTPUT,
         accept: (output) => {
           if (output.unit.code !== unitCode) {

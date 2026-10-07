@@ -8,6 +8,7 @@ import { protectedAction } from "@/platform/web";
 export const config = { api: { bodyParser: { sizeLimit: "4kb" } } };
 
 const ID = /^[0-9a-f]{32}$/;
+const NUMBER = /^(?:0|[1-9][0-9]{0,9})$/;
 
 export default protectedAction(
   {
@@ -20,8 +21,16 @@ export default protectedAction(
     if (!ID.test(interpretationId)) {
       return { location: "/documents" };
     }
+    // La petición lleva las cifras que el usuario vio: si ya no son las
+    // actuales, no se envía nada y la página las muestra de nuevo.
+    const shown = (name: string): number =>
+      NUMBER.test(field(name)) ? Number(field(name)) : Number.NaN;
     const result = await openOutlines(runtime).request({
       interpretationId,
+      shown: {
+        estimatedCost: shown("shown_estimate"),
+        maxCost: shown("shown_max"),
+      },
       actorId: session.user.id,
       correlationId,
     });

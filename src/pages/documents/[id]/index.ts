@@ -31,8 +31,6 @@ export const getServerSideProps = protectedPage(
       interpretations: openStructuredInterpretation(runtime).listForDocument(
         document.id,
       ),
-      budget: runtime.generation.budget.status(),
-      provider: runtime.generation.provider,
       names: new Map(
         runtime.identity.listUsers().map((user) => [user.id, user.username]),
       ),

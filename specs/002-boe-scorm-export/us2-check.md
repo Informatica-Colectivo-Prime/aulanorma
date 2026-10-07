@@ -65,6 +65,21 @@ disponible son cero, y la moneda figura como «sin fijar». Esas cifras no son p
 ningún proveedor. El límite del presupuesto todavía no se puede cambiar desde el producto:
 sus páginas son de la fase 6 (T057).
 
+## Estimación antes de cada solicitud (revisión del PR)
+
+La primera versión de este cambio mostraba lo disponible, pero no la estimación, al pedir una
+interpretación. Corregido: FR-021 se cumple en las dos solicitudes.
+
+- **Interpretación**: primero se indican la unidad y las páginas; el envío no manda nada y
+  responde con la estimación, el máximo que se reserva y lo disponible; después se confirma.
+  Cambiar la unidad o las páginas vuelve a ese paso. La confirmación lleva las cifras vistas:
+  si ya no son las actuales, responde 409 con las nuevas y no envía nada.
+- **Índice**: la página ya mostraba las cifras; ahora la solicitud las lleva y, si han
+  cambiado, tampoco se envía nada.
+- **Tres importes separados**: la estimación, la reserva máxima y el consumo confirmado se
+  guardan y se muestran por separado en la interpretación y en el índice. Con el adaptador
+  determinista los tres son cero y figuran como **coste simulado**.
+
 ## Pruebas automáticas
 
 | Fichero                                                    | Casos | Qué cubre                                                                     |
@@ -110,6 +125,13 @@ aprobaciones no son las de ninguna persona. Los datos no se conservan.
 | Cuenta sin perfil                                     | 403 en la página, en la vista previa y en las cinco acciones                                |
 | Consola y red                                         | Sin errores de script; solo peticiones al propio origen                                     |
 
+Tras la revisión del PR se repitió una tercera vez, con un directorio de datos exclusivo
+creado como indican las instrucciones del README: la petición de interpretación mostró la
+estimación antes de enviar nada, volvió a mostrarla al cambiar las páginas, respondió 409 a
+una confirmación con cifras que no eran las actuales y, una vez confirmada, la interpretación
+mostró por separado estimación, reserva máxima y consumo confirmado, como coste simulado. El
+resto del recorrido dio el mismo resultado.
+
 El recorrido descubrió dos defectos, corregidos antes de entregar: las entradas mostraban sus
 requisitos en un orden arbitrario, y la página de la interpretación presentaba como aprobado
 un índice cuya aprobación ya no estaba vigente.
@@ -121,7 +143,8 @@ un índice cuya aprobación ya no estaba vigente.
 - **Nadie ha validado la interpretación del piloto ni aprobado su índice.** Lo hecho son
   ensayos automatizados.
 - **La propuesta grabada depende del inventario exacto.** Si la interpretación se corrige
-  antes de pedir el índice, el adaptador no responde.
+  antes de pedir el índice, el adaptador no responde. Es un límite del doble de pruebas: no
+  impide corregir ni justifica validar una interpretación que no sea correcta.
 - **Un índice por interpretación.** No se puede pedir otra propuesta para la misma
   interpretación; se edita la que hay.
 - **Reordenar es subir o bajar una posición**, sin arrastrar.
@@ -130,8 +153,6 @@ un índice cuya aprobación ya no estaba vigente.
 - **El presupuesto no tiene páginas** (T057): no se consulta su detalle, no se cambia el
   límite ni se concilia desde el producto. Con el límite a cero solo caben operaciones sin
   coste, que son las del adaptador determinista.
-- **Petición de interpretación**: muestra lo disponible, pero no una estimación, porque su
-  coste depende de las páginas que se indican en ese mismo formulario.
 - **Una ejecución de generación interrumpida** por una caída conserva su reserva como
   incierta, pero su estado sigue figurando como en curso.
 - **Las aprobaciones dependientes** del índice no existen todavía: llegan con los temas.

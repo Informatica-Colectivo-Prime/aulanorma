@@ -25,7 +25,6 @@ import * as rejectAction from "@/pages/api/outlines/reject";
 import * as requestAction from "@/pages/api/outlines/request";
 import * as resubmitAction from "@/pages/api/outlines/resubmit";
 import * as signInAction from "@/pages/api/session/sign-in";
-import * as documentPage from "@/pages/documents/[id]/index";
 import * as interpretationPage from "@/pages/interpretations/[id]/index";
 import * as loginPage from "@/pages/login";
 import * as entryPage from "@/pages/outlines/[id]/entries/[eid]";
@@ -160,13 +159,17 @@ async function validatedInterpretation(): Promise<string> {
     (JSON.parse(uploaded.body) as { location: string }).location
       .split("/")
       .pop() ?? "";
-  const requested = await client.post(interpretationRequestAction, {
+  const estimate = await client.post(interpretationRequestAction, {
     csrf: await csrf(),
     document: documentId,
     unit_code: "UX9001",
     page_from: "1",
     page_to: "3",
   });
+  const requested = await client.post(
+    interpretationRequestAction,
+    client.hiddenFields(estimate, "/api/interpretations/request"),
+  );
   const id = requested.location?.split("/").pop() ?? "";
   await validate(id);
   return id;
@@ -183,11 +186,16 @@ async function validate(interpretationId: string): Promise<void> {
   expect(reply.status).toBe(303);
 }
 
+// Pide el índice con el formulario de la página de la interpretación, que
+// lleva las cifras mostradas; si la página no lo ofrece, lo envía sin ellas.
 async function requestOutline(interpretationId: string): Promise<Reply> {
-  return client.post(requestAction, {
-    csrf: await csrf(),
-    interpretation: interpretationId,
-  });
+  const page = await viewInterpretation(interpretationId);
+  return client.post(
+    requestAction,
+    page.body.includes('action="/api/outlines/request"')
+      ? client.hiddenFields(page, "/api/outlines/request")
+      : { csrf: await csrf(), interpretation: interpretationId },
+  );
 }
 
 // Deja un índice propuesto y devuelve su identificador.
@@ -291,17 +299,32 @@ describe("escenario 1: pedir el índice", () => {
     expect(page).toContain("Presupuesto disponible");
     expect(page).toContain("0,00 unidades (moneda sin fijar)");
     expect(page).toContain("No son precios de ningún proveedor.");
-    // También al pedir una interpretación.
-    const documentId = client.runtime.db
-      .prepare("SELECT id FROM document")
-      .get()?.id;
-    const document = flat(
-      await client.get(documentPage, {
-        params: { id: typeof documentId === "string" ? documentId : "" },
-      }),
+    expect(page).toContain("Coste simulado");
+  });
+
+  test("si las cifras mostradas ya no son las actuales, no se envía nada y se dice", async () => {
+    await enter("docente1", ["teacher"]);
+    const interpretationId = await validatedInterpretation();
+    const page = await viewInterpretation(interpretationId);
+    const reply = await client.post(requestAction, {
+      ...client.hiddenFields(page, "/api/outlines/request"),
+      shown_max: "5",
+    });
+    expect(reply.location).toBe(`/interpretations/${interpretationId}`);
+    expect(flat(await viewInterpretation(interpretationId))).toContain(
+      "La estimación o el coste máximo han cambiado desde que los viste",
     );
-    expect(document).toContain("Presupuesto disponible");
-    expect(document).toContain("No son precios de ningún proveedor.");
+    expect(auditOf("outline.request")).toEqual([
+      { result: "failed", reason: "estimate_changed" },
+    ]);
+    expect(count("outline")).toBe(0);
+    expect(
+      client.runtime.db
+        .prepare(
+          "SELECT count(*) AS n FROM generation_run WHERE kind = 'outline'",
+        )
+        .get()?.n,
+    ).toBe(0);
   });
 
   test("propone un índice en el que cada entrada declara sus requisitos, con su página, o está marcada sin respaldo normativo", async () => {

@@ -139,6 +139,9 @@ export interface WebClient {
   ): Promise<Reply>;
   // Testigo del formulario de la última página recibida.
   csrfOf(reply: Reply): string;
+  // Campos ocultos del formulario de esa página que se envía a `action`,
+  // como los enviaría un navegador.
+  hiddenFields(reply: Reply, action: string): Record<string, string>;
   dispose(): void;
 }
 
@@ -279,6 +282,24 @@ export function createWebClient(options: WebClientOptions = {}): WebClient {
         throw new Error("La página no contiene ningún testigo.");
       }
       return match[1];
+    },
+    hiddenFields(reply, action) {
+      const start = reply.body.indexOf(`action="${action}"`);
+      if (start < 0) {
+        throw new Error(`La página no contiene ningún formulario a ${action}.`);
+      }
+      const form = reply.body.slice(
+        start,
+        reply.body.indexOf("</form>", start),
+      );
+      const fields: Record<string, string> = {};
+      for (const [input] of form.matchAll(/<input\b[^>]*>/g)) {
+        const name = /name="([^"]*)"/.exec(input)?.[1];
+        if (input.includes('type="hidden"') && name !== undefined) {
+          fields[name] = /value="([^"]*)"/.exec(input)?.[1] ?? "";
+        }
+      }
+      return fields;
     },
     dispose() {
       Reflect.deleteProperty(holder, RUNTIME);
