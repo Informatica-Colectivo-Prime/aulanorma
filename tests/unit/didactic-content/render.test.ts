@@ -296,6 +296,114 @@ describe("renderizador", () => {
     );
   });
 
+  // Lectura independiente del resultado: se parte en etiquetas y texto. Toda
+  // etiqueta debe ser, carácter a carácter, una de las que escribe el
+  // renderizador; y el texto, una vez descodificado, debe contener la carga
+  // íntegra en cada campo. Así una inyección no puede pasar por desaparecer:
+  // quitar o alterar el texto hace fallar la prueba igual que no escaparlo.
+  const ALLOWED_TAGS = new Set([
+    '<section class="block norm">',
+    '<section class="block development">',
+    "</section>",
+    '<p class="kind">',
+    '<p class="hint">',
+    "<p>",
+    "</p>",
+    '<span class="tag">',
+    "</span>",
+    "<strong>",
+    "</strong>",
+    "<blockquote>",
+    "</blockquote>",
+    "<h3>",
+    "</h3>",
+    "<ul>",
+    '<ul class="hint">',
+    "</ul>",
+    "<li>",
+    "</li>",
+    "<br />",
+    '<a href="/documents/abc/pages/3">',
+    "</a>",
+  ]);
+
+  function decode(value: string): string {
+    // Solo las cinco referencias que emite la plantilla; cualquier otra «&»
+    // sería texto sin escapar.
+    expect(value.replace(/&(?:amp|lt|gt|quot|#39);/g, "")).not.toContain("&");
+    return value
+      .replaceAll("&lt;", "<")
+      .replaceAll("&gt;", ">")
+      .replaceAll("&quot;", '"')
+      .replaceAll("&#39;", "'")
+      .replaceAll("&amp;", "&");
+  }
+
+  // Texto visible del resultado, con cada `<br />` como salto de línea.
+  function visibleText(html: string): string {
+    let text = "";
+    for (const token of html.split(/(<[^<>]*>)/)) {
+      if (token.startsWith("<")) {
+        expect(ALLOWED_TAGS, token).toContain(token);
+        text += token === "<br />" ? "\n" : "\u0001";
+      } else {
+        // Fuera de una etiqueta no queda ningún delimitador de marcado.
+        expect(token).not.toMatch(/[<>"']/);
+        text += decode(token);
+      }
+    }
+    return text;
+  }
+
+  test.each([
+    ["etiqueta de script", `<script>alert(1)</script>`],
+    ["cierre del contenedor", `</section></p><iframe src="//example.invalid">`],
+    ["atributos", `" onmouseover="alert(1)" x='y' autofocus`],
+    ["entidades ya escritas", `&lt;b&gt; &amp;amp; &#60;i&#62; &copy; &`],
+    ["comentario y CDATA", `<!-- --><![CDATA[<svg onload=alert(1)>]]>`],
+    ["etiqueta sin cerrar", `<svg/onload=alert(1)`],
+    ["varias líneas", `uno <b>dos</b>\ntres & "cuatro"\n<br />`],
+    ["otros alfabetos y símbolos", `ñ ü € 日本語 \u202e <x> 𝒳 ' \` =`],
+  ])(
+    "inyección por %s: la estructura es la del renderizador y el texto se conserva literal",
+    (_name, payload) => {
+      const render = (value: string): string => {
+        const item = requirement({
+          code: value,
+          kindName: value,
+          text: value,
+          documentTitle: value,
+          section: value,
+          quote: value,
+        });
+        return renderBlocks(
+          [
+            { kind: "requirement", requirement: item },
+            {
+              kind: "development",
+              content: [
+                { type: "heading", text: value },
+                { type: "paragraph", text: value },
+                { type: "list", items: [value] },
+              ],
+              requirements: [item],
+            },
+          ],
+          { pageHref: () => "/documents/abc/pages/3" },
+        ).text;
+      };
+      const text = visibleText(render(payload));
+      // Seis campos del requisito, tres del contenido y cuatro de la
+      // referencia del desarrollo: la carga aparece entera en los trece.
+      expect(text.split(payload)).toHaveLength(14);
+      // Con las mismas etiquetas en los mismos sitios que un texto
+      // inofensivo, y sin que falte ni sobre un solo carácter.
+      expect(text.replaceAll(payload, "NEUTRO")).toBe(
+        visibleText(render("NEUTRO")),
+      );
+    },
+  );
+
   test.each([
     "javascript:alert(1)",
     "JaVaScRiPt:alert(1)",
