@@ -11,6 +11,7 @@ import type {
   ContentExportOptions,
   PackageAssets,
 } from "@/modules/content-export";
+import type { Database } from "@/platform/persistence";
 import { createOutlineFixture, TEACHER } from "./outline-fixture";
 import type { OutlineFixture } from "./outline-fixture";
 import { syllabusHelpers } from "./syllabus-helpers";
@@ -47,8 +48,12 @@ export interface ExportFixture {
   dispose(): void;
 }
 
-export async function createExportFixture(): Promise<ExportFixture> {
-  const outline = await createOutlineFixture();
+// Por defecto, con la base de datos en memoria y un directorio de datos
+// temporal. Una prueba de copia y restauración indica los suyos.
+export async function createExportFixture(
+  store: { readonly db?: Database; readonly dataDir?: string } = {},
+): Promise<ExportFixture> {
+  const outline = await createOutlineFixture(store.db);
   const outlineId = await outline.approvedOutline();
   await outline.syllabus.generate({ ...TEACHER, outlineId });
   const helpers = syllabusHelpers(outline, outlineId);
@@ -57,7 +62,8 @@ export async function createExportFixture(): Promise<ExportFixture> {
   if (!approved.ok) {
     throw new Error(`La versión debía aprobarse: ${approved.reason}.`);
   }
-  const dataDir = mkdtempSync(path.join(tmpdir(), "aulanorma-export-"));
+  const dataDir =
+    store.dataDir ?? mkdtempSync(path.join(tmpdir(), "aulanorma-export-"));
   const fixture: ExportFixture = {
     outline,
     helpers,

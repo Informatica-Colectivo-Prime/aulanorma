@@ -380,15 +380,25 @@ describe("almacén de ficheros por huella", () => {
 
   test("no ofrece ninguna operación para borrar ni sobrescribir", async () => {
     const namespace = await import("@/platform/persistence");
+    // La copia y la restauración solo escriben en un directorio nuevo o
+    // vacío: nunca en el almacén del que leen.
     expect(Object.keys(namespace).sort()).toEqual([
+      "BACKUP_RECORD",
+      "PACKAGE_DIRECTORY",
       "PLATFORM_MIGRATIONS",
+      "checkFileReferences",
+      "createBackup",
+      "fileReferences",
       "hasBlob",
       "migrate",
       "openDatabase",
       "openMemoryDatabase",
       "putBlob",
       "readBlob",
+      "restoreBackup",
+      "syncToDisk",
       "transaction",
+      "verifyBackup",
     ]);
   });
 });

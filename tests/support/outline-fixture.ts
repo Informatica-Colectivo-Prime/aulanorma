@@ -165,8 +165,10 @@ export interface OutlineFixture {
   requestOutline(reply?: unknown): Promise<string>;
 }
 
-export async function createOutlineFixture(): Promise<OutlineFixture> {
-  const db = openMemoryDatabase();
+// Por defecto, sobre una base de datos en memoria.
+export async function createOutlineFixture(
+  db: Database = openMemoryDatabase(),
+): Promise<OutlineFixture> {
   migrate(db, PLATFORM_MIGRATIONS);
   const audit = createAudit(db);
   let clock = Date.UTC(2026, 9, 7);

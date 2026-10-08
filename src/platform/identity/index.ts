@@ -311,6 +311,17 @@ function summary(row: Row): UserSummary {
   };
 }
 
+// Revoca todas las sesiones, de todas las cuentas y también las de entrada.
+// Es la regla de una restauración: ninguna sesión anterior a la copia sirve
+// después (FR-069). Devuelve cuántas quedaban abiertas.
+export function revokeEverySession(db: DatabaseSync, at: number): number {
+  return Number(
+    db
+      .prepare("UPDATE session SET revoked_at = ? WHERE revoked_at IS NULL")
+      .run(at).changes,
+  );
+}
+
 export function createIdentity(options: IdentityOptions): Identity {
   const { db, audit, now, sessionIdleMs, sessionMaxMs, passwordParams } =
     options;

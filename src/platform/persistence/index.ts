@@ -13,16 +13,20 @@ import { createHash, randomBytes } from "node:crypto";
 import {
   chmodSync,
   closeSync,
+  copyFileSync,
   existsSync,
   fsyncSync,
+  lstatSync,
   mkdirSync,
   openSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
+  writeFileSync,
   writeSync,
 } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
+import { backup, DatabaseSync } from "node:sqlite";
 
 export type Database = DatabaseSync;
 
@@ -33,6 +37,9 @@ export interface Migration {
 
 const DATABASE_FILE = "aulanorma.db";
 const BLOB_DIRECTORY = "blobs";
+// Directorio, dentro del de datos, de los paquetes exportados: cada uno es
+// `<identificador de la exportación>.zip`.
+export const PACKAGE_DIRECTORY = "exports";
 const PRIVATE_DIRECTORY = 0o700;
 const PRIVATE_FILE = 0o600;
 
@@ -665,7 +672,9 @@ function blobPath(dataDir: string, sha256: string): string {
   return `${dataDir}/${BLOB_DIRECTORY}/${sha256.slice(0, 2)}/${sha256}`;
 }
 
-function syncDirectory(directory: string): void {
+// Sincroniza a disco un fichero ya escrito, o un directorio tras crear o
+// renombrar una entrada en él.
+export function syncToDisk(directory: string): void {
   const descriptor = openSync(directory, "r");
   try {
     fsyncSync(descriptor);
@@ -702,7 +711,7 @@ export function putBlob(dataDir: string, content: Uint8Array): string {
   }
   closeSync(descriptor);
   renameSync(temporary, target);
-  syncDirectory(directory);
+  syncToDisk(directory);
   return sha256;
 }
 
@@ -718,4 +727,490 @@ export function readBlob(dataDir: string, sha256: string): Buffer {
     throw new Error("El contenido del fichero no coincide con su huella.");
   }
   return content;
+}
+
+// --- Copia de seguridad y restauración (research.md, R11; FR-069) ---
+//
+// La copia es un directorio con una instantánea de la base de datos, los
+// ficheros publicados y un registro, `backup.json`. Primero se copia la base
+// con la operación `backup` de SQLite, sin detener el servicio, y después
+// los ficheros: como un fichero se publica antes de referenciarse y no cambia,
+// todo lo que la instantánea referencia ya estaba publicado. Lo publicado
+// después sobra, pero no falta nada. La copia solo se da por buena si cada
+// referencia de la instantánea tiene en la propia copia su fichero con la
+// huella correcta.
+
+const BACKUP_FORMAT = "aulanorma-backup-v1";
+export const BACKUP_RECORD = "backup.json";
+
+// Fichero que una fila de la base de datos da por publicado.
+export interface FileReference {
+  readonly kind: "document" | "package";
+  readonly id: string;
+  // Ruta relativa al directorio de datos.
+  readonly path: string;
+  readonly sha256: string;
+}
+
+export interface ReferenceProblem {
+  readonly kind: FileReference["kind"];
+  readonly id: string;
+  readonly path: string;
+  readonly problem: "missing" | "mismatch";
+}
+
+export interface InventoryEntry {
+  readonly path: string;
+  readonly sizeBytes: number;
+  readonly sha256: string;
+}
+
+export interface BackupRecord {
+  readonly format: typeof BACKUP_FORMAT;
+  readonly name: string;
+  readonly createdAt: string;
+  // `failed`: la copia no sirve para restaurar.
+  readonly status: "ok" | "failed";
+  // Tamaño y huella del conjunto: la huella es el SHA-256 del inventario.
+  readonly sizeBytes: number;
+  readonly sha256: string;
+  readonly migrations: readonly string[];
+  readonly integrity: "ok" | "failed";
+  readonly references: number;
+  // Ficheros publicados que la instantánea no referencia. Son inocuos.
+  readonly unreferenced: number;
+  readonly problems: readonly ReferenceProblem[];
+  readonly inventory: readonly InventoryEntry[];
+}
+
+export interface BackupOptions {
+  readonly dataDir: string;
+  // Directorio en el que se crea el de la copia.
+  readonly destination: string;
+  readonly now: () => number;
+  // Páginas por paso de la copia de la base. Entre un paso y otro el servicio
+  // sigue escribiendo.
+  readonly pagesPerStep?: number;
+  readonly onStep?: () => void;
+}
+
+export interface BackupResult {
+  readonly directory: string;
+  readonly record: BackupRecord;
+}
+
+export type BackupVerification =
+  | { readonly ok: true; readonly record: BackupRecord }
+  | { readonly ok: false; readonly problems: readonly string[] };
+
+export interface RestoreResult {
+  readonly ok: boolean;
+  readonly problems: readonly string[];
+  readonly record: BackupRecord | undefined;
+  readonly integrity: "ok" | "failed" | "not_run";
+  readonly foreignKeys: "ok" | "failed" | "not_run";
+  readonly references: number;
+  readonly referenceProblems: readonly ReferenceProblem[];
+}
+
+const BLOB_FILE = /^blobs\/([0-9a-f]{2})\/([0-9a-f]{64})$/;
+const PACKAGE_FILE = /^exports\/[0-9a-f]{32}\.zip$/;
+const STORE_DIRECTORIES = [BLOB_DIRECTORY, PACKAGE_DIRECTORY] as const;
+
+function storedFile(relative: string): boolean {
+  const blob = BLOB_FILE.exec(relative);
+  return blob === null
+    ? PACKAGE_FILE.test(relative)
+    : blob[2]?.startsWith(blob[1] ?? " ") === true;
+}
+
+function sha256Of(file: string): string {
+  return createHash("sha256").update(readFileSync(file)).digest("hex");
+}
+
+function hasTable(db: Database, table: string): boolean {
+  return (
+    db
+      .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get(table) !== undefined
+  );
+}
+
+// Ficheros que la base de datos referencia: el PDF de cada documento
+// registrado y el paquete de cada exportación terminada.
+export function fileReferences(db: Database): readonly FileReference[] {
+  const references: FileReference[] = [];
+  if (hasTable(db, "document")) {
+    for (const row of db
+      .prepare("SELECT id, sha256 FROM document ORDER BY id")
+      .all()) {
+      const sha256 = String(row.sha256);
+      references.push({
+        kind: "document",
+        id: String(row.id),
+        path: `${BLOB_DIRECTORY}/${sha256.slice(0, 2)}/${sha256}`,
+        sha256,
+      });
+    }
+  }
+  if (hasTable(db, "package_export")) {
+    for (const row of db
+      .prepare(
+        "SELECT id, package_sha256 FROM package_export " +
+          "WHERE status = 'succeeded' ORDER BY id",
+      )
+      .all()) {
+      const id = String(row.id);
+      references.push({
+        kind: "package",
+        id,
+        path: `${PACKAGE_DIRECTORY}/${id}.zip`,
+        sha256: String(row.package_sha256),
+      });
+    }
+  }
+  return references;
+}
+
+function regularFile(file: string): boolean {
+  try {
+    return lstatSync(file).isFile();
+  } catch {
+    return false;
+  }
+}
+
+// Comprueba que cada referencia tiene bajo `root` su fichero y que su huella
+// coincide.
+export function checkFileReferences(
+  db: Database,
+  root: string,
+): {
+  readonly checked: number;
+  readonly problems: readonly ReferenceProblem[];
+} {
+  const references = fileReferences(db);
+  const problems: ReferenceProblem[] = [];
+  for (const { kind, id, path, sha256 } of references) {
+    const file = `${root}/${path}`;
+    if (!storedFile(path) || !regularFile(file)) {
+      problems.push({ kind, id, path, problem: "missing" });
+    } else if (sha256Of(file) !== sha256) {
+      problems.push({ kind, id, path, problem: "mismatch" });
+    }
+  }
+  return { checked: references.length, problems };
+}
+
+// Ficheros publicados bajo `root`, por su ruta relativa. Los temporales de una
+// publicación a medias y cualquier otra cosa que no sea un fichero publicado
+// se dejan fuera.
+function listStoredFiles(root: string): string[] {
+  const found: string[] = [];
+  const walk = (relative: string): void => {
+    for (const entry of readdirSync(`${root}/${relative}`, {
+      withFileTypes: true,
+    })) {
+      const child = `${relative}/${entry.name}`;
+      if (entry.isDirectory()) {
+        walk(child);
+      } else if (entry.isFile() && storedFile(child)) {
+        found.push(child);
+      }
+    }
+  };
+  for (const directory of STORE_DIRECTORIES) {
+    if (existsSync(`${root}/${directory}`)) {
+      walk(directory);
+    }
+  }
+  return found.sort();
+}
+
+function copyPrivate(source: string, target: string): void {
+  mkdirSync(target.slice(0, target.lastIndexOf("/")), {
+    recursive: true,
+    mode: PRIVATE_DIRECTORY,
+  });
+  copyFileSync(source, target);
+  chmodSync(target, PRIVATE_FILE);
+  syncToDisk(target);
+}
+
+function inventoryOf(root: string): InventoryEntry[] {
+  return [DATABASE_FILE, ...listStoredFiles(root)].map((path) => {
+    const content = readFileSync(`${root}/${path}`);
+    return {
+      path,
+      sizeBytes: content.length,
+      sha256: createHash("sha256").update(content).digest("hex"),
+    };
+  });
+}
+
+function inventoryDigest(inventory: readonly InventoryEntry[]): string {
+  const hash = createHash("sha256");
+  for (const { path, sizeBytes, sha256 } of inventory) {
+    hash.update(`${sha256}  ${String(sizeBytes)}  ${path}\n`);
+  }
+  return hash.digest("hex");
+}
+
+// Abre una instantánea solo para leerla y no deja a su lado los ficheros
+// auxiliares del modo WAL.
+function inspectSnapshot<Result>(
+  root: string,
+  work: (db: Database) => Result,
+): Result {
+  const file = `${root}/${DATABASE_FILE}`;
+  const db = new DatabaseSync(file, { readOnly: true });
+  try {
+    return work(db);
+  } finally {
+    db.close();
+    rmSync(`${file}-wal`, { force: true });
+    rmSync(`${file}-shm`, { force: true });
+  }
+}
+
+function integrityOf(db: Database): "ok" | "failed" {
+  const rows = db.prepare("PRAGMA integrity_check").all();
+  return rows.length === 1 && rows[0]?.integrity_check === "ok"
+    ? "ok"
+    : "failed";
+}
+
+function backupName(at: number): string {
+  return `aulanorma-${new Date(at).toISOString().replace(/[-:.]/g, "")}`;
+}
+
+// Hace una copia de seguridad del directorio de datos, con el servicio en
+// marcha, y la verifica. Devuelve siempre el registro que deja escrito: una
+// copia con `status: "failed"` no sirve para restaurar.
+export async function createBackup({
+  dataDir,
+  destination,
+  now,
+  pagesPerStep = 256,
+  onStep,
+}: BackupOptions): Promise<BackupResult> {
+  const sourceFile = `${dataDir}/${DATABASE_FILE}`;
+  if (!regularFile(sourceFile)) {
+    throw new Error("El directorio de datos no contiene la base de datos.");
+  }
+  const at = now();
+  const name = backupName(at);
+  const directory = `${destination}/${name}`;
+  mkdirSync(destination, { recursive: true, mode: PRIVATE_DIRECTORY });
+  // Falla si ya existe: una copia nunca se escribe sobre otra.
+  mkdirSync(directory, { mode: PRIVATE_DIRECTORY });
+
+  // 1. Instantánea de la base de datos.
+  const snapshot = `${directory}/${DATABASE_FILE}`;
+  const source = new DatabaseSync(sourceFile, { readOnly: true });
+  try {
+    await backup(source, snapshot, {
+      rate: pagesPerStep,
+      ...(onStep === undefined ? {} : { progress: onStep }),
+    });
+  } finally {
+    source.close();
+  }
+  chmodSync(snapshot, PRIVATE_FILE);
+  syncToDisk(snapshot);
+
+  // 2. Después, los ficheros publicados.
+  for (const relative of listStoredFiles(dataDir)) {
+    copyPrivate(`${dataDir}/${relative}`, `${directory}/${relative}`);
+  }
+
+  // 3. Verificación de la propia copia.
+  const checked = inspectSnapshot(directory, (db) => ({
+    integrity: integrityOf(db),
+    references: checkFileReferences(db, directory),
+    referenced: new Set(fileReferences(db).map(({ path }) => path)),
+    migrations: hasTable(db, "schema_migration")
+      ? db
+          .prepare("SELECT id FROM schema_migration ORDER BY id")
+          .all()
+          .map((row) => String(row.id))
+      : [],
+  }));
+  const inventory = inventoryOf(directory);
+
+  // 4. Registro.
+  const record: BackupRecord = {
+    format: BACKUP_FORMAT,
+    name,
+    createdAt: new Date(at).toISOString(),
+    status:
+      checked.integrity === "ok" && checked.references.problems.length === 0
+        ? "ok"
+        : "failed",
+    sizeBytes: inventory.reduce((sum, entry) => sum + entry.sizeBytes, 0),
+    sha256: inventoryDigest(inventory),
+    migrations: checked.migrations,
+    integrity: checked.integrity,
+    references: checked.references.checked,
+    unreferenced: inventory.filter(
+      ({ path }) => path !== DATABASE_FILE && !checked.referenced.has(path),
+    ).length,
+    problems: checked.references.problems,
+    inventory,
+  };
+  const recordFile = `${directory}/${BACKUP_RECORD}`;
+  writeFileSync(recordFile, `${JSON.stringify(record, null, 2)}\n`, {
+    mode: PRIVATE_FILE,
+    flag: "wx",
+  });
+  syncToDisk(recordFile);
+  syncToDisk(directory);
+  return { directory, record };
+}
+
+function isInventoryEntry(value: unknown): value is InventoryEntry {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const entry = value as Record<string, unknown>;
+  return (
+    typeof entry.path === "string" &&
+    (entry.path === DATABASE_FILE || storedFile(entry.path)) &&
+    typeof entry.sizeBytes === "number" &&
+    typeof entry.sha256 === "string" &&
+    SHA256.test(entry.sha256)
+  );
+}
+
+function readRecord(directory: string): BackupRecord | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(`${directory}/${BACKUP_RECORD}`, "utf8"));
+  } catch {
+    return undefined;
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    return undefined;
+  }
+  const record = parsed as Record<string, unknown>;
+  return record.format === BACKUP_FORMAT &&
+    (record.status === "ok" || record.status === "failed") &&
+    typeof record.sha256 === "string" &&
+    Array.isArray(record.inventory) &&
+    record.inventory.every(isInventoryEntry)
+    ? (parsed as BackupRecord)
+    : undefined;
+}
+
+// Comprueba que una copia sigue siendo la que se registró: marcada como
+// buena, con todos sus ficheros, ninguno de más y las mismas huellas. No
+// modifica la copia.
+export function verifyBackup(directory: string): BackupVerification {
+  const record = readRecord(directory);
+  if (record === undefined) {
+    return { ok: false, problems: ["La copia no tiene un registro legible."] };
+  }
+  if (record.status !== "ok") {
+    return { ok: false, problems: ["La copia está marcada como fallida."] };
+  }
+  const problems: string[] = [];
+  if (!record.inventory.some(({ path }) => path === DATABASE_FILE)) {
+    problems.push("El registro no incluye la base de datos.");
+  }
+  if (inventoryDigest(record.inventory) !== record.sha256) {
+    problems.push("La huella del registro no corresponde a su inventario.");
+  }
+  const listed = new Set(record.inventory.map(({ path }) => path));
+  for (const { path, sizeBytes, sha256 } of record.inventory) {
+    const file = `${directory}/${path}`;
+    if (!regularFile(file)) {
+      problems.push(`Falta ${path}.`);
+    } else {
+      const content = readFileSync(file);
+      if (
+        content.length !== sizeBytes ||
+        createHash("sha256").update(content).digest("hex") !== sha256
+      ) {
+        problems.push(`${path} no coincide con su huella.`);
+      }
+    }
+  }
+  for (const path of listStoredFiles(directory)) {
+    if (!listed.has(path)) {
+      problems.push(`${path} no figura en el registro.`);
+    }
+  }
+  return problems.length === 0 ? { ok: true, record } : { ok: false, problems };
+}
+
+// Restaura una copia en un directorio limpio y la comprueba: integridad de
+// SQLite, claves ajenas, y cada referencia con su fichero y su huella. No
+// arranca nada ni toca el directorio de datos del servicio. Las reglas de las
+// operaciones en curso (sesiones y generaciones) las aplica
+// `scripts/ops/verify-restore.mjs` sobre el directorio restaurado.
+export function restoreBackup(
+  backupDirectory: string,
+  targetDirectory: string,
+): RestoreResult {
+  const failed = (
+    problems: readonly string[],
+    record?: BackupRecord,
+  ): RestoreResult => ({
+    ok: false,
+    problems,
+    record,
+    integrity: "not_run",
+    foreignKeys: "not_run",
+    references: 0,
+    referenceProblems: [],
+  });
+  const verification = verifyBackup(backupDirectory);
+  if (!verification.ok) {
+    return failed(verification.problems);
+  }
+  const { record } = verification;
+  if (
+    existsSync(targetDirectory) &&
+    (!lstatSync(targetDirectory).isDirectory() ||
+      readdirSync(targetDirectory).length > 0)
+  ) {
+    return failed(["El directorio de destino no está vacío."], record);
+  }
+  mkdirSync(targetDirectory, { recursive: true, mode: PRIVATE_DIRECTORY });
+  chmodSync(targetDirectory, PRIVATE_DIRECTORY);
+  for (const { path } of record.inventory) {
+    copyPrivate(`${backupDirectory}/${path}`, `${targetDirectory}/${path}`);
+  }
+
+  const db = openDatabase(targetDirectory);
+  try {
+    const integrity = integrityOf(db);
+    const foreignKeys =
+      db.prepare("PRAGMA foreign_key_check").all().length === 0
+        ? "ok"
+        : "failed";
+    const references = checkFileReferences(db, targetDirectory);
+    const problems = [
+      ...(integrity === "ok"
+        ? []
+        : ["La verificación de integridad de SQLite ha fallado."]),
+      ...(foreignKeys === "ok" ? [] : ["Hay claves ajenas sin su fila."]),
+      ...references.problems.map(({ path, problem }) =>
+        problem === "missing"
+          ? `Falta ${path}.`
+          : `${path} no coincide con su huella.`,
+      ),
+    ];
+    return {
+      ok: problems.length === 0,
+      problems,
+      record,
+      integrity,
+      foreignKeys,
+      references: references.checked,
+      referenceProblems: references.problems,
+    };
+  } finally {
+    db.close();
+  }
 }
