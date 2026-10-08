@@ -1,0 +1,77 @@
+{
+  "task": "topic",
+  "promptVersion": "v1",
+  "inputSha256": "0fb5e5b831ad388fa18984820d7a7a12ce66ea2f68680bb5f6deec55c1251efa",
+  "output": {
+    "blocks": [
+      {
+        "kind": "requirement",
+        "requirementRef": "r1"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r2"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r3"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r4"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r5"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r6"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r7"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r8"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r9"
+      },
+      {
+        "kind": "development",
+        "requirementRefs": [
+          "r1",
+          "r2",
+          "r3",
+          "r4",
+          "r5",
+          "r6",
+          "r7",
+          "r8",
+          "r9"
+        ],
+        "content": [
+          {
+            "type": "heading",
+            "text": "Texto de ensayo, no didáctico"
+          },
+          {
+            "type": "paragraph",
+            "text": "Este bloque es un relleno preparado para ensayar el recorrido del producto. No es contenido generado por ningún modelo ni revisado por ningún docente, y no desarrolla de verdad los requisitos a los que está vinculado."
+          },
+          {
+            "type": "list",
+            "items": [
+              "Sirve para comprobar la separación entre norma y desarrollo.",
+              "Sirve para comprobar los vínculos con los requisitos y las aprobaciones.",
+              "No sirve para valorar la calidad de una generación real."
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -165,17 +165,18 @@ automáticas y con un navegador real: ver [us2-check.md](./us2-check.md).
 **Independent Test**: con un índice aprobado, el docente genera el temario, edita y aprueba
 los temas, aprueba la versión y comprueba la invalidación al editar el índice.
 
-- [ ] T051 [P] [US3] Crear la migración y el repositorio de `Topic` (`status`: `pending`, `failed`, `draft`, `in_review`, `approved`, `rejected`), `TopicBlock` (`kind`: `requirement`, `development`), `BlockRequirement`, `TopicApproval`, `SyllabusVersion`, `SyllabusVersionTopic` y `ReferenceCheck` en `src/modules/didactic-content/`
-- [ ] T052 [US3] Definir el esquema Zod de los bloques estructurados y el renderizador que escapa todo el texto en `src/modules/didactic-content/render/`, con etiqueta de texto para distinguir norma y desarrollo; pruebas en `tests/unit/didactic-content/render.test.ts` con texto hostil (SC-046)
-- [ ] T053 [US3] Implementar la generación del temario tema a tema con `prompts/topic/v1.md`: estimación y presupuesto disponible mostrados antes de cada solicitud, incluida la reanudación; estimación separada del coste máximo reservado; ninguna operación enviada sin una reserva dentro de los límites; reserva por tema, temas terminados como borradores, pendientes o fallidos identificados, estado `incomplete`, y reanudación explícita que solo procesa pendientes o fallidos; pruebas en `tests/unit/didactic-content/syllabus-generation.test.ts`; un tema es `failed` si la operación termina con error o la propuesta no supera el esquema y las comprobaciones (FR-019): el resultado inválido no se guarda ni sustituye un borrador válido, no hay reintentos automáticos, cada nuevo intento explícito reserva de nuevo y una operación incierta no se reenvía (SC-005)
-- [ ] T054 [US3] Implementar la edición de temas con control de revisión y conflicto 409 que conserva lo enviado, y la aprobación de cada tema (exige índice aprobado y vigente) y su rechazo con motivo obligatorio, sin borrar ni regenerar; la vigencia de `TopicApproval` se deriva de `topic_revision` y de su `OutlineApproval`; pruebas en `tests/unit/didactic-content/topic-approval.test.ts`
-- [ ] T055 [US3] Implementar la aprobación de la versión: exige índice aprobado y vigente, todos los temas desarrollados y aprobados, y cada requisito del inventario citado por un bloque `requirement` y desarrollado por al menos un bloque `development`; guarda una instantánea inmutable con `content_sha256`; pruebas en `tests/unit/didactic-content/syllabus-version.test.ts`
-- [ ] T056 [US3] Crear las páginas `src/pages/syllabus/` (estimación y lanzamiento, progreso y estado incompleto, reanudar, tema junto a su fuente normativa, edición, conflicto con ambas versiones, aprobación de tema y de versión con pendientes)
-- [ ] T057 [P] [US3] Crear las páginas `src/pages/budget/` (consulta para `teacher`; modificación del límite y conciliación de operaciones inciertas solo para `admin`, con registro de actor, fecha, valor anterior y nuevo)
-- [ ] T058 [US3] Implementar la comprobación de referencias heredadas tras un documento sustituto (`ReferenceCheck`), hecha por un docente referencia a referencia, que bloquea la aprobación del índice (T046) y de los temas mientras quede alguna sin comprobar; pruebas en `tests/unit/didactic-content/reference-check.test.ts`
-- [ ] T059 [US3] Escribir `tests/integration/us3-syllabus-approval.test.ts` con los escenarios 1 a 10 de la historia 3, la invalidación por cada tipo de edición del índice (SC-028), el límite de coste y la reanudación (SC-032), el presupuesto por perfil (SC-037) y el rechazo de interpretación, índice y tema (SC-041)
+- [X] T051 [P] [US3] Crear la migración y el repositorio de `Topic` (`status`: `pending`, `failed`, `draft`, `in_review`, `approved`, `rejected`), `TopicBlock` (`kind`: `requirement`, `development`), `BlockRequirement`, `TopicApproval`, `SyllabusVersion`, `SyllabusVersionTopic` y `ReferenceCheck` en `src/modules/didactic-content/`. Hecho: migración `0008_syllabus` en la lista única de `src/platform/persistence`; `Topic` guarda el motivo del fallo y su última llamada, `TopicBlock` lleva `removed`, y `topic_change` conserva el historial
+- [X] T052 [US3] Definir el esquema Zod de los bloques estructurados y el renderizador que escapa todo el texto en `src/modules/didactic-content/render/`, con etiqueta de texto para distinguir norma y desarrollo; pruebas en `tests/unit/didactic-content/render.test.ts` con texto hostil (SC-046). Hecho en `src/modules/didactic-content/render/index.ts`, con el texto editable de un bloque (`# ` encabezado, `- ` lista); 18 casos
+- [X] T053 [US3] Implementar la generación del temario tema a tema con `prompts/topic/v1.md`: estimación y presupuesto disponible mostrados antes de cada solicitud, incluida la reanudación; estimación separada del coste máximo reservado; ninguna operación enviada sin una reserva dentro de los límites; reserva por tema, temas terminados como borradores, pendientes o fallidos identificados, estado `incomplete`, y reanudación explícita que solo procesa pendientes o fallidos; pruebas en `tests/unit/didactic-content/syllabus-generation.test.ts`; un tema es `failed` si la operación termina con error o la propuesta no supera el esquema y las comprobaciones (FR-019): el resultado inválido no se guarda ni sustituye un borrador válido, no hay reintentos automáticos, cada nuevo intento explícito reserva de nuevo y una operación incierta no se reenvía (SC-005). Hecho en `src/modules/didactic-content/syllabus.ts`; la generación se ejecuta dentro de la petición, tema a tema; 21 casos
+- [X] T054 [US3] Implementar la edición de temas con control de revisión y conflicto 409 que conserva lo enviado, y la aprobación de cada tema (exige índice aprobado y vigente) y su rechazo con motivo obligatorio, sin borrar ni regenerar; la vigencia de `TopicApproval` se deriva de `topic_revision` y de su `OutlineApproval`; pruebas en `tests/unit/didactic-content/topic-approval.test.ts`. Hecho; la edición es bloque a bloque (añadir, editar, reordenar y quitar, sin borrar); 31 casos
+- [X] T055 [US3] Implementar la aprobación de la versión: exige índice aprobado y vigente, todos los temas desarrollados y aprobados, y cada requisito del inventario citado por un bloque `requirement` y desarrollado por al menos un bloque `development`; guarda una instantánea inmutable con `content_sha256`; pruebas en `tests/unit/didactic-content/syllabus-version.test.ts`. Hecho; la aprobación lleva una huella del estado mostrado y se rechaza con 409 si el temario cambió; 15 casos
+- [X] T056 [US3] Crear las páginas `src/pages/syllabus/` (estimación y lanzamiento, progreso y estado incompleto, reanudar, tema junto a su fuente normativa, edición, conflicto con ambas versiones, aprobación de tema y de versión con pendientes). Hecho en `src/pages/syllabus/[id].ts` y `src/pages/topics/`, con las vistas en `src/views/syllabus.ts`
+- [X] T057 [P] [US3] Crear las páginas `src/pages/budget/` (consulta para `teacher`; modificación del límite y conciliación de operaciones inciertas solo para `admin`, con registro de actor, fecha, valor anterior y nuevo). Hecho en `src/pages/budget/` y `src/pages/api/budget/`; la consulta admite el perfil de docente o el de administración
+- [X] T058 [US3] Implementar la comprobación de referencias heredadas tras un documento sustituto (`ReferenceCheck`), hecha por un docente referencia a referencia, que bloquea la aprobación del índice (T046) y de los temas mientras quede alguna sin comprobar; pruebas en `tests/unit/didactic-content/reference-check.test.ts`. Hecho en `src/modules/didactic-content/references.ts`; sustituye el bloqueo total de la fase 5: el índice y los temas de un documento con sustituto se conservan sin poder editarse, y se aprueban de nuevo tras comprobar cada referencia; 9 casos
+- [X] T059 [US3] Escribir `tests/integration/us3-syllabus-approval.test.ts` con los escenarios 1 a 10 de la historia 3, la invalidación por cada tipo de edición del índice (SC-028), el límite de coste y la reanudación (SC-032), el presupuesto por perfil (SC-037) y el rechazo de interpretación, índice y tema (SC-041). Hecho, con 19 casos; el consumo se simula con una reserva preparada, porque el adaptador determinista no cuesta nada
 
 **Checkpoint**: aprobar una versión; ver límite, reanudación, conflicto e invalidación.
+Verificado con pruebas automáticas y con un navegador real: ver [us3-check.md](./us3-check.md).
 
 ---
 
@@ -223,7 +224,7 @@ una decisión que el mantenedor no ha tomado. No se instala ningún SDK ni se ha
 llamada de pago antes.
 
 - [ ] T075 ⛔ BLOQUEADA (proveedor, modelo, moneda, precios y presupuesto, con cuenta de API) Registrar la elección y su justificación en `specs/002-boe-scorm-export/research.md` (R6) y en el ADR 0004 mientras siga Propuesto, y justificar la dependencia nueva en `plan.md`
-- [ ] T076 ⛔ BLOQUEADA (T075) Implementar el adaptador real en `src/platform/generation/adapters/`, con la clave leída de la configuración y nunca registrada, los precios por modelo en configuración, y las mismas pruebas de contrato de T035 ejecutadas a mano
+- [ ] T076 ⛔ BLOQUEADA (T075) Implementar el adaptador real en `src/platform/generation/adapters/`, con la clave leída de la configuración y nunca registrada, los precios por modelo en configuración, y las mismas pruebas de contrato de T035 ejecutadas a mano; resolver o validar con tiempos reales que la generación del índice y del temario se ejecute dentro de la petición (limitación registrada en `us3-check.md`)
 - [ ] T077 ⛔ BLOQUEADA (T076) Fijar el límite del proyecto con el perfil `admin`, generar la interpretación, el índice y el temario de UF0517, y registrar el coste real y la calidad observada sin darla por aceptada
 
 ---
@@ -273,6 +274,7 @@ FR-066, SC-005 y SC-032), antes de la fase 6. Ver las revisiones de
 - **Fase 3**, completada, dependía de las fases 1 y 2.
 - **Fase 4**, completada, dependía de la fase 3.
 - **Fase 5**, completada, dependía de la fase 4; incluye T049 y T050, adelantadas de la fase 6.
+- **Fase 6**, completada, dependía de la fase 5.
 - **Fases 4 → 5 → 6 → 7** van en ese orden: cada historia usa lo aprobado en la anterior.
 - **T058** se apoya en T040 y condiciona la aprobación de T046 y T054 tras un sustituto.
 - **Fase 8**: T070 a T073 dependen de T014 a T016; T072 necesita además T050 y T066.
@@ -287,14 +289,14 @@ bloqueada.
 
 | Estado                                        | Tareas                                                                 |
 | --------------------------------------------- | ---------------------------------------------------------------------- |
-| Completadas                                   | T001–T050                                                              |
-| Ejecutables, en este orden                    | T051–T073, T078, T082–T087                                             |
+| Completadas                                   | T001–T059                                                              |
+| Ejecutables, en este orden                    | T060–T073, T078, T082–T087                                             |
 | Bloqueada por el dominio y el servidor        | T074                                                                   |
 | Bloqueadas por el proveedor de generación     | T075; y por depender de ella, T076 y T077                              |
 | Bloqueadas por el Moodle de pruebas           | T079; y por depender de ella, T080                                     |
 | Bloqueada por las tres anteriores             | T081, que depende de T074, T077 y T079                                 |
 
-De las 87 tareas, 50 están completadas (T001 a T050), 30 son ejecutables y 7 están
+De las 87 tareas, 59 están completadas (T001 a T059), 21 son ejecutables y 7 están
 bloqueadas. T086 no cierra la aceptación mientras quede alguna bloqueada. Ninguna evidencia
 de las tareas bloqueadas se simula: el recorrido con respuestas deterministas se registra
 como ensayo.
@@ -332,6 +334,7 @@ Salen de [feasibility.md](./feasibility.md). No son tareas de código.
    página y salir.
 4. **Historia 1** (fase 4): primer recorrido visible con un PDF.
 5. **Historia 2** (fase 5): índice, cobertura y aprobación, con el presupuesto de generación.
+6. **Historia 3** (fase 6): temario, aprobaciones, páginas de presupuesto y referencias heredadas.
 
 ### Entrega incremental
 

@@ -1,0 +1,182 @@
+{
+  "task": "topic",
+  "promptVersion": "v1",
+  "inputSha256": "cf648431d743a7ec9e2ebc2f9f3b11b9ac3b78573058f09940f6530fba1bc8ec",
+  "output": {
+    "blocks": [
+      {
+        "kind": "requirement",
+        "requirementRef": "r1"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r2"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r3"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r4"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r5"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r6"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r7"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r8"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r9"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r10"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r11"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r12"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r13"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r14"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r15"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r16"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r17"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r18"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r19"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r20"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r21"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r22"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r23"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r24"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r25"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r26"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r27"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r28"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r29"
+      },
+      {
+        "kind": "requirement",
+        "requirementRef": "r30"
+      },
+      {
+        "kind": "development",
+        "requirementRefs": [
+          "r1",
+          "r2",
+          "r3",
+          "r4",
+          "r5",
+          "r6",
+          "r7",
+          "r8",
+          "r9",
+          "r10",
+          "r11",
+          "r12",
+          "r13",
+          "r14",
+          "r15",
+          "r16",
+          "r17",
+          "r18",
+          "r19",
+          "r20",
+          "r21",
+          "r22",
+          "r23",
+          "r24",
+          "r25",
+          "r26",
+          "r27",
+          "r28",
+          "r29",
+          "r30"
+        ],
+        "content": [
+          {
+            "type": "heading",
+            "text": "Texto de ensayo, no didáctico"
+          },
+          {
+            "type": "paragraph",
+            "text": "Este bloque es un relleno preparado para ensayar el recorrido del producto. No es contenido generado por ningún modelo ni revisado por ningún docente, y no desarrolla de verdad los requisitos a los que está vinculado."
+          },
+          {
+            "type": "list",
+            "items": [
+              "Sirve para comprobar la separación entre norma y desarrollo.",
+              "Sirve para comprobar los vínculos con los requisitos y las aprobaciones.",
+              "No sirve para valorar la calidad de una generación real."
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

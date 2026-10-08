@@ -49,6 +49,7 @@ import type {
 import { outlineNotice } from "./outline";
 
 export * from "./outline";
+export * from "./syllabus";
 export type {
   BudgetFigures,
   CostFigures,

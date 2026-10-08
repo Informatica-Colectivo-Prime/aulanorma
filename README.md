@@ -300,6 +300,52 @@ La propuesta grabada del piloto es una transcripción mecánica del inventario: 
 capacidad y otra por contenido. No es una generación ni una propuesta didáctica. Qué acredita
 y qué no está en [`us2-check.md`](specs/002-boe-scorm-export/us2-check.md).
 
+### 3 quinquies. Desarrollar, revisar y aprobar el temario
+
+Necesitas un índice **aprobado** (apartado anterior). Desde la página del índice, abre
+«Temario».
+
+**Con el documento del piloto**, copia las respuestas de ensayo de sus cuatro temas:
+
+```bash
+cp specs/002-boe-scorm-export/pilot/topic-recording-*.json \
+  "$AULANORMA_DATA_DIR/generation-recordings/"
+```
+
+Tienen el mismo límite que las anteriores: responden solo al índice y al inventario tal como
+salen de sus grabaciones. Si has corregido la interpretación, o has cambiado el título o los
+requisitos de una entrada, ese tema no tendrá respuesta y quedará como **fallido**, con su
+motivo. Es un límite del doble de pruebas, no un defecto. Su contenido es un **texto de
+relleno que se declara como tal**: sirve para ensayar el recorrido, no para valorar ningún
+contenido didáctico.
+
+Después:
+
+1. En «Temario», revisa la estimación, el máximo que se reserva y lo disponible, y confirma.
+   Cada tema es una operación con su propia reserva. Para ver un tema fallido, copia solo
+   tres de las cuatro respuestas, genera, copia la cuarta y pulsa de nuevo: solo se genera lo
+   pendiente o fallido, y nada se reintenta por su cuenta.
+2. Abre un tema. Cada bloque dice si es «Requisito extraído del BOE», con su página, o
+   «Desarrollo didáctico generado», con los requisitos que desarrolla.
+3. Edita un bloque de desarrollo. Se escribe en texto plano: «# » para un encabezado, «- »
+   para una lista. Lo que escribas, también si parece HTML, se muestra tal cual.
+4. Desmarca un requisito en un bloque de desarrollo: en «Temario» aparecerá «Sin desarrollo»,
+   y la versión no se podrá aprobar aunque el requisito siga citado.
+5. Aprueba cada tema y, después, la versión. Si falta algo, el producto lo enumera.
+6. Cambia un tema ya aprobado, o el índice: sus aprobaciones y la de la versión quedan «sin
+   vigencia», y los textos se conservan.
+
+Para ver un conflicto, abre el formulario de un bloque en dos pestañas y guarda en las dos.
+
+**Presupuesto.** «Presupuesto», en la cabecera, muestra el límite, lo consumido, lo reservado
+y lo disponible. Con una cuenta de administración (`--role admin`) puedes modificar el límite
+y conciliar las operaciones de resultado incierto; con una de docente, solo consultarlo. Con
+el adaptador determinista todo cuesta cero, así que ningún límite llega a alcanzarse desde el
+navegador: ese comportamiento está comprobado con consumos simulados en las pruebas.
+
+Qué acredita este recorrido y qué no está en
+[`us3-check.md`](specs/002-boe-scorm-export/us3-check.md).
+
 Detén el servidor con `Ctrl+C`.
 
 La configuración solo se valida al arrancar. Cualquier cambio en los ficheros `.env*` exige

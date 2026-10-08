@@ -34,8 +34,27 @@ export const getServerSideProps = protectedPage(
             ${
               roles.includes("teacher")
                 ? html`<li>
-                    <a href="/documents">Subir un documento oficial</a>,
-                    comprobar su registro y revisar y validar su interpretación.
+                      <a href="/documents">Subir un documento oficial</a>,
+                      comprobar su registro y revisar y validar su
+                      interpretación.
+                    </li>
+                    <li>
+                      Desde una interpretación validada, proponer, revisar y
+                      aprobar el índice; y desde un índice aprobado, desarrollar
+                      el temario, revisar y aprobar cada tema y aprobar una
+                      versión.
+                    </li>`
+                : null
+            }
+            ${
+              roles.length > 0
+                ? html`<li>
+                    <a href="/budget">Consultar el presupuesto de generación</a
+                    >${
+                      roles.includes("admin")
+                        ? ", modificar su límite y conciliar las operaciones de resultado incierto"
+                        : ""
+                    }.
                   </li>`
                 : null
             }
@@ -44,10 +63,10 @@ export const getServerSideProps = protectedPage(
           </ul>
           <h2>Qué no está disponible todavía</h2>
           <p class="muted">
-            Proponer y aprobar el índice, desarrollar y aprobar el temario y
-            exportar el paquete llegarán en entregas posteriores. La
-            interpretación se obtiene, por ahora, de respuestas grabadas: no hay
-            ningún servicio de generación real conectado.
+            Exportar y descargar el paquete llegará en una entrega posterior. La
+            interpretación, el índice y el temario se obtienen, por ahora, de
+            respuestas grabadas: no hay ningún servicio de generación real
+            conectado.
           </p>`,
       }),
     };

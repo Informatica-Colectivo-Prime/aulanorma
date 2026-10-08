@@ -114,7 +114,7 @@ describe("una operación con consumo confirmado", () => {
       return ok(180);
     });
     const runId = start(generation);
-    expect(await generation.call(runId, REQUEST)).toEqual({
+    expect(await generation.call(runId, REQUEST)).toMatchObject({
       status: "ok",
       output: { answer: "sí" },
     });
@@ -161,7 +161,7 @@ describe("una operación con consumo confirmado", () => {
       }),
     );
     const runId = start(generation);
-    expect(await generation.call(runId, REQUEST)).toEqual({
+    expect(await generation.call(runId, REQUEST)).toMatchObject({
       status: "invalid_output",
     });
     expect(budget.list()).toMatchObject([
@@ -259,7 +259,7 @@ describe("consumo sin confirmar", () => {
       15,
     );
     const runId = start(generation);
-    expect(await generation.call(runId, REQUEST)).toEqual({
+    expect(await generation.call(runId, REQUEST)).toMatchObject({
       status: "provider_error",
     });
     expect(budget.list()).toMatchObject([{ state: "uncertain" }]);

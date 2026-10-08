@@ -1146,6 +1146,12 @@ async function checkProductSurface(secure) {
     `/outlines/${"a".repeat(32)}/entries/`,
     "/api/outlines",
     "/api/outlines/force-approve",
+    "/syllabus",
+    `/syllabus/${"a".repeat(32)}/approve`,
+    `/topics/${"a".repeat(32)}/blocks`,
+    "/budget/",
+    "/api/budget",
+    "/api/syllabus/force-approve",
     "/api/documents",
   ]) {
     const response = await rawRequest("GET", target, { persistent: true });
@@ -1172,6 +1178,11 @@ async function checkProductSurface(secure) {
     `/outlines/${"a".repeat(32)}/preview`,
     `/outlines/${"a".repeat(32)}/entries/new`,
     `/outlines/${"a".repeat(32)}/entries/${"b".repeat(32)}`,
+    `/syllabus/${"a".repeat(32)}`,
+    `/topics/${"a".repeat(32)}`,
+    `/topics/${"a".repeat(32)}/blocks/new`,
+    `/topics/${"a".repeat(32)}/blocks/${"b".repeat(32)}`,
+    "/budget",
   ]) {
     const name = `GET ${target} sin sesión`;
     const response = await rawRequest("GET", target, {
@@ -1279,6 +1290,15 @@ async function checkProductSurface(secure) {
     "/api/outlines/approve",
     "/api/outlines/reject",
     "/api/outlines/resubmit",
+    "/api/syllabus/generate",
+    "/api/syllabus/approve",
+    "/api/topics/edit",
+    "/api/topics/approve",
+    "/api/topics/reject",
+    "/api/topics/resubmit",
+    "/api/references/check",
+    "/api/budget/limit",
+    "/api/budget/reconcile",
   ]) {
     const noLength = await rawRequest("POST", target, { persistent: true });
     problems.push(
@@ -1356,6 +1376,15 @@ async function checkProductSurface(secure) {
     "/api/outlines/approve",
     "/api/outlines/reject",
     "/api/outlines/resubmit",
+    "/api/syllabus/generate",
+    "/api/syllabus/approve",
+    "/api/topics/edit",
+    "/api/topics/approve",
+    "/api/topics/reject",
+    "/api/topics/resubmit",
+    "/api/references/check",
+    "/api/budget/limit",
+    "/api/budget/reconcile",
   ]) {
     const response = await rawRequest("POST", target, {
       headers: [...FORM_HEADERS, `Origin: ${origin}`],

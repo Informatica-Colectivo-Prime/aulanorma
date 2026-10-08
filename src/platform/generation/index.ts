@@ -93,11 +93,21 @@ export interface GenerationRequest<Output> extends ProviderRequest {
   readonly accept?: (output: Output) => boolean;
 }
 
+// `callId` identifica la llamada registrada. `uncertain` indica que el
+// consumo de la operación no pudo confirmarse: su reserva sigue contando hasta
+// que se concilie, y la operación no debe reenviarse por su cuenta.
 export type GenerationResult<Output> =
-  | { readonly status: "ok"; readonly output: Output }
+  | {
+      readonly status: "ok";
+      readonly output: Output;
+      readonly callId: string;
+      readonly uncertain: boolean;
+    }
   | {
       readonly status:
         "invalid_output" | "provider_error" | "rejected_by_domain";
+      readonly callId: string;
+      readonly uncertain: boolean;
     }
   // No había una reserva posible dentro de los límites: no se envió nada.
   | { readonly status: "budget_exceeded"; readonly reason: ReserveRefusal };
@@ -298,10 +308,12 @@ export function createGeneration({
       const reply = await ask(providerRequest);
       const latencyMs = Math.max(0, now() - startedAt);
       const callId = randomBytes(16).toString("hex");
-      if (reply?.cost === null || reply === null) {
-        budget.markUncertain(reservationId, callId);
-      } else if (!budget.settle(reservationId, reply.cost, callId)) {
-        // Un consumo que no es un importe válido tampoco está confirmado.
+      // Un consumo ausente, o que no es un importe válido, no está confirmado.
+      const confirmedCost = reply?.cost ?? null;
+      const uncertain =
+        confirmedCost === null ||
+        !budget.settle(reservationId, confirmedCost, callId);
+      if (uncertain) {
         budget.markUncertain(reservationId, callId);
       }
       const record = (validation: CallValidation): void => {
@@ -317,19 +329,19 @@ export function createGeneration({
       };
       if (!reply?.ok) {
         record("provider_error");
-        return { status: "provider_error" };
+        return { status: "provider_error", callId, uncertain };
       }
       const parsed = outputSchema.safeParse(reply.output);
       if (!parsed.success) {
         record("invalid_output");
-        return { status: "invalid_output" };
+        return { status: "invalid_output", callId, uncertain };
       }
       if (accept !== undefined && !accept(parsed.data)) {
         record("rejected_by_domain");
-        return { status: "rejected_by_domain" };
+        return { status: "rejected_by_domain", callId, uncertain };
       }
       record("valid");
-      return { status: "ok", output: parsed.data };
+      return { status: "ok", output: parsed.data, callId, uncertain };
     },
 
     finishRun(runId, status) {

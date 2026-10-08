@@ -212,9 +212,11 @@ describe("PLATFORM_MIGRATIONS", () => {
       "0005_generation",
       "0006_budget",
       "0007_outline",
+      "0008_syllabus",
     ]);
     expect(tables(db)).toEqual([
       "audit_event",
+      "block_requirement",
       "budget",
       "budget_change",
       "budget_reservation",
@@ -233,11 +235,18 @@ describe("PLATFORM_MIGRATIONS", () => {
       "outline_entry",
       "page_resolution",
       "reconciliation",
+      "reference_check",
       "rejection",
       "requirement",
       "schema_migration",
       "session",
       "sign_in_throttle",
+      "syllabus_version",
+      "syllabus_version_topic",
+      "topic",
+      "topic_approval",
+      "topic_block",
+      "topic_change",
       "user_account",
     ]);
     const triggers = db
@@ -261,6 +270,11 @@ describe("PLATFORM_MIGRATIONS", () => {
       "outline_change",
       "outline_approval",
       "rejection",
+      "topic_change",
+      "topic_approval",
+      "syllabus_version",
+      "syllabus_version_topic",
+      "reference_check",
     ]) {
       expect(triggers).toEqual(
         expect.arrayContaining([
@@ -279,11 +293,13 @@ describe("PLATFORM_MIGRATIONS", () => {
       "budget_reservation",
       "outline",
       "outline_entry",
+      "topic",
+      "topic_block",
     ]) {
       expect(triggers).toContain(`${table}_no_delete`);
       expect(triggers).not.toContain(`${table}_no_update`);
     }
-    expect(triggers).toHaveLength(49);
+    expect(triggers).toHaveLength(68);
     // El presupuesto nace con una única fila, a cero y sin moneda fijada.
     expect(db.prepare("SELECT * FROM budget").all()).toEqual([
       { id: 1, project_limit: 0, currency: "XXX", revision: 1 },

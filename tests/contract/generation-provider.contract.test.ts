@@ -109,7 +109,7 @@ describe.each(ADAPTERS)("adaptador %s", (name, create) => {
       ...REQUEST,
       outputSchema: SCHEMA,
     });
-    expect(result).toEqual({ status: "ok", output: OUTPUT });
+    expect(result).toMatchObject({ status: "ok", output: OUTPUT });
     generation.finishRun(runId, "succeeded");
 
     const calls = generation.listCalls(runId);
@@ -149,7 +149,7 @@ describe.each(ADAPTERS)("adaptador %s", (name, create) => {
       ...REQUEST,
       outputSchema: z.object({ answer: z.number() }),
     });
-    expect(result).toEqual({ status: "invalid_output" });
+    expect(result).toMatchObject({ status: "invalid_output" });
     expect(JSON.stringify(result)).not.toContain("grabada");
     expect(generation.listCalls(runId)).toMatchObject([
       { validationResult: "invalid_output", provider: name },
@@ -168,7 +168,7 @@ describe.each(ADAPTERS)("adaptador %s", (name, create) => {
       outputSchema: SCHEMA,
       accept: (output) => output.items.length > 3,
     });
-    expect(result).toEqual({ status: "rejected_by_domain" });
+    expect(result).toMatchObject({ status: "rejected_by_domain" });
     expect(generation.listCalls(runId)).toMatchObject([
       { validationResult: "rejected_by_domain" },
     ]);
@@ -207,7 +207,7 @@ describe.each(ADAPTERS)("adaptador %s", (name, create) => {
       input: hostile,
       outputSchema: SCHEMA,
     });
-    expect(result).toEqual({ status: "ok", output: OUTPUT });
+    expect(result).toMatchObject({ status: "ok", output: OUTPUT });
     expect(REQUEST.instructions).not.toContain("Ignora");
   });
 
@@ -296,7 +296,7 @@ describe("lo que se envía al proveedor", () => {
       });
       expect(
         await generation.call(runId, { ...REQUEST, outputSchema: SCHEMA }),
-      ).toEqual({ status: "provider_error" });
+      ).toMatchObject({ status: "provider_error" });
       expect(generation.listCalls(runId)).toMatchObject([
         { validationResult: "provider_error", estimatedCost: 12 },
       ]);

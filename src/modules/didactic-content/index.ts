@@ -33,9 +33,60 @@ import { transaction } from "@/platform/persistence";
 import type { Database } from "@/platform/persistence";
 import { computeCoverage } from "./coverage";
 import type { Coverage } from "./coverage";
+import { createReferences } from "./references";
+import type { ReferenceCheck } from "./references";
+import { createSyllabus } from "./syllabus";
+import type { Syllabus } from "./syllabus";
 
 export { computeCoverage } from "./coverage";
 export type { Coverage, CoverageEntry, CoverageItem } from "./coverage";
+export type { ReferenceCheck } from "./references";
+export {
+  CONTENT,
+  contentToText,
+  DEVELOPMENT_LABEL,
+  renderBlock,
+  renderBlocks,
+  REQUIREMENT_LABEL,
+  textToContent,
+  UNSUPPORTED_LABEL,
+} from "./render/index";
+export type {
+  ContentNode,
+  RenderBlock,
+  RenderedRequirement,
+  RenderOptions,
+} from "./render/index";
+export {
+  computeDevelopment,
+  createSyllabus,
+  MAX_BLOCKS,
+  TOPIC_OUTPUT,
+} from "./syllabus";
+export type {
+  Development,
+  DevelopmentInput,
+  DevelopmentItem,
+  GenerateRejection,
+  GenerateResult,
+  Syllabus,
+  SyllabusReview,
+  SyllabusTopic,
+  SyllabusVersion,
+  Topic,
+  TopicApproval,
+  TopicBlock,
+  TopicChange,
+  TopicFailure,
+  TopicHistory,
+  TopicOutput,
+  TopicRejection,
+  TopicResult,
+  TopicReview,
+  TopicStatus,
+  VersionBlockers,
+  VersionResult,
+} from "./syllabus";
 
 export type OutlineStatus = "proposed" | "in_review" | "approved" | "rejected";
 
@@ -108,6 +159,11 @@ export interface OutlineReview {
   readonly interpretationValid: boolean;
   // `true` si el documento de la interpretación tiene un sustituto.
   readonly historical: boolean;
+  // Con un documento sustituto: requisitos en los que se apoya el índice y
+  // cuya referencia nadie ha comprobado todavía contra la nueva fuente. Vacío
+  // si no hay sustituto.
+  readonly referencesPending: readonly Requirement[];
+  readonly referenceChecks: readonly ReferenceCheck[];
   // La aprobación vigente, si la hay.
   readonly approval: OutlineApproval | undefined;
   readonly history: OutlineHistory;
@@ -150,14 +206,20 @@ export type ChangeRejection =
   | "interpretation_not_validated"
   | "incomplete_coverage"
   | "missing_reason"
-  | "not_rejected";
+  | "not_rejected"
+  // Quedan referencias heredadas sin comprobar contra el documento sustituto.
+  | "unchecked_references"
+  | "not_historical"
+  | "not_confirmed"
+  | "already_checked";
 
 export type ChangeResult =
   | { readonly ok: true; readonly revision: number }
   | {
       readonly ok: false;
       readonly reason: ChangeRejection;
-      // Requisitos sin cubrir que bloquean la aprobación.
+      // Requisitos que bloquean la aprobación: sin cubrir o, tras un
+      // documento sustituto, con la referencia sin comprobar.
       readonly pending: readonly Requirement[];
     };
 
@@ -203,6 +265,17 @@ export interface Outlines {
   reject(input: Target & { readonly reason: string }): ChangeResult;
   // Devuelve a revisión un índice rechazado, sin cambiarlo.
   resubmit(input: Target): ChangeResult;
+  // Tras un documento sustituto: registra que un docente ha comprobado contra
+  // la nueva fuente la referencia de un requisito en el que se apoya el
+  // índice. No cambia el índice ni su revisión.
+  checkReference(
+    input: Actor & {
+      readonly outlineId: string;
+      readonly requirementId: string;
+      // Confirmación expresa de quien la comprueba.
+      readonly confirmed: boolean;
+    },
+  ): ChangeResult;
 }
 
 export interface OutlinesOptions {
@@ -296,6 +369,33 @@ export function createOutlines({
   prompt,
   now,
 }: OutlinesOptions): Outlines {
+  const references = createReferences({ db, now });
+
+  // Requisitos vigentes en los que se apoya el índice y cuya referencia
+  // sigue sin comprobar tras un documento sustituto.
+  const referencesPendingOf = (
+    outline: Outline,
+    inventory: readonly Requirement[],
+  ): Requirement[] => {
+    if (!interpretations.isHistorical(outline.interpretationId)) {
+      return [];
+    }
+    const linked = new Set(
+      outline.entries
+        .filter((entry) => !entry.removed)
+        .flatMap((entry) => entry.requirementIds),
+    );
+    const required = inventory.filter(
+      (item) => !item.withdrawn && linked.has(item.id),
+    );
+    const pending = references.pending(
+      "outline",
+      outline.id,
+      required.map((item) => item.id),
+    );
+    return required.filter((item) => pending.includes(item.id));
+  };
+
   const entriesOf = (outlineId: string): OutlineEntry[] => {
     const links = new Map<string, string[]>();
     for (const row of db
@@ -350,6 +450,16 @@ export function createOutlines({
     const validation = interpretations.currentValidation(
       outline.interpretationId,
     );
+    // Con un documento sustituto, solo vale una aprobación posterior a él y
+    // con todas las referencias comprobadas (FR-067).
+    const since = interpretations.historicalSince(outline.interpretationId);
+    const unchecked =
+      since === null
+        ? 0
+        : referencesPendingOf(
+            outline,
+            interpretations.get(outline.interpretationId)?.requirements ?? [],
+          ).length;
     return {
       changes: db
         .prepare(
@@ -387,7 +497,8 @@ export function createOutlines({
             integer(row.outline_revision) === outline.revision &&
             validation !== undefined &&
             validation.id === row.interpretation_validation_id &&
-            !interpretations.isHistorical(outline.interpretationId),
+            (since === null ||
+              (integer(row.approved_at) >= since && unchecked === 0)),
         })),
       rejections: db
         .prepare(
@@ -420,6 +531,11 @@ export function createOutlines({
         !historical &&
         interpretations.currentValidation(interpretation.id) !== undefined,
       historical,
+      referencesPending: referencesPendingOf(
+        outline,
+        interpretation.requirements,
+      ),
+      referenceChecks: references.list("outline", outline.id),
       approval: history.approvals.find((item) => item.current),
       history,
     };
@@ -449,6 +565,8 @@ export function createOutlines({
     input: Target,
     action: string,
     work: (review: OutlineReview) => ChangeResult,
+    // Aprobar y comprobar referencias siguen disponibles con un sustituto.
+    allowHistorical = false,
   ): ChangeResult =>
     transaction(db, () => {
       const outline = get(input.outlineId);
@@ -456,7 +574,7 @@ export function createOutlines({
       let result: ChangeResult;
       if (review === undefined) {
         result = failure("not_found");
-      } else if (review.historical) {
+      } else if (review.historical && !allowHistorical) {
         // El documento tiene un sustituto: este índice es histórico.
         result = failure("superseded");
       } else if (review.outline.revision !== input.revision) {
@@ -863,43 +981,52 @@ export function createOutlines({
     },
 
     approve(input) {
-      return change(input, "outline.approve", (review) => {
-        const { outline } = review;
-        // Un índice aprobado cuya aprobación perdió la vigencia puede
-        // volver a aprobarse; uno con aprobación vigente o rechazado, no.
-        if (
-          outline.status === "rejected" ||
-          (outline.status === "approved" && review.approval !== undefined)
-        ) {
-          return failure("not_reviewable");
-        }
-        const validation = interpretations.currentValidation(
-          outline.interpretationId,
-        );
-        if (validation === undefined) {
-          return failure("interpretation_not_validated");
-        }
-        // Sin excepciones: con algún requisito sin cubrir no se aprueba.
-        if (!review.coverage.complete) {
-          return failure("incomplete_coverage", review.coverage.pending);
-        }
-        db.prepare("UPDATE outline SET status = 'approved' WHERE id = ?").run(
-          outline.id,
-        );
-        db.prepare(
-          "INSERT INTO outline_approval (id, outline_id, outline_revision, " +
-            "interpretation_validation_id, approved_by, approved_at) " +
-            "VALUES (?, ?, ?, ?, ?, ?)",
-        ).run(
-          newId(),
-          outline.id,
-          outline.revision,
-          validation.id,
-          input.actorId,
-          now(),
-        );
-        return { ok: true, revision: outline.revision };
-      });
+      return change(
+        input,
+        "outline.approve",
+        (review) => {
+          const { outline } = review;
+          // Un índice aprobado cuya aprobación perdió la vigencia puede
+          // volver a aprobarse; uno con aprobación vigente o rechazado, no.
+          if (
+            outline.status === "rejected" ||
+            (outline.status === "approved" && review.approval !== undefined)
+          ) {
+            return failure("not_reviewable");
+          }
+          const validation = interpretations.currentValidation(
+            outline.interpretationId,
+          );
+          if (validation === undefined) {
+            return failure("interpretation_not_validated");
+          }
+          // Tras un documento sustituto, ninguna referencia sin comprobar.
+          if (review.referencesPending.length > 0) {
+            return failure("unchecked_references", review.referencesPending);
+          }
+          // Sin excepciones: con algún requisito sin cubrir no se aprueba.
+          if (!review.coverage.complete) {
+            return failure("incomplete_coverage", review.coverage.pending);
+          }
+          db.prepare("UPDATE outline SET status = 'approved' WHERE id = ?").run(
+            outline.id,
+          );
+          db.prepare(
+            "INSERT INTO outline_approval (id, outline_id, outline_revision, " +
+              "interpretation_validation_id, approved_by, approved_at) " +
+              "VALUES (?, ?, ?, ?, ?, ?)",
+          ).run(
+            newId(),
+            outline.id,
+            outline.revision,
+            validation.id,
+            input.actorId,
+            now(),
+          );
+          return { ok: true, revision: outline.revision };
+        },
+        true,
+      );
     },
 
     reject(input) {
@@ -942,6 +1069,43 @@ export function createOutlines({
         return { ok: true, revision: outline.revision };
       });
     },
+
+    checkReference({ outlineId, requirementId, confirmed, ...actor }) {
+      return transaction(db, () => {
+        const outline = get(outlineId);
+        const review = outline === undefined ? undefined : reviewOf(outline);
+        let result: ChangeResult;
+        if (review === undefined) {
+          result = failure("not_found");
+        } else if (!review.historical) {
+          result = failure("not_historical");
+        } else if (!confirmed) {
+          result = failure("not_confirmed");
+        } else if (
+          !review.referencesPending.some((item) => item.id === requirementId)
+        ) {
+          result = failure("already_checked");
+        } else {
+          references.record({
+            kind: "outline",
+            targetId: outlineId,
+            requirementId,
+            actorId: actor.actorId,
+          });
+          result = { ok: true, revision: review.outline.revision };
+        }
+        record(
+          actor,
+          "outline.reference_check",
+          review === undefined ? null : outlineId,
+          result.ok ? "ok" : "failed",
+          result.ok
+            ? { requirement: requirementId }
+            : { reason: result.reason },
+        );
+        return result;
+      });
+    },
   };
 }
 
@@ -973,4 +1137,32 @@ export function openOutlines(services: InterpretationServices): Outlines {
     opened.set(services, outlines);
   }
   return outlines;
+}
+
+export const TOPIC_PROMPT_VERSION = "v1";
+
+const openedSyllabus = new WeakMap<InterpretationServices, Syllabus>();
+
+// El temario de estos servicios: uno por proceso.
+export function openSyllabus(services: InterpretationServices): Syllabus {
+  let syllabus = openedSyllabus.get(services);
+  if (syllabus === undefined) {
+    syllabus = createSyllabus({
+      db: services.db,
+      audit: services.audit,
+      interpretations: openStructuredInterpretation(services),
+      outlines: openOutlines(services),
+      generation: services.generation,
+      prompt: {
+        version: TOPIC_PROMPT_VERSION,
+        instructions: readFileSync(
+          `${services.projectRoot}/prompts/topic/${TOPIC_PROMPT_VERSION}.md`,
+          "utf8",
+        ),
+      },
+      now: () => Date.now(),
+    });
+    openedSyllabus.set(services, syllabus);
+  }
+  return syllabus;
 }

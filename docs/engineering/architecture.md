@@ -36,7 +36,7 @@ src/
 └── modules/               # Las cuatro capas de la constitución
     ├── normative-source/          # Documentos, páginas y tratamiento del PDF (pdf/)
     ├── structured-interpretation/ # Inventario, correcciones, validación y rechazo
-    ├── didactic-content/          # Índice, cobertura y aprobación
+    ├── didactic-content/          # Índice, cobertura, temario y aprobaciones
     └── content-export/            # Todavía vacía
 prompts/                   # Prompts versionados de la generación
 ```
@@ -70,8 +70,8 @@ la exportación de un paquete que el usuario incorpora manualmente a Moodle. Con
 módulo pasó de llamarse `moodle-publication` a `src/modules/content-export`.
 
 **Estado actual**: `normative-source` y `structured-interpretation` están implementadas;
-`didactic-content` contiene el índice del temario, su cobertura y su aprobación, y todavía no
-los temas; `content-export` sigue vacía, con `export {};` en su `index.ts`. Nada es
+`didactic-content` contiene el índice del temario, su cobertura y su aprobación, y el temario,
+con sus temas, sus aprobaciones y sus versiones; `content-export` sigue vacía, con `export {};` en su `index.ts`. Nada es
 específico de ningún certificado (FR-024): el código de la unidad es un dato.
 
 ### Índice, cobertura y aprobación
@@ -92,7 +92,34 @@ explícitos, o queda marcada «sin respaldo normativo».
 - **Nada se borra**: una entrada quitada queda marcada, y cada cambio, aprobación y rechazo
   queda en tablas de solo inserción.
 
+### Temario, aprobaciones y versiones
+
+Cada entrada del índice tiene un tema, formado por bloques de dos tipos que no se mezclan: de
+**requisito**, que citan la norma y se muestran con su texto, su página y su cita; y de
+**desarrollo**, con texto plano estructurado y los requisitos que desarrollan.
+
+- **El contenido no es HTML**: es una lista de encabezados, párrafos y listas validada por
+  esquema. El HTML lo produce un único renderizador (`render/`), que escapa todo el texto y
+  etiqueta cada bloque como norma o como desarrollo. Es el mismo que usará el paquete.
+- **Generación tema a tema**, solo con el índice aprobado y vigente, y con una reserva de
+  presupuesto por tema. Un tema cuya operación falla, o cuya propuesta no supera el esquema o
+  las comprobaciones, queda fallido y su resultado no se guarda. No hay reintentos
+  automáticos; una operación incierta no se reenvía hasta conciliarla.
+- **Desarrollo de cada requisito**: exige su cita y, además, un bloque de desarrollo
+  vinculado. La cita sola no basta, y no hay herencia.
+- **Vigencia derivada en cadena**: la aprobación de un tema guarda su revisión y la
+  aprobación del índice en la que se apoyó; la versión, las aprobaciones de sus temas. Editar
+  un tema invalida la suya y la de la versión; editar el índice o corregir la interpretación,
+  todas. La versión guarda una instantánea inmutable con su huella.
+- **Referencias heredadas**: tras un documento sustituto, el índice y los temas se conservan
+  sin poder editarse, y solo se aprueban de nuevo tras comprobar cada referencia, una a una.
+
 ### Presupuesto de generación
+
+`src/platform/markup` es el único sitio que convierte texto en HTML: su plantilla escapa cada
+valor interpolado y no existe ninguna función que acepte una cadena como HTML ya escapado. La
+usan la entrega web y el renderizador de contenido de `didactic-content`, de modo que la
+revisión, la vista previa y el paquete exportado comparten la misma garantía.
 
 `src/platform/generation` no envía ninguna operación sin una reserva de su coste máximo, hecha
 en una transacción que comprueba el máximo por operación (configuración) y el límite acumulado

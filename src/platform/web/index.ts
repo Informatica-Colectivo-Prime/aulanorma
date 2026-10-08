@@ -52,6 +52,8 @@ import type {
 } from "@/platform/identity";
 import { createLogger, logProductEvent } from "@/platform/logging";
 import type { AppLogger, ProductEvent } from "@/platform/logging";
+import { html, inlineResource } from "@/platform/markup";
+import type { Html } from "@/platform/markup";
 import { openDatabase } from "@/platform/persistence";
 import type { Database } from "@/platform/persistence";
 
@@ -192,6 +194,18 @@ const NOTICE_CODES = [
   "outline_approved",
   "outline_rejected",
   "outline_resubmitted",
+  "syllabus_generated",
+  "syllabus_refused",
+  "version_approved",
+  "topic_edited",
+  "topic_approved",
+  "topic_rejected",
+  "topic_resubmitted",
+  "reference_checked",
+  "reference_refused",
+  "budget_limit_changed",
+  "budget_reconciled",
+  "budget_refused",
 ] as const;
 
 export type NoticeCode = (typeof NOTICE_CODES)[number];
@@ -379,6 +393,12 @@ ol.entries>li{border-bottom:1px solid var(--line);padding:.75rem 0}
 ol.entries ul{margin:.25rem 0 .5rem;padding-left:1.1rem}
 .banner{border:2px dashed var(--bad);color:var(--bad);font-weight:700;padding:.6rem 1rem;margin:0 0 1.25rem;border-radius:.3rem}
 label.check.d1,label.check.d2,label.check.d3,label.check.d4{max-width:none}
+.block{border:1px solid var(--line);border-left:.4rem solid var(--muted);border-radius:.3rem;padding:.75rem 1rem;margin:0 0 1rem}
+.block.norm{border-left-color:var(--accent);background:var(--surface)}
+.block.development{border-left-color:var(--good)}
+.block .kind{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin:0 0 .5rem}
+.block h3{font-size:1.05rem;margin:.75rem 0 .35rem}
+ul.hint{padding-left:1.1rem}
 .gone{text-decoration:line-through;color:var(--muted)}
 .lines{white-space:pre-line}
 .cols{display:grid;gap:1.5rem;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr))}
@@ -422,68 +442,17 @@ const CONTENT_SECURITY_POLICY = [
 
 // --- HTML ---
 
-// Fragmento de HTML ya escapado. Solo lo crea `html`, así que componer
-// fragmentos nunca introduce texto sin escapar.
-declare const markup: unique symbol;
-export interface Html {
-  readonly [markup]: true;
-  readonly text: string;
-}
-
-type HtmlValue = string | number | Html | readonly Html[] | null | undefined;
-
-const ESCAPES: Readonly<Record<string, string>> = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
-};
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => ESCAPES[char] ?? char);
-}
-
-function isHtml(value: HtmlValue): value is Html {
-  return typeof value === "object" && value !== null && "text" in value;
-}
-
-function rawHtml(text: string): Html {
-  return Object.freeze({ text }) as Html;
-}
-
-// Plantilla de HTML: el texto literal se emite tal cual y cada valor
-// interpolado se escapa, salvo que sea otro fragmento creado con `html`.
-export function html(
-  strings: TemplateStringsArray,
-  ...values: readonly HtmlValue[]
-): Html {
-  let text = "";
-  strings.forEach((literal, index) => {
-    text += literal;
-    const value = values[index];
-    if (value === null || value === undefined) {
-      return;
-    }
-    if (typeof value === "string") {
-      text += escapeHtml(value);
-    } else if (typeof value === "number") {
-      text += String(value);
-    } else if (isHtml(value)) {
-      text += value.text;
-    } else {
-      text += value.map((item) => item.text).join("");
-    }
-  });
-  return rawHtml(text);
-}
+// El marcado se compone con la plantilla de `@/platform/markup`, que escapa
+// cada valor: aquí no hay ninguna forma de tratar una cadena como HTML.
+export { html };
+export type { Html };
 
 // El contenido de estas dos etiquetas debe ser, byte a byte, el texto cuya
 // huella lleva la política de contenido. Por eso se construyen por
 // concatenación y no dentro de la plantilla, cuyo formato puede añadir
 // espacios.
-const STYLE_ELEMENT = rawHtml(`<style>${STYLE}</style>`);
-const SCRIPT_ELEMENT = rawHtml(`<script>${SCRIPT}</script>`);
+const STYLE_ELEMENT = inlineResource("style", STYLE);
+const SCRIPT_ELEMENT = inlineResource("script", SCRIPT);
 
 export interface LayoutProps {
   readonly title: string;
@@ -503,6 +472,11 @@ export function layout({ title, session, content }: LayoutProps): Html {
             ${
               session.user.roles.includes("teacher")
                 ? html`<li><a href="/documents">Documentos</a></li>`
+                : null
+            }
+            ${
+              session.user.roles.length > 0
+                ? html`<li><a href="/budget">Presupuesto</a></li>`
                 : null
             }
             <li><a href="/account/password">Contraseña</a></li>
@@ -607,13 +581,35 @@ export interface ProtectedPageContext {
 }
 
 export interface AccessOptions {
-  // Perfil exigido; `null`, solo una sesión.
-  readonly role: Role | null;
+  // Perfil exigido; una lista, cualquiera de ellos; `null`, solo una sesión.
+  readonly role: Role | readonly Role[] | null;
   // Nombre de la operación en la auditoría de una denegación.
   readonly operation: string;
   // Solo la página y la acción de cambio de contraseña se alcanzan mientras la
   // cuenta tiene pendiente cambiar su contraseña inicial.
   readonly allowPendingPasswordChange: boolean;
+}
+
+// Comprueba el perfil exigido, con denegación por defecto y auditada. Con
+// una lista basta cualquiera de sus perfiles.
+function authorized(
+  identity: Identity,
+  session: SessionContext,
+  options: AccessOptions,
+  correlationId: string,
+): boolean {
+  const required =
+    options.role === null || typeof options.role === "string"
+      ? options.role
+      : (options.role.find((role) => session.user.roles.includes(role)) ??
+        options.role[0] ??
+        null);
+  return identity.authorize(
+    session,
+    required,
+    options.operation,
+    correlationId,
+  );
 }
 
 const EMPTY_PROPS = { props: {} };
@@ -742,14 +738,7 @@ export function protectedPage(
       seeOther(res, "/account/password", []);
       return;
     }
-    if (
-      !identity.authorize(
-        session,
-        options.role,
-        options.operation,
-        correlationId,
-      )
-    ) {
+    if (!authorized(identity, session, options, correlationId)) {
       logEvent(config, "access.denied", correlationId);
       sendPage(res, 403, forbiddenPage(session), []);
       return;
@@ -965,14 +954,7 @@ export function protectedAction(
       seeOther(res, "/account/password", []);
       return;
     }
-    if (
-      !identity.authorize(
-        session,
-        options.role,
-        options.operation,
-        correlationId,
-      )
-    ) {
+    if (!authorized(identity, session, options, correlationId)) {
       logEvent(config, "access.denied", correlationId);
       sendEmpty(res, 403);
       return;
@@ -1104,12 +1086,7 @@ export function protectedUpload(
     if (
       (session.user.mustChangePassword &&
         !options.allowPendingPasswordChange) ||
-      !identity.authorize(
-        session,
-        options.role,
-        options.operation,
-        correlationId,
-      )
+      !authorized(identity, session, options, correlationId)
     ) {
       logEvent(config, "access.denied", correlationId);
       sendEmpty(res, 403);

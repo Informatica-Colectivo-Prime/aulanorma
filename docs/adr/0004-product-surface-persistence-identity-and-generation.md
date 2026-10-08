@@ -16,6 +16,8 @@ presupuesto, con sus reservas, su ciclo y su conciliación, probados con consumo
 de la decisión 9, la apertura de la entrega a la capa `didactic-content`. Las páginas para
 consultar el presupuesto, modificar el límite y conciliar llegan con la historia 3.
 
+Con la historia 3 (fase 6) quedan implementadas y verificadas esas páginas del presupuesto.
+
 **No están implementadas**, y quedan registradas como la dirección acordada: de la decisión
 6, cualquier proveedor real, que sigue sin seleccionar, y con él sus precios y la moneda del
 presupuesto; el despliegue real de la decisión 7; y la apertura de la entrega a la capa

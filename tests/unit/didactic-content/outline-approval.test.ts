@@ -574,6 +574,7 @@ describe("aprobación", () => {
     expect(Object.keys(fixture.outlines).sort()).toEqual([
       "addEntry",
       "approve",
+      "checkReference",
       "editEntry",
       "estimate",
       "get",
@@ -736,7 +737,7 @@ describe("cambios en la interpretación", () => {
     expect(entry("Tema 3").requirementIds).toHaveLength(2);
   });
 
-  test("si el documento tiene un sustituto, el índice es histórico: ni se cambia ni se aprueba, y su aprobación deja de estar vigente", () => {
+  test("si el documento tiene un sustituto, el índice se conserva sin poder cambiarse, su aprobación deja de estar vigente y no se aprueba sin comprobar sus referencias", () => {
     approve();
     fixture.supersede();
     const review = fixture.outlines.review(outlineId);
@@ -751,10 +752,13 @@ describe("cambios en la interpretación", () => {
         ...target(),
         entryId: entry("Tema 1").id,
       }),
-      fixture.outlines.approve(target()),
       fixture.outlines.reject({ ...target(), reason: "No." }),
     ];
-    expect(attempts.map(refused)).toEqual(Array(4).fill("superseded"));
+    expect(attempts.map(refused)).toEqual(Array(3).fill("superseded"));
+    // Aprobar depende de las referencias heredadas: reference-check.test.ts.
+    expect(refused(fixture.outlines.approve(target()))).toBe(
+      "unchecked_references",
+    );
     expect(outline().revision).toBe(1);
   });
 });

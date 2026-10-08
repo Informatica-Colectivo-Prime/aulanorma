@@ -37,6 +37,7 @@ import type {
   Names,
   RunCostFigures,
 } from "./shared";
+import { referencesSection, syllabusLink, syllabusNotice } from "./syllabus";
 
 // --- Textos ---
 
@@ -68,7 +69,7 @@ const REQUEST_REFUSALS: Readonly<Record<string, string>> = {
 const CHANGE_PROBLEMS: Readonly<Record<ChangeRejection, string>> = {
   not_found: "El elemento ya no existe.",
   superseded:
-    "El documento de este índice tiene un sustituto registrado: el índice se conserva como histórico y ya no se puede cambiar ni aprobar.",
+    "El documento de este índice tiene un sustituto registrado: el índice se conserva, pero ya no se puede cambiar ni rechazar.",
   conflict:
     "Otra persona u otra sesión ha cambiado este índice desde que lo abriste. No se ha guardado nada.",
   invalid: `El título no es válido. Escribe un título de una línea, de ${String(MAX_TITLE_LENGTH)} caracteres como máximo.`,
@@ -86,6 +87,14 @@ const CHANGE_PROBLEMS: Readonly<Record<ChangeRejection, string>> = {
     "No se puede aprobar: quedan requisitos obligatorios sin cubrir. No existe ninguna forma de aprobarlo así.",
   missing_reason: "Para rechazar tienes que escribir el motivo.",
   not_rejected: "Solo se puede devolver a revisión un índice rechazado.",
+  unchecked_references:
+    "No se puede aprobar: quedan referencias de este índice sin comprobar contra el documento sustituto.",
+  not_historical:
+    "El documento no tiene ningún sustituto: no hay referencias heredadas que comprobar.",
+  not_confirmed:
+    "Para registrar la comprobación tienes que confirmar que la has hecho.",
+  already_checked:
+    "Esa referencia ya estaba comprobada o no es de este índice.",
 };
 
 export function outlineProblem(reason: ChangeRejection): string {
@@ -124,7 +133,9 @@ export function outlineNotice(notice: Notice | undefined): Html | null {
     );
   }
   const known = NOTICES[notice.code];
-  return known === undefined ? null : noticeBox(known[0], known[1]);
+  return known === undefined
+    ? syllabusNotice(notice)
+    : noticeBox(known[0], known[1]);
 }
 
 const DETERMINISTIC_ORIGIN =
@@ -375,7 +386,7 @@ export function outlineView(input: {
         input.blockedBy === undefined || input.blockedBy.length === 0
           ? null
           : html`<div class="notice bad" role="alert">
-              <p>Requisitos pendientes de cubrir:</p>
+              <p>Requisitos pendientes:</p>
               ${pendingList(document, input.blockedBy)}
             </div>`
       }
@@ -384,7 +395,9 @@ export function outlineView(input: {
           ? html`<div class="notice" role="status">
               <p>
                 El documento de este índice tiene un sustituto registrado. Se
-                conserva como histórico y ya no se puede cambiar ni aprobar.
+                conserva y ya no se puede cambiar. Para aprobarlo de nuevo hay
+                que comprobar antes cada una de sus referencias contra la nueva
+                fuente.
               </p>
             </div>`
           : null
@@ -522,8 +535,24 @@ export function outlineView(input: {
         </table>
       </div>
 
+      ${syllabusLink({
+        outlineId: id,
+        approved: review.approval !== undefined,
+      })}
       ${
-        editable
+        review.historical
+          ? referencesSection({
+              session,
+              kind: "outline",
+              targetId: id,
+              document,
+              pending: review.referencesPending,
+              checked: review.referenceChecks.length,
+            })
+          : null
+      }
+      ${
+        editable || outline.status !== "rejected"
           ? html`<h2>Aprobar</h2>
               ${
                 outline.status === "approved" && !stale
@@ -570,7 +599,7 @@ export function outlineView(input: {
                         </form>`
               }
               ${
-                outline.status === "rejected"
+                outline.status === "rejected" || review.historical
                   ? null
                   : html`<h2>Rechazar</h2>
                       <form method="post" action="/api/outlines/reject">
