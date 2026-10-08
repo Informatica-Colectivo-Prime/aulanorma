@@ -958,3 +958,331 @@ describe("plazos y ampliación de la sesión", () => {
     expect(short.resolveSession(signedIn.cookie)).toBeNull();
   });
 });
+
+// Renovación de la autenticación sin salir de la página (FR-071; WCAG 2.2.1).
+// La sesión no se prolonga: se sustituye por otra nueva, con la contraseña.
+describe("renovación de la sesión", () => {
+  const sessions = (): Record<string, unknown>[] =>
+    db.prepare("SELECT * FROM session WHERE user_id IS NOT NULL").all();
+  const live = (): Record<string, unknown>[] =>
+    sessions().filter((row) => row.revoked_at === null);
+  const renewals = (): string[] =>
+    audit
+      .list()
+      .filter((event) => event.action === "session.renew")
+      .map(
+        ({ result, details }) =>
+          `${result}${typeof details.reason === "string" ? `:${details.reason}` : ""}`,
+      );
+  const renew = (
+    cookie: string | undefined,
+    password: string = PASSWORD,
+  ): ReturnType<Identity["renewSession"]> =>
+    identity.renewSession({ cookie, password, correlationId: "renovación" });
+
+  test("con la contraseña correcta crea una sesión nueva, con otro identificador, otro testigo y su propia duración máxima, y revoca la anterior", async () => {
+    await createUser("docente1");
+    const second = await sessionOf("docente1");
+    advance(20 * MINUTE);
+
+    const result = await renew(second.cookie);
+    if (!result.ok) {
+      expect.fail(result.reason);
+    }
+    expect(result.cookie).not.toBe(second.cookie);
+    expect(result.csrfToken).not.toBe(second.session.csrfToken);
+    expect(result.idleExpiresAt).toBe(clock + IDLE);
+    expect(result.idleMs).toBe(IDLE);
+    // Doce horas desde la renovación, no desde la entrada.
+    expect(result.expiresAt).toBe(clock + MAX);
+
+    expect(identity.resolveSession(second.cookie)).toBeNull();
+    expect(identity.wasRenewed(second.cookie)).toBe(true);
+    const renewed = identity.resolveSession(result.cookie);
+    expect(renewed?.csrfToken).toBe(result.csrfToken);
+    expect(renewed?.user.username).toBe("docente1");
+    expect(renewed?.expiresAt).toBe(clock + MAX);
+    expect(live()).toHaveLength(1);
+    expect(renewals()).toEqual(["ok"]);
+  });
+
+  test("la sesión anterior no revive: ni se resuelve, ni se amplía, ni se renueva otra vez", async () => {
+    await createUser("docente1");
+    const { cookie } = await sessionOf("docente1");
+    const result = await renew(cookie);
+    expect(result.ok).toBe(true);
+
+    expect(identity.resolveSession(cookie)).toBeNull();
+    expect(identity.resolveSession(cookie, { touch: false })).toBeNull();
+    expect(identity.extendSession(cookie, "c")).toBeNull();
+    expect(await renew(cookie)).toEqual({ ok: false, reason: "session_ended" });
+    expect(live()).toHaveLength(1);
+    // Una sesión cerrada o caducada no figura como renovada.
+    const other = await sessionOf("docente1");
+    identity.signOut(other.cookie, "c");
+    expect(identity.wasRenewed(other.cookie)).toBe(false);
+    expect(identity.wasRenewed(undefined)).toBe(false);
+    expect(identity.wasRenewed("no-es-una-sesión")).toBe(false);
+  });
+
+  test("el testigo de la sesión sustituida se reconoce como anterior, y solo desde la sesión que la sustituyó", async () => {
+    await createUser("docente1");
+    await createUser("docente2");
+    const before = await sessionOf("docente1");
+    const result = await renew(before.cookie);
+    if (!result.ok) {
+      expect.fail(result.reason);
+    }
+    expect(
+      identity.isPreviousToken(result.cookie, before.session.csrfToken),
+    ).toBe(true);
+    expect(identity.isPreviousToken(result.cookie, result.csrfToken)).toBe(
+      false,
+    );
+    expect(identity.isPreviousToken(result.cookie, "inventado")).toBe(false);
+    expect(identity.isPreviousToken(result.cookie, "")).toBe(false);
+    // Desde otra sesión, o desde la propia sustituida, no significa nada.
+    const stranger = await sessionOf("docente2");
+    expect(
+      identity.isPreviousToken(stranger.cookie, before.session.csrfToken),
+    ).toBe(false);
+    expect(
+      identity.isPreviousToken(before.cookie, before.session.csrfToken),
+    ).toBe(false);
+    // Tras una segunda renovación, el testigo de la primera sesión ya no
+    // vale ni como anterior.
+    const again = await renew(result.cookie);
+    if (!again.ok) {
+      expect.fail(again.reason);
+    }
+    expect(identity.isPreviousToken(again.cookie, result.csrfToken)).toBe(true);
+    expect(
+      identity.isPreviousToken(again.cookie, before.session.csrfToken),
+    ).toBe(false);
+  });
+
+  test("con una contraseña incorrecta no cambia nada: la sesión sigue igual y el fallo se registra", async () => {
+    await createUser("docente1");
+    const { cookie, session } = await sessionOf("docente1");
+    const before = JSON.stringify(sessions());
+
+    expect(await renew(cookie, WRONG)).toEqual({
+      ok: false,
+      reason: "invalid_credentials",
+    });
+    expect(JSON.stringify(sessions())).toBe(before);
+    expect(identity.resolveSession(cookie)?.csrfToken).toBe(session.csrfToken);
+    expect(identity.wasRenewed(cookie)).toBe(false);
+    expect(renewals()).toEqual(["failed:invalid_credentials"]);
+  });
+
+  test("usa el control de intentos de la entrada: los fallos de renovar y de entrar se suman, y el bloqueo vale para las dos", async () => {
+    await createUser("docente1");
+    const { cookie } = await sessionOf("docente1");
+    // Dos fallos al renovar y uno al entrar: al tercero, bloqueo.
+    await renew(cookie, WRONG);
+    await renew(cookie, WRONG);
+    expect((await signIn("docente1", WRONG)).ok).toBe(false);
+
+    expect(await renew(cookie)).toEqual({ ok: false, reason: "throttled" });
+    expect(await signIn("docente1")).toMatchObject({
+      ok: false,
+      reason: "throttled",
+    });
+    // La sesión no se pierde por el bloqueo.
+    expect(identity.resolveSession(cookie)).not.toBeNull();
+    expect(renewals().at(-1)).toBe("denied:throttled");
+
+    // Pasado el bloqueo, la contraseña correcta renueva y limpia los fallos.
+    advance(6000);
+    const result = await renew(cookie);
+    expect(result.ok).toBe(true);
+    expect(
+      db
+        .prepare(
+          "SELECT count(*) AS n FROM sign_in_throttle WHERE subject LIKE 'account:%'",
+        )
+        .get()?.n,
+    ).toBe(0);
+  });
+
+  test("tres fallos seguidos al renovar bloquean también la entrada", async () => {
+    await createUser("docente1");
+    const { cookie } = await sessionOf("docente1");
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await renew(cookie, WRONG);
+    }
+    expect(await signIn("docente1")).toMatchObject({
+      ok: false,
+      reason: "throttled",
+    });
+  });
+
+  // La comprobación de la contraseña tarda. Lo que ocurra mientras tanto se
+  // provoca justo después de pedir la renovación, antes de que termine.
+  test.each([
+    {
+      name: "se revocan sus sesiones",
+      during: () => identity.revokeSessions("docente1", "c"),
+    },
+    {
+      name: "se cierra la sesión",
+      during: (cookie: string) => {
+        identity.signOut(cookie, "c");
+      },
+    },
+    {
+      name: "se desactiva la cuenta",
+      during: () => identity.setDisabled("docente1", true, "c"),
+    },
+    {
+      name: "cambian sus permisos",
+      during: () => identity.setRoles("docente1", ["admin"], "c"),
+    },
+    {
+      name: "caduca por inactividad",
+      during: () => {
+        advance(IDLE);
+      },
+    },
+    {
+      name: "alcanza su duración máxima",
+      during: () => {
+        advance(MAX);
+      },
+    },
+  ])(
+    "si mientras se comprueba la contraseña $name, no se renueva nada",
+    async ({ during }) => {
+      await createUser("docente1");
+      const { cookie } = await sessionOf("docente1");
+      const count = sessions().length;
+
+      const pending = renew(cookie);
+      during(cookie);
+      expect(await pending).toEqual({ ok: false, reason: "session_ended" });
+
+      // Ni una fila más: no se ha creado ninguna sesión.
+      expect(sessions()).toHaveLength(count);
+      expect(identity.resolveSession(cookie)).toBeNull();
+      expect(identity.wasRenewed(cookie)).toBe(false);
+      expect(renewals()).toEqual(["denied:session_ended"]);
+    },
+  );
+
+  test("si mientras se comprueba cambia la contraseña de la cuenta, no se renueva con la antigua", async () => {
+    await createUser("docente1");
+    const { cookie } = await sessionOf("docente1");
+    const pending = renew(cookie);
+    // La cambia quien administra, a la vez: además revoca todas las
+    // sesiones. Termine antes una cosa o la otra, no queda ninguna
+    // utilizable.
+    await identity.resetPassword("docente1", NEW_PASSWORD, "c");
+    const outcome = await pending;
+    expect(identity.resolveSession(cookie)).toBeNull();
+    expect(
+      outcome.ok ? identity.resolveSession(outcome.cookie) : null,
+    ).toBeNull();
+    expect(live()).toEqual([]);
+
+    // Aunque la sesión siguiera viva, la contraseña comprobada ya no es la
+    // de la cuenta.
+    const fresh = await signIn("docente1", NEW_PASSWORD);
+    if (!fresh.ok) {
+      expect.fail(fresh.reason);
+    }
+    const second = renew(fresh.cookie, NEW_PASSWORD);
+    db.prepare(
+      "UPDATE user_account SET password_hash = 'otra:huella' WHERE username = ?",
+    ).run("docente1");
+    expect(await second).toEqual({ ok: false, reason: "session_ended" });
+    expect(identity.wasRenewed(fresh.cookie)).toBe(false);
+  });
+
+  test("dos renovaciones simultáneas de la misma sesión: solo una la sustituye", async () => {
+    await createUser("docente1");
+    const { cookie } = await sessionOf("docente1");
+    const [first, second] = await Promise.all([renew(cookie), renew(cookie)]);
+    const results = [first, second];
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(results.filter((result) => !result.ok)).toEqual([
+      { ok: false, reason: "session_ended" },
+    ]);
+    expect(live()).toHaveLength(1);
+    expect(identity.resolveSession(cookie)).toBeNull();
+    const winner = results.find((result) => result.ok);
+    expect(winner?.ok && identity.resolveSession(winner.cookie)).toBeTruthy();
+    expect(renewals().sort()).toEqual(["denied:session_ended", "ok"]);
+  });
+
+  test("si falla al guardar, no queda ni la sesión nueva ni la anterior revocada", async () => {
+    await createUser("docente1");
+    const { cookie, session } = await sessionOf("docente1");
+    const before = JSON.stringify(sessions());
+    // El registro de la renovación forma parte de la transacción.
+    db.exec(
+      "CREATE TRIGGER fallo BEFORE INSERT ON audit_event " +
+        "WHEN NEW.action = 'session.renew' AND NEW.result = 'ok' " +
+        "BEGIN SELECT RAISE(ABORT, 'fallo provocado'); END;",
+    );
+    await expect(renew(cookie)).rejects.toThrow("fallo provocado");
+    db.exec("DROP TRIGGER fallo");
+
+    expect(JSON.stringify(sessions())).toBe(before);
+    expect(identity.resolveSession(cookie)?.csrfToken).toBe(session.csrfToken);
+    // Y puede renovarse después con normalidad.
+    expect((await renew(cookie)).ok).toBe(true);
+  });
+
+  test("no se renueva sin sesión, con una sesión de entrada ni con una cuenta desactivada", async () => {
+    await createUser("docente1");
+    expect(await renew(undefined)).toEqual({
+      ok: false,
+      reason: "session_ended",
+    });
+    expect(await renew("")).toEqual({ ok: false, reason: "session_ended" });
+    expect(await renew(identity.beginEntry().cookie)).toEqual({
+      ok: false,
+      reason: "session_ended",
+    });
+    const { cookie } = await sessionOf("docente1");
+    identity.setDisabled("docente1", true, "c");
+    expect(await renew(cookie)).toEqual({ ok: false, reason: "session_ended" });
+    expect(live()).toEqual([]);
+  });
+
+  test("ni el registro ni los resultados fallidos contienen contraseñas, cookies ni testigos", async () => {
+    await createUser("docente1");
+    const { cookie, session } = await sessionOf("docente1");
+    const refused = await renew(cookie, WRONG);
+    const result = await renew(cookie);
+    if (!result.ok) {
+      expect.fail(result.reason);
+    }
+    const recorded = JSON.stringify(audit.list());
+    for (const secret of [
+      PASSWORD,
+      WRONG,
+      cookie,
+      session.csrfToken,
+      result.cookie,
+      result.csrfToken,
+    ]) {
+      expect(recorded).not.toContain(secret);
+      expect(JSON.stringify(refused)).not.toContain(secret);
+    }
+    // En la base, el identificador de la sesión es su huella, no la cookie.
+    expect(JSON.stringify(sessions())).not.toContain(result.cookie);
+    expect(JSON.stringify(sessions())).not.toContain(cookie);
+  });
+
+  test("comprobar una sesión sin anotar actividad no retrasa su caducidad", async () => {
+    await createUser("docente1");
+    const { cookie } = await sessionOf("docente1");
+    advance(IDLE - MINUTE);
+    const peeked = identity.resolveSession(cookie, { touch: false });
+    expect(peeked?.idleExpiresAt).toBe(clock + MINUTE);
+    advance(MINUTE);
+    expect(identity.resolveSession(cookie)).toBeNull();
+  });
+});

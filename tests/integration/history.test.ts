@@ -546,12 +546,16 @@ describe("historial de cada elemento", () => {
       const reply = await view();
       expect(reply.status).toBe(200);
       // Sus únicos formularios son los comunes a toda página: continuar la
-      // sesión y salir.
+      // sesión, renovarla y salir.
       expect(
         [...reply.body.matchAll(/<form\s[^>]*action="([^"]+)"/g)].map(
           (match) => match[1],
         ),
-      ).toEqual(["/api/session/extend", "/api/session/sign-out"]);
+      ).toEqual([
+        "/api/session/extend",
+        "/api/session/renew",
+        "/api/session/sign-out",
+      ]);
       expect(reply.body).toContain("Esta página es de solo lectura.");
       expect(reply.headers["cache-control"]).toBe("no-store");
     }
@@ -777,7 +781,11 @@ describe("métricas mínimas", () => {
       [...reply.body.matchAll(/<form\s[^>]*action="([^"]+)"/g)].map(
         (match) => match[1],
       ),
-    ).toEqual(["/api/session/extend", "/api/session/sign-out"]);
+    ).toEqual([
+      "/api/session/extend",
+      "/api/session/renew",
+      "/api/session/sign-out",
+    ]);
   });
 
   test("solo para administración: sin sesión lleva a la entrada y un docente recibe 403", async () => {

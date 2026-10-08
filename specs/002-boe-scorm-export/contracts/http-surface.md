@@ -53,6 +53,7 @@ operación, quién puede ejecutarla y sus condiciones.
 | `/account/password`     | `GET`                    | Ver el formulario de cambio de contraseña |
 | `/api/session/sign-out` | `POST`                   | Cerrar sesión                             |
 | `/api/session/extend`   | `POST`                   | Ampliar la sesión desde el aviso de caducidad |
+| `/api/session/renew`    | `POST`                   | Renovar la autenticación sin salir de la página |
 | `/api/account/password` | `POST`                   | Cambiar la contraseña                     |
 | `/documents`            | `GET`                    | Ver los documentos registrados            |
 | `/documents/new`        | `GET`                    | Ver el formulario de subida               |

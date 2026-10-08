@@ -11,6 +11,7 @@ import * as passwordPage from "@/pages/account/password";
 import * as passwordAction from "@/pages/api/account/password";
 import * as signInAction from "@/pages/api/session/sign-in";
 import * as extendAction from "@/pages/api/session/extend";
+import * as renewAction from "@/pages/api/session/renew";
 import * as signOutAction from "@/pages/api/session/sign-out";
 import * as homePage from "@/pages/index";
 import * as loginPage from "@/pages/login";
@@ -947,7 +948,7 @@ describe("secretos", () => {
       expect(JSON.stringify(page.headers)).not.toContain(session);
       expect(JSON.stringify(page.headers)).not.toContain(token);
       expect(page.body.split(token).length - 1).toBe(
-        (page.body.match(/name="csrf"/g) ?? []).length,
+        (page.body.match(/<input[^>]*\sname="csrf"/g) ?? []).length,
       );
     }
     const rejections = [
@@ -1163,9 +1164,12 @@ describe("aviso de caducidad y ampliación de la sesión", () => {
       `script-src 'sha256-${createHash("sha256").update(script).digest("base64")}'`,
     );
     expect(script).toContain("/api/session/sign-out");
-    // Sin temporizadores que consulten al servidor: la única petición del
-    // aviso es la del envío del formulario.
-    expect(script.match(/fetch\(/g)).toHaveLength(2);
+    // Sin temporizadores que consulten al servidor. Las tres llamadas son la
+    // subida de un PDF, el envío de los formularios del aviso y la lectura
+    // del testigo vigente tras una renovación; ninguna está en el
+    // temporizador.
+    expect(script.match(/fetch\(/g)).toHaveLength(3);
+    expect(/function tick\(\)\{[^}]*fetch/.test(script)).toBe(false);
     expect(script).not.toMatch(
       /XMLHttpRequest|sendBeacon|EventSource|WebSocket/,
     );
@@ -1269,13 +1273,17 @@ describe("aviso de caducidad y ampliación de la sesión", () => {
     { name: "sin testigo", fields: {} },
     { name: "con otro testigo", fields: { csrf: "otro" } },
   ])(
-    "$name se rechaza y no se registra ninguna ampliación",
+    "$name se rechaza, no se registra ninguna ampliación y no cuenta como actividad",
     async ({ fields }) => {
       await enter("docente1", ["teacher"]);
       await client.get(homePage);
+      advance(IDLE - 120_000);
       expectClosed(await client.post(extendAction, fields), 403);
       expect(auditActions().at(-1)).toBe("request.denied:denied:csrf");
       expect(auditActions()).not.toContain("session.extended:ok");
+      // La caducidad sigue donde estaba: el rechazo no la ha retrasado.
+      advance(120_000);
+      expect((await client.get(homePage)).location).toBe("/login");
     },
   );
 
@@ -1364,5 +1372,394 @@ describe("aviso de caducidad y ampliación de la sesión", () => {
         )
       ).location,
     ).toBe("/login");
+  });
+});
+
+// Renovación de la autenticación sin salir de la página (FR-071; WCAG
+// 2.2.1). Sustituye la sesión por otra nueva: no prolonga ninguna.
+describe("renovación de la sesión", () => {
+  interface Renewal {
+    csrf: string;
+    now: number;
+    idleAt: number;
+    idleMs: number;
+    maxAt: number;
+  }
+
+  // Estado de un navegador: sus cookies y el testigo de una página abierta.
+  async function opened(): Promise<{
+    cookies: Record<string, string>;
+    token: string;
+  }> {
+    const home = await client.get(passwordPage);
+    return {
+      cookies: Object.fromEntries(client.cookies),
+      token: client.csrfOf(home),
+    };
+  }
+
+  const renew = (
+    token: string,
+    password: string,
+    options: Parameters<WebClient["post"]>[2] = {},
+  ): Promise<Reply> =>
+    client.post(renewAction, { csrf: token, password }, options);
+
+  const renewals = (): string[] =>
+    auditActions().filter((action) => action.startsWith("session.renew"));
+
+  test("el aviso lleva el formulario de renovación, oculto, con campos que admiten pegar y gestores de contraseñas", async () => {
+    await enter("docente1", ["teacher"]);
+    const body = (await client.get(homePage)).body.replace(/\s+/g, " ");
+    expect(body).toContain(
+      '<form id="sesion-renovar" method="post" action="/api/session/renew" hidden >',
+    );
+    expect(body).toContain(
+      '<input class="skip" type="text" name="username" autocomplete="username" value="docente1" tabindex="-1" aria-hidden="true" readonly />',
+    );
+    expect(body).toContain(
+      '<label for="sesion-contrasena">Contraseña</label> <input id="sesion-contrasena" name="password" type="password" autocomplete="current-password" aria-describedby="sesion-error" required />',
+    );
+    expect(body).toContain(
+      '<p id="sesion-error" class="session-error" role="alert"></p>',
+    );
+    expect(body).toMatch(
+      /<button type="submit" data-busy="Renovando…">\s*Renovar la sesión\s*<\/button>/,
+    );
+    // Nada impide pegar ni rellenar el campo.
+    const script = /<script>(.*?)<\/script>/s.exec(body)?.[1] ?? "";
+    expect(script).not.toMatch(/paste|autocomplete|keydown|keypress|keyup/);
+    // El almacenamiento local solo recibe instantes y el fin de la sesión:
+    // nunca contraseñas, cookies ni testigos.
+    expect(
+      [...script.matchAll(/publish\(([A-Z_]+),([^)]*)\)/g)]
+        .map((match) => `${match[1] ?? ""}:${match[2] ?? ""}`)
+        .filter((call) => !call.startsWith("key:"))
+        .sort(),
+    ).toEqual([
+      "RENEWED_KEY:at",
+      "SESSION_KEY:{ended:true}",
+      "SESSION_KEY:{ended:true}",
+      "SESSION_KEY:{idleAt:idleAt}",
+      "SESSION_KEY:{idleAt:idleAt}",
+      "SESSION_KEY:{idleAt:idleAt}",
+    ]);
+    expect(script.match(/localStorage\.setItem/g)).toHaveLength(1);
+  });
+
+  test("con la contraseña correcta responde con el testigo y los plazos nuevos, cambia la cookie y revoca la sesión anterior", async () => {
+    await enter("docente1", ["teacher"]);
+    const before = await opened();
+    const reply = await renew(before.token, NEW_PASSWORD);
+
+    expect(reply.status).toBe(200);
+    expect(reply.headers["content-type"]).toBe(
+      "application/json; charset=utf-8",
+    );
+    expect(reply.headers["cache-control"]).toBe("no-store");
+    expect(reply.headers["x-content-type-options"]).toBe("nosniff");
+    const data = JSON.parse(reply.body) as Renewal;
+    expect(Object.keys(data).sort()).toEqual([
+      "csrf",
+      "idleAt",
+      "idleMs",
+      "maxAt",
+      "now",
+    ]);
+    expect(data.csrf).toMatch(/^[\w-]{43}$/);
+    expect(data.csrf).not.toBe(before.token);
+    expect(data.idleMs).toBe(30 * 60_000);
+    expect(data.idleAt - data.now).toBeLessThanOrEqual(30 * 60_000);
+    expect(data.maxAt - data.now).toBeGreaterThan(12 * 3_600_000 - 5000);
+    expect(data.maxAt - data.now).toBeLessThanOrEqual(12 * 3_600_000);
+    expect(reply.setCookies).toHaveLength(1);
+    expect(reply.setCookies[0]).toMatch(
+      new RegExp(
+        `^${SESSION}=[\\w-]{43}; Path=/; HttpOnly; SameSite=Strict; Secure$`,
+      ),
+    );
+    const cookie = client.cookies.get(SESSION);
+    expect(cookie).not.toBe(before.cookies[SESSION]);
+    expect(reply.body).not.toContain(cookie ?? "?");
+    expect(renewals()).toEqual(["session.renew:ok"]);
+
+    // Con la sesión nueva, las páginas llevan el testigo nuevo.
+    const home = await client.get(homePage);
+    expect(home.status).toBe(200);
+    expect(client.csrfOf(home)).toBe(data.csrf);
+  });
+
+  test("una página pedida con la cookie anterior no borra la cookie nueva ni lleva a la entrada", async () => {
+    await enter("docente1", ["teacher"]);
+    const before = await opened();
+    await renew(before.token, NEW_PASSWORD);
+
+    const stale = await client.get(homePage, { cookies: before.cookies });
+    expect(stale.status).toBe(409);
+    expect(stale.setCookies).toEqual([]);
+    expect(stale.body).toContain("Tu sesión se ha renovado");
+    expect(stale.body).not.toContain("docente1");
+    expect(stale.body).not.toMatch(/<input[^>]*name="csrf"/);
+    // La sesión nueva sigue intacta.
+    expect((await client.get(homePage)).status).toBe(200);
+  });
+
+  test("un formulario enviado con la cookie anterior no se ejecuta ni se pierde: se devuelve para repetirlo, sin testigo y sin tocar la cookie nueva", async () => {
+    await enter("docente1", ["teacher"]);
+    const before = await opened();
+    await renew(before.token, NEW_PASSWORD);
+
+    const hostile = '"><script>alert(1)</script> & texto pendiente';
+    const reply = await client.post(
+      passwordAction,
+      { csrf: before.token, current: hostile, next: "otro valor" },
+      { cookies: before.cookies, path: "/api/account/password?x=1" },
+    );
+    expect(reply.status).toBe(409);
+    expect(reply.setCookies).toEqual([]);
+    const body = reply.body.replace(/\s+/g, " ");
+    expect(body).toContain("Tu envío no se ha guardado todavía");
+    expect(body).toContain(
+      '<form method="post" action="/api/account/password" data-replay>',
+    );
+    // Lo enviado vuelve escapado, y el testigo, vacío.
+    expect(body).toContain('<input type="hidden" name="csrf" value="" />');
+    expect(body).toContain(
+      '<input type="hidden" name="current" value="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt; &amp; texto pendiente" />',
+    );
+    expect(body).toContain(
+      '<input type="hidden" name="next" value="otro valor" />',
+    );
+    expect(reply.body).not.toContain(before.token);
+    expect(reply.body).not.toContain(client.cookies.get(SESSION) ?? "?");
+    expect(auditActions().at(-1)).toBe("request.denied:denied:session_renewed");
+    // La contraseña no ha cambiado y la sesión nueva sigue viva: con la
+    // contraseña de siempre se puede renovar otra vez.
+    const home = await client.get(homePage);
+    expect(home.status).toBe(200);
+    expect((await renew(client.csrfOf(home), NEW_PASSWORD)).status).toBe(200);
+  });
+
+  test("un formulario con la cookie nueva y el testigo anterior tampoco se ejecuta: se devuelve para repetirlo", async () => {
+    await enter("docente1", ["teacher"]);
+    const before = await opened();
+    await renew(before.token, NEW_PASSWORD);
+
+    // Salir, con el testigo de antes de renovar.
+    const reply = await client.post(
+      signOutAction,
+      { csrf: before.token },
+      { path: "/api/session/sign-out" },
+    );
+    expect(reply.status).toBe(409);
+    expect(reply.setCookies).toEqual([]);
+    expect(reply.body.replace(/\s+/g, " ")).toContain(
+      '<form method="post" action="/api/session/sign-out" data-replay>',
+    );
+    expect(auditActions().at(-1)).toBe("request.denied:denied:csrf_renewed");
+    // No ha salido.
+    expect((await client.get(homePage)).status).toBe(200);
+    // Un destino que no es una acción propia no produce ningún formulario.
+    const odd = await client.post(
+      signOutAction,
+      { csrf: before.token },
+      { path: "//otro.example/api/x" },
+    );
+    expect(odd.status).toBe(409);
+    expect(odd.body).not.toContain("data-replay>");
+    expect(odd.body).not.toContain("otro.example");
+
+    // Un testigo inventado sigue siendo un rechazo sin más.
+    expectClosed(await client.post(signOutAction, { csrf: "inventado" }), 403);
+    // Y repetido con el testigo vigente, se ejecuta.
+    const current = client.csrfOf(await client.get(homePage));
+    expect((await client.post(signOutAction, { csrf: current })).location).toBe(
+      "/login",
+    );
+  });
+
+  test("la sesión anterior no revive por ninguna vía", async () => {
+    await enter("docente1", ["teacher"]);
+    const before = await opened();
+    await renew(before.token, NEW_PASSWORD);
+    const old = { cookies: before.cookies };
+
+    expect((await client.get(homePage, old)).status).toBe(409);
+    expect(
+      (await client.post(extendAction, { csrf: before.token }, old)).status,
+    ).toBe(409);
+    expect((await renew(before.token, NEW_PASSWORD, old)).status).toBe(409);
+    expect(
+      client.runtime.identity.resolveSession(before.cookies[SESSION]),
+    ).toBeNull();
+    expect(auditActions()).not.toContain("session.extended:ok");
+    expect(renewals()).toEqual(["session.renew:ok"]);
+  });
+
+  test("con una contraseña incorrecta responde 422, no cambia la cookie y la sesión sigue igual", async () => {
+    await enter("docente1", ["teacher"]);
+    const before = await opened();
+    const reply = await renew(before.token, WRONG);
+    expect(reply.status).toBe(422);
+    expect(JSON.parse(reply.body)).toEqual({ reason: "invalid_credentials" });
+    expect(reply.setCookies).toEqual([]);
+    expect(reply.body).not.toContain(WRONG);
+    expect(renewals()).toEqual(["session.renew:failed:invalid_credentials"]);
+    // El mismo testigo sigue sirviendo.
+    expect(client.csrfOf(await client.get(homePage))).toBe(before.token);
+  });
+
+  test("tras tres fallos responde 429 aunque la contraseña sea correcta, y la sesión no se pierde", async () => {
+    await enter("docente1", ["teacher"]);
+    const { token } = await opened();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      expect((await renew(token, WRONG)).status).toBe(422);
+    }
+    const reply = await renew(token, NEW_PASSWORD);
+    expect(reply.status).toBe(429);
+    expect(JSON.parse(reply.body)).toEqual({ reason: "throttled" });
+    expect(reply.setCookies).toEqual([]);
+    expect(renewals().at(-1)).toBe("session.renew:denied:throttled");
+    expect((await client.get(homePage)).status).toBe(200);
+  });
+
+  test("si la sesión se revoca mientras se comprueba la contraseña, responde 401 sin cookie nueva", async () => {
+    await enter("docente1", ["teacher"]);
+    const { token } = await opened();
+    const pending = renew(token, NEW_PASSWORD);
+    client.runtime.identity.revokeSessions("docente1", "revocación");
+    const reply = await pending;
+    expect(reply.status).toBe(401);
+    expect(JSON.parse(reply.body)).toEqual({ reason: "session_ended" });
+    expect(reply.setCookies).toEqual([]);
+    expect((await client.get(homePage)).location).toBe("/login");
+  });
+
+  test("dos renovaciones simultáneas desde dos pestañas: una sustituye la sesión y la otra no crea ninguna más", async () => {
+    await enter("docente1", ["teacher"]);
+    const before = await opened();
+    const old = { cookies: before.cookies };
+    const [first, second] = await Promise.all([
+      renew(before.token, NEW_PASSWORD, old),
+      renew(before.token, NEW_PASSWORD, old),
+    ]);
+    expect([first.status, second.status].sort()).toEqual([200, 401]);
+    expect(
+      client.runtime.db
+        .prepare(
+          "SELECT count(*) AS n FROM session WHERE user_id IS NOT NULL AND revoked_at IS NULL",
+        )
+        .get()?.n,
+    ).toBe(1);
+    expect([...first.setCookies, ...second.setCookies]).toHaveLength(1);
+  });
+
+  test("un fallo interno responde 500 sin cuerpo y deja la sesión como estaba", async () => {
+    await enter("docente1", ["teacher"]);
+    const before = await opened();
+    client.runtime.db.exec(
+      "CREATE TRIGGER fallo BEFORE INSERT ON audit_event " +
+        "WHEN NEW.action = 'session.renew' AND NEW.result = 'ok' " +
+        "BEGIN SELECT RAISE(ABORT, 'fallo provocado'); END;",
+    );
+    const reply = await renew(before.token, NEW_PASSWORD);
+    client.runtime.db.exec("DROP TRIGGER fallo");
+    expect(reply.status).toBe(500);
+    expect(reply.body).toBe("");
+    expect(reply.setCookies).toEqual([]);
+    // La misma sesión y el mismo testigo siguen sirviendo, y puede renovarse.
+    expect(client.csrfOf(await client.get(homePage))).toBe(before.token);
+    expect((await renew(before.token, NEW_PASSWORD)).status).toBe(200);
+  });
+
+  test.each([
+    { name: "sin Origin", options: { origin: null }, token: undefined },
+    {
+      name: "desde otro origen",
+      options: { origin: "https://otro.example" },
+      token: undefined,
+    },
+    { name: "sin testigo", options: {}, token: "" },
+    { name: "con un testigo inventado", options: {}, token: "inventado" },
+  ])(
+    "$name se rechaza sin comprobar la contraseña ni contar un intento",
+    async ({ options, token }) => {
+      await enter("docente1", ["teacher"]);
+      const before = await opened();
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        expectClosed(await renew(token ?? before.token, WRONG, options), 403);
+      }
+      expect(renewals()).toEqual([]);
+      // Cuatro rechazos no han bloqueado nada.
+      expect((await renew(before.token, NEW_PASSWORD)).status).toBe(200);
+    },
+  );
+
+  test("sin sesión, con la sesión caducada o con la cuenta desactivada lleva a la entrada", async () => {
+    await enter("docente1", ["teacher"]);
+    const before = await opened();
+    client.cookies.clear();
+    expect((await renew(before.token, NEW_PASSWORD)).location).toBe("/login");
+
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(Date.now() + 30 * 60_000);
+      const expired = await renew(before.token, NEW_PASSWORD, {
+        cookies: before.cookies,
+      });
+      expect(expired.location).toBe("/login");
+    } finally {
+      vi.useRealTimers();
+    }
+    client.runtime.identity.setDisabled("docente1", true, "baja");
+    expect(
+      (await renew(before.token, NEW_PASSWORD, { cookies: before.cookies }))
+        .location,
+    ).toBe("/login");
+    expect(renewals()).toEqual([]);
+  });
+
+  test("con la contraseña inicial pendiente se puede renovar, y sigue pendiente", async () => {
+    await createUser("docente1", ["teacher"]);
+    await signIn("docente1");
+    const form = await client.get(passwordPage);
+    expect((await renew(client.csrfOf(form), PASSWORD)).status).toBe(200);
+    expect((await client.get(homePage)).location).toBe("/account/password");
+  });
+
+  test("renovar no cambia los permisos, y un cambio de permisos revoca también la sesión renovada", async () => {
+    await enter("docente1", ["teacher"]);
+    const { token } = await opened();
+    expect((await renew(token, NEW_PASSWORD)).status).toBe(200);
+    expect(
+      client.runtime.identity.resolveSession(client.cookies.get(SESSION))?.user
+        .roles,
+    ).toEqual(["teacher"]);
+    client.runtime.identity.setRoles("docente1", ["admin"], "permisos");
+    expect((await client.get(homePage)).location).toBe("/login");
+  });
+
+  test("ni las respuestas ni el registro contienen la contraseña, y el registro tampoco cookies ni testigos", async () => {
+    await enter("docente1", ["teacher"]);
+    const before = await opened();
+    const refused = await renew(before.token, WRONG);
+    const reply = await renew(before.token, NEW_PASSWORD);
+    const data = JSON.parse(reply.body) as Renewal;
+    for (const response of [refused, reply]) {
+      const text = JSON.stringify([response.body, response.headers]);
+      expect(text).not.toContain(WRONG);
+      expect(text).not.toContain(NEW_PASSWORD);
+    }
+    const recorded = JSON.stringify(client.runtime.audit.list());
+    for (const secret of [
+      WRONG,
+      NEW_PASSWORD,
+      before.token,
+      data.csrf,
+      before.cookies[SESSION] ?? "?",
+      client.cookies.get(SESSION) ?? "?",
+    ]) {
+      expect(recorded).not.toContain(secret);
+    }
   });
 });

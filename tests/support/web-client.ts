@@ -107,6 +107,8 @@ export interface RequestOptions {
   readonly cookies?: Readonly<Record<string, string>>;
   // Cabeceras añadidas a la petición, en minúsculas.
   readonly headers?: Readonly<Record<string, string>>;
+  // Ruta de una acción, como la recibe del servidor: `/api/…`.
+  readonly path?: string;
   // Segmentos variables del destino de una página.
   readonly params?: Readonly<Record<string, string>>;
 }
@@ -253,6 +255,7 @@ export function createWebClient(options: WebClientOptions = {}): WebClient {
           method: options.method ?? "POST",
           headers,
           body: { ...fields },
+          ...(options.path === undefined ? {} : { url: options.path }),
         } as never,
         response as never,
       );
