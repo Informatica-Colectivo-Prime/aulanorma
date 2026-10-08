@@ -43,6 +43,7 @@ const DELIVERY_LAYERS = [
   "normative-source",
   "structured-interpretation",
   "didactic-content",
+  "content-export",
 ];
 const DELIVERY_PLATFORM_AREAS = [
   "config",
@@ -454,7 +455,7 @@ export default defineConfig([
     patterns: [
       pattern(
         `^@/(?!platform/(?:${alternatives(DELIVERY_PLATFORM_AREAS)})$|modules/(?:${alternatives(DELIVERY_LAYERS)})$|views$)`,
-        "La entrega solo importa `@/platform/<área>` (config, logging, health, version o web), las capas `normative-source`, `structured-interpretation` y `didactic-content` por su API pública, y `@/views`.",
+        "La entrega solo importa `@/platform/<área>` (config, logging, health, version o web), las capas de dominio por su API pública, y `@/views`.",
       ),
       relativeEscape([...PLATFORM_AREAS, ...LAYERS, ...OTHER_SEGMENTS]),
     ],
@@ -479,7 +480,7 @@ export default defineConfig([
     patterns: [
       pattern(
         `^@/(?!platform/web$|modules/(?:${alternatives(DELIVERY_LAYERS)})$)`,
-        "Las vistas solo importan `@/platform/web` y las capas `normative-source`, `structured-interpretation` y `didactic-content`, por su API pública.",
+        "Las vistas solo importan `@/platform/web` y las capas de dominio, por su API pública.",
       ),
       relativeEscape([...PLATFORM_AREAS, ...LAYERS, ...OTHER_SEGMENTS]),
     ],

@@ -147,6 +147,14 @@ const SURFACE: readonly SurfaceRoute[] = [
   page("/topics/:id", "topics/[id]/index.ts"),
   page("/topics/:id/blocks/new", "topics/[id]/blocks/new.ts"),
   page("/topics/:id/blocks/:id", "topics/[id]/blocks/[bid].ts"),
+  // Historia 4: exportación y descarga. Todas exigen sesión.
+  page("/export/:id", "export/[id]/index.ts"),
+  page("/export/:id/preview", "export/[id]/preview.ts"),
+  page("/export/packages/:id", "export/packages/[id]/index.ts"),
+  page(
+    "/export/packages/:id/instructions",
+    "export/packages/[id]/instructions.ts",
+  ),
   page("/budget", "budget/index.ts"),
   action("/api/documents/upload", UPLOAD, "protectedUpload"),
   action("/api/documents/resolve-page"),
@@ -167,6 +175,7 @@ const SURFACE: readonly SurfaceRoute[] = [
   action("/api/topics/reject", TEXT_FORM),
   action("/api/topics/resubmit"),
   action("/api/references/check"),
+  action("/api/export/create"),
   action("/api/budget/limit"),
   action("/api/budget/reconcile", TEXT_FORM),
 ];

@@ -234,10 +234,11 @@ function entryList(entries: readonly OutlineEntry[]): Html {
 
 // Lo que impide aprobar la versión, con la referencia normativa de cada
 // requisito pendiente.
-function blockersBox(
+export function blockersBox(
   document: DocumentRecord,
   blockers: VersionBlockers,
   role: "alert" | "status",
+  heading = "Pendiente para poder aprobar la versión:",
 ): Html | null {
   if (
     !blockers.outlineNotApproved &&
@@ -248,7 +249,7 @@ function blockersBox(
     return null;
   }
   return html`<div class="notice bad" role="${role}">
-    <p>Pendiente para poder aprobar la versión:</p>
+    <p>${heading}</p>
     ${
       blockers.outlineNotApproved
         ? html`<p>El índice no tiene una aprobación vigente.</p>`
@@ -581,6 +582,11 @@ export function syllabusView(input: {
       }
 
       <h2>Versiones aprobadas</h2>
+      <p>
+        <a href="/export/${outlineId}"
+          >Exportación: vista previa, paquete e instrucciones</a
+        >
+      </p>
       ${
         syllabus.versions.length === 0
           ? html`<p class="muted">Todavía no hay ninguna versión aprobada.</p>`

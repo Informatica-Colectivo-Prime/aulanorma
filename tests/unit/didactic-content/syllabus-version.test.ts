@@ -324,6 +324,7 @@ describe("aprobación de la versión", () => {
       "editBlock",
       "generate",
       "getTopic",
+      "locateVersion",
       "moveBlock",
       "rejectTopic",
       "removeBlock",

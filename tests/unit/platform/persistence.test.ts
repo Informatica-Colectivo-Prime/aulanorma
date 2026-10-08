@@ -213,6 +213,7 @@ describe("PLATFORM_MIGRATIONS", () => {
       "0006_budget",
       "0007_outline",
       "0008_syllabus",
+      "0009_content_export",
     ]);
     expect(tables(db)).toEqual([
       "audit_event",
@@ -233,6 +234,8 @@ describe("PLATFORM_MIGRATIONS", () => {
       "outline_approval",
       "outline_change",
       "outline_entry",
+      "package_download",
+      "package_export",
       "page_resolution",
       "reconciliation",
       "reference_check",
@@ -275,6 +278,8 @@ describe("PLATFORM_MIGRATIONS", () => {
       "syllabus_version",
       "syllabus_version_topic",
       "reference_check",
+      "package_export",
+      "package_download",
     ]) {
       expect(triggers).toEqual(
         expect.arrayContaining([
@@ -299,7 +304,7 @@ describe("PLATFORM_MIGRATIONS", () => {
       expect(triggers).toContain(`${table}_no_delete`);
       expect(triggers).not.toContain(`${table}_no_update`);
     }
-    expect(triggers).toHaveLength(68);
+    expect(triggers).toHaveLength(74);
     // El presupuesto nace con una única fila, a cero y sin moneda fijada.
     expect(db.prepare("SELECT * FROM budget").all()).toEqual([
       { id: 1, project_limit: 0, currency: "XXX", revision: 1 },

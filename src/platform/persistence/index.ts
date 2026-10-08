@@ -605,6 +605,40 @@ ${appendOnly("syllabus_version_topic", "syllabus_version_id = NEW.syllabus_versi
 ${appendOnly("reference_check", "id = NEW.id OR (target_kind = NEW.target_kind AND target_id = NEW.target_id AND requirement_id = NEW.requirement_id)")}
 `;
 
+// Exportación (data-model.md). Cada intento de exportar y cada intento de
+// descarga se registran, también los fallidos y los denegados; nada se
+// modifica ni se borra. Un intento fallido no tiene huella ni tamaño, porque
+// no deja ningún fichero (FR-037 y FR-039).
+const CONTENT_EXPORT = `
+CREATE TABLE package_export (
+  id TEXT PRIMARY KEY,
+  syllabus_version_id TEXT NOT NULL REFERENCES syllabus_version (id),
+  format TEXT NOT NULL CHECK (format = 'scorm-1.2'),
+  status TEXT NOT NULL CHECK (status IN ('succeeded', 'failed')),
+  package_sha256 TEXT CHECK (
+    package_sha256 IS NULL OR length(package_sha256) = 64
+  ),
+  size_bytes INTEGER CHECK (size_bytes IS NULL OR size_bytes > 0),
+  validation_result TEXT NOT NULL,
+  exported_by TEXT NOT NULL,
+  exported_at INTEGER NOT NULL,
+  CHECK ((status = 'succeeded') = (package_sha256 IS NOT NULL)),
+  CHECK ((status = 'succeeded') = (size_bytes IS NOT NULL))
+) STRICT;
+CREATE TABLE package_download (
+  id TEXT PRIMARY KEY,
+  export_id TEXT NOT NULL REFERENCES package_export (id),
+  item TEXT NOT NULL CHECK (item IN ('package', 'instructions')),
+  result TEXT NOT NULL CHECK (
+    result IN ('granted', 'not_current', 'incomplete', 'unavailable')
+  ),
+  downloaded_by TEXT NOT NULL,
+  downloaded_at INTEGER NOT NULL
+) STRICT;
+${appendOnly("package_export", "id = NEW.id")}
+${appendOnly("package_download", "id = NEW.id")}
+`;
+
 export const PLATFORM_MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ id: "0001_audit_event", sql: AUDIT_EVENT }),
   Object.freeze({ id: "0002_identity", sql: IDENTITY }),
@@ -617,6 +651,7 @@ export const PLATFORM_MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ id: "0006_budget", sql: BUDGET }),
   Object.freeze({ id: "0007_outline", sql: OUTLINE }),
   Object.freeze({ id: "0008_syllabus", sql: SYLLABUS }),
+  Object.freeze({ id: "0009_content_export", sql: CONTENT_EXPORT }),
 ]);
 
 // --- Almacén de ficheros direccionado por huella ---
