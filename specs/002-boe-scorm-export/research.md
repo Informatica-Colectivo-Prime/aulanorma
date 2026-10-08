@@ -419,6 +419,14 @@ llamadas y aplica los límites del formato (SC-017).
 en local sus importaciones; y las condiciones de redistribución de los XSD, para guardarlos
 en el repositorio o, si no se pudiera, obtenerlos con procedencia en la preparación.
 
+**Estado en la fase 7 (2026-10-08)**: la primera comprobación de esta lista **no se ejecuta
+todavía**. La procedencia del esquema de ADL y la redistribución de los de IMS no están
+acreditadas ([scorm-schemas.md](./scorm-schemas.md)), así que no se ha incorporado ningún XSD
+ni se ha instalado `xmllint-wasm`. Están implementadas la segunda y la tercera, y el producto
+dice expresamente que la validación contra los esquemas no se ha hecho. Mientras siga así,
+la conformidad descansa en una comprobación propia, con la debilidad que este apartado
+describe.
+
 ## R9. Estructura de módulos y migración a `content-export`
 
 **Decisión**: las cuatro capas contienen el dominio; `src/platform` gana cuatro áreas

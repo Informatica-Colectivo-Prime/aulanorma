@@ -187,16 +187,16 @@ Verificado con pruebas automáticas y con un navegador real: ver [us3-check.md](
 **Independent Test**: con una versión aprobada, el docente descarga el paquete, comprueba su
 huella y lo abre sin conexión.
 
-- [ ] T060 [P] [US4] Crear la migración y el repositorio de `Export` (`status`: `succeeded`, `failed`) y `Download` en `src/modules/content-export/`
-- [ ] T061 [P] [US4] Escribir el contenido del paquete en `src/modules/content-export/package/`: `index.html` con todos los temas mediante el renderizador de T052, `assets/style.css` y `assets/app.js` con la navegación y el envoltorio mínimo de la API de SCORM 1.2, sin URL externas
-- [ ] T062 [US4] Escribir `tests/contract/scorm-runtime.contract.test.ts` con `jsdom` y un doble de la API que aplica los límites del formato: inicio, `lesson_location`, `suspend_data` con mapa de bits, `exit=suspend`, `completed` solo tras «Finalizar», nunca `score` ni `passed`, ausencia de API con aviso, estado de otra versión descartado (SC-017)
-- [ ] T063 [US4] Implementar el generador en `src/modules/content-export/build.ts`: manifiesto desde plantilla con escapado e identificador de versión, ZIP con `fflate` de entradas ordenadas y fechas fijas, máximo de 200 temas, huella SHA-256 del fichero final, sin datos de usuarios
-- [ ] T064 [US4] Implementar la conformidad en `src/modules/content-export/conformance.ts`: validación del manifiesto contra los XSD oficiales con `xmllint-wasm` (XSD en `tests/fixtures/scorm/xsd/` y en el recurso de ejecución, con su procedencia) y las reglas que los esquemas no expresan, releyendo el ZIP
-- [ ] T065 [US4] Escribir `tests/contract/scorm-package.contract.test.ts`: manifiestos y paquetes incorrectos hechos a mano que deben rechazarse, un paquete SCORM 1.2 de referencia no generado por AulaNorma que debe aceptarse, equivalencia entre dos exportaciones de la misma versión (SC-014), ausencia de URL externas, credenciales y datos de usuarios (SC-012, SC-015)
-- [ ] T066 [US4] Implementar exportar y descargar: exigen versión vigente y cobertura completa en cada petición, registran cada intento, no dejan fichero tras un fallo y deniegan la descarga de paquetes de versiones invalidadas, también con enlaces antiguos; pruebas en `tests/unit/content-export/export-download.test.ts`
-- [ ] T067 [US4] Redactar las instrucciones de incorporación manual en `src/modules/content-export/instructions/`, en español claro, declarando que todavía no se ha comprobado ninguna versión de Moodle y que sustituir un paquete ya importado corresponde al usuario
-- [ ] T068 [US4] Crear las páginas `src/pages/export/` (vista previa con aviso de que no acredita el seguimiento, exportar, huella, descarga del paquete y de las instrucciones, historial de exportaciones y descargas)
-- [ ] T069 [US4] Escribir `tests/integration/us4-export-download.test.ts` con los escenarios 1 a 8 de la historia 4, la ausencia de cualquier operación de borrado (SC-031) y todas las vías de exportación con cobertura incompleta (SC-025)
+- [X] T060 [P] [US4] Crear la migración y el repositorio de `Export` (`status`: `succeeded`, `failed`) y `Download` en `src/modules/content-export/`
+- [X] T061 [P] [US4] Escribir el contenido del paquete en `src/modules/content-export/package/`: `index.html` con todos los temas mediante el renderizador de T052, `assets/style.css` y `assets/app.js` con la navegación y el envoltorio mínimo de la API de SCORM 1.2, sin URL externas
+- [X] T062 [US4] Escribir `tests/contract/scorm-runtime.contract.test.ts` con `jsdom` y un doble de la API que aplica los límites del formato: inicio, `lesson_location`, `suspend_data` con mapa de bits, `exit=suspend`, `completed` solo tras «Finalizar», nunca `score` ni `passed`, ausencia de API con aviso, estado de otra versión descartado (SC-017)
+- [X] T063 [US4] Implementar el generador en `src/modules/content-export/build.ts`: manifiesto desde plantilla con escapado e identificador de versión, ZIP con `fflate` de entradas ordenadas y fechas fijas, máximo de 200 temas, huella SHA-256 del fichero final, sin datos de usuarios
+- [ ] T064 [US4] Implementar la conformidad en `src/modules/content-export/conformance.ts`: validación del manifiesto contra los XSD oficiales con `xmllint-wasm` (XSD en `tests/fixtures/scorm/xsd/` y en el recurso de ejecución, con su procedencia) y las reglas que los esquemas no expresan, releyendo el ZIP. **Parcial**: hechas las reglas propias al releer el ZIP; la validación contra los XSD queda pendiente de su procedencia y de sus condiciones de redistribución ([scorm-schemas.md](./scorm-schemas.md)), y `xmllint-wasm` no se ha instalado
+- [X] T065 [US4] Escribir `tests/contract/scorm-package.contract.test.ts`: manifiestos y paquetes incorrectos hechos a mano que deben rechazarse, un paquete SCORM 1.2 de referencia no generado por AulaNorma que debe aceptarse, equivalencia entre dos exportaciones de la misma versión (SC-014), ausencia de URL externas, credenciales y datos de usuarios (SC-012, SC-015). Los casos que dependen de los XSD se añadirán con T064; el paquete de referencia está escrito a mano para las pruebas, no es de un tercero
+- [X] T066 [US4] Implementar exportar y descargar: exigen versión vigente y cobertura completa en cada petición, registran cada intento, no dejan fichero tras un fallo y deniegan la descarga de paquetes de versiones invalidadas, también con enlaces antiguos; pruebas en `tests/unit/content-export/export-download.test.ts`
+- [X] T067 [US4] Redactar las instrucciones de incorporación manual en `src/modules/content-export/instructions/`, en español claro, declarando que todavía no se ha comprobado ninguna versión de Moodle y que sustituir un paquete ya importado corresponde al usuario
+- [X] T068 [US4] Crear las páginas `src/pages/export/` (vista previa con aviso de que no acredita el seguimiento, exportar, huella, descarga del paquete y de las instrucciones, historial de exportaciones y descargas)
+- [X] T069 [US4] Escribir `tests/integration/us4-export-download.test.ts` con los escenarios 1 a 8 de la historia 4, la ausencia de cualquier operación de borrado (SC-031) y todas las vías de exportación con cobertura incompleta (SC-025)
 
 **Checkpoint**: recorrido completo con el adaptador determinista, registrado como ensayo.
 
@@ -289,15 +289,16 @@ bloqueada.
 
 | Estado                                        | Tareas                                                                 |
 | --------------------------------------------- | ---------------------------------------------------------------------- |
-| Completadas                                   | T001–T059                                                              |
-| Ejecutables, en este orden                    | T060–T073, T078, T082–T087                                             |
+| Completadas                                   | T001–T063, T065–T069                                                   |
+| Ejecutables, en este orden                    | T070–T073, T078, T082–T087                                             |
+| Abierta por la procedencia de los esquemas    | T064 (su parte de validación con XSD)                                  |
 | Bloqueada por el dominio y el servidor        | T074                                                                   |
 | Bloqueadas por el proveedor de generación     | T075; y por depender de ella, T076 y T077                              |
 | Bloqueadas por el Moodle de pruebas           | T079; y por depender de ella, T080                                     |
 | Bloqueada por las tres anteriores             | T081, que depende de T074, T077 y T079                                 |
 
-De las 87 tareas, 59 están completadas (T001 a T059), 21 son ejecutables y 7 están
-bloqueadas. T086 no cierra la aceptación mientras quede alguna bloqueada. Ninguna evidencia
+De las 87 tareas, 68 están completadas, 11 son ejecutables, 1 está abierta a falta de una
+decisión sobre los esquemas (T064) y 7 están bloqueadas. T086 no cierra la aceptación mientras quede alguna bloqueada. Ninguna evidencia
 de las tareas bloqueadas se simula: el recorrido con respuestas deterministas se registra
 como ensayo.
 
@@ -312,7 +313,7 @@ Salen de [feasibility.md](./feasibility.md). No son tareas de código.
 | Ubicación de los datos del piloto                                          | `specs/002-boe-scorm-export/`            |
 | Instalación de qpdf en la integración continua, en Linux y en macOS        | Hecha en T032, como herramienta verificada |
 | Instalación de qpdf en el servidor de destino                              | Pendiente; se resuelve en T074           |
-| Origen de referencia y redistribución de los esquemas de SCORM 1.2         | Pendiente; antes de la fase 7            |
+| Origen de referencia y redistribución de los esquemas de SCORM 1.2         | Sin acreditar; ver `scorm-schemas.md`    |
 | Límite de memoria total y corte de red de los procesos de análisis         | Pendiente; fase 8                        |
 
 ### Parallel Opportunities

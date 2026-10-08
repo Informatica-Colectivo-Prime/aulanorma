@@ -126,11 +126,15 @@ borradores hasta volver a aprobarse.
 
 | Entidad    | Campos principales                                                                                                   | Reglas                                                                                                    |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `Export`   | `id`, `syllabus_version_id`, `format`, `status`, `package_sha256`, `size_bytes`, `validation_result`, `by`, `at`     | Solo inserción. `status`: `succeeded` o `failed`. Un fallo no deja fichero (FR-037).                      |
-| `Download` | `id`, `export_id`, `by`, `at`, `result`                                                                              | Solo inserción. Registra también las denegadas. Se concede solo si la versión está vigente (FR-062).      |
+| `Export`   | `id`, `syllabus_version_id`, `format`, `status`, `package_sha256`, `size_bytes`, `validation_result`, `by`, `at`     | Solo inserción. `status`: `succeeded` o `failed`. Un fallo no deja fichero ni huella (FR-037).            |
+| `Download` | `id`, `export_id`, `item`, `by`, `at`, `result`                                                                      | Solo inserción. `item`: paquete o instrucciones. Registra también las denegadas (FR-062).                 |
 
-El paquete se guarda en el almacén de ficheros con su huella como nombre y se conserva aunque
-deje de ofrecerse (FR-053). No contiene identidades de usuarios (FR-033).
+Las tablas son `package_export` y `package_download`. El paquete se guarda en el directorio
+de datos, en `exports/`, con el identificador de su exportación como nombre, y se conserva
+aunque deje de ofrecerse (FR-053); al descargarlo se comprueba que su huella es la
+registrada. No contiene identidades de usuarios (FR-033). `validation_result` guarda el
+motivo de un fallo, los problemas hallados, si el contenido es de ensayo y que la validación
+contra los esquemas oficiales no se ejecutó.
 
 ## Plataforma (`src/platform`)
 
