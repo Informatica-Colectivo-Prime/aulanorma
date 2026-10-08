@@ -224,7 +224,7 @@ una decisión que el mantenedor no ha tomado. No se instala ningún SDK ni se ha
 llamada de pago antes.
 
 - [ ] T075 ⛔ BLOQUEADA (proveedor, modelo, moneda, precios y presupuesto, con cuenta de API) Registrar la elección y su justificación en `specs/002-boe-scorm-export/research.md` (R6) y en el ADR 0004 mientras siga Propuesto, y justificar la dependencia nueva en `plan.md`
-- [ ] T076 ⛔ BLOQUEADA (T075) Implementar el adaptador real en `src/platform/generation/adapters/`, con la clave leída de la configuración y nunca registrada, los precios por modelo en configuración, y las mismas pruebas de contrato de T035 ejecutadas a mano
+- [ ] T076 ⛔ BLOQUEADA (T075) Implementar el adaptador real en `src/platform/generation/adapters/`, con la clave leída de la configuración y nunca registrada, los precios por modelo en configuración, y las mismas pruebas de contrato de T035 ejecutadas a mano; resolver o validar con tiempos reales que la generación del índice y del temario se ejecute dentro de la petición (limitación registrada en `us3-check.md`)
 - [ ] T077 ⛔ BLOQUEADA (T076) Fijar el límite del proyecto con el perfil `admin`, generar la interpretación, el índice y el temario de UF0517, y registrar el coste real y la calidad observada sin darla por aceptada
 
 ---

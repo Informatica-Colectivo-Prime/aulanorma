@@ -116,6 +116,11 @@ Cada entrada del índice tiene un tema, formado por bloques de dos tipos que no 
 
 ### Presupuesto de generación
 
+`src/platform/markup` es el único sitio que convierte texto en HTML: su plantilla escapa cada
+valor interpolado y no existe ninguna función que acepte una cadena como HTML ya escapado. La
+usan la entrega web y el renderizador de contenido de `didactic-content`, de modo que la
+revisión, la vista previa y el paquete exportado comparten la misma garantía.
+
 `src/platform/generation` no envía ninguna operación sin una reserva de su coste máximo, hecha
 en una transacción que comprueba el máximo por operación (configuración) y el límite acumulado
 del proyecto. El envío se anota antes de llamar al proveedor; con el consumo confirmado la

@@ -30,6 +30,15 @@ El contenido sale de **respuestas grabadas**: no hay ningún proveedor de genera
 conectado, y cada página lo dice. Estos ensayos no acreditan una generación real ni la
 calidad pedagógica de ningún contenido. Aprobar es siempre una acción de una persona.
 
+**Los temas del piloto no son un temario.** Sus respuestas grabadas llevan un único bloque de
+desarrollo con un texto de relleno que dice que lo es. Que el producto cuente un requisito
+como «desarrollado» con ese texto demuestra que el vínculo y el cálculo funcionan, no que el
+requisito esté desarrollado.
+
+**Nada de esto acredita SC-024.** El recorrido de aceptación exige el proveedor real, HTTPS
+y una persona autorizada (T081, bloqueada). Los ensayos con grabaciones, las cuentas
+desechables y la operación incierta insertada a mano son comprobaciones del mecanismo.
+
 ## Lo que pidió comprobar el mantenedor
 
 | Comprobación                                                    | Cómo se impone                                                                                         | Dónde se prueba                                    |
@@ -60,7 +69,9 @@ CHK032 se cerró antes de esta fase con la redacción; aquí está el comportami
 
 | Fichero                                                  | Casos | Qué cubre                                                                          |
 | -------------------------------------------------------- | ----- | ---------------------------------------------------------------------------------- |
-| `tests/unit/didactic-content/render.test.ts`             | 18    | Esquema del contenido, texto editable y renderizador con texto hostil (SC-046)     |
+| `tests/unit/didactic-content/render.test.ts`             | 37    | Esquema del contenido, texto editable y renderizador con casos de inyección (SC-046) |
+| `tests/unit/platform/markup.test.ts`                     | 29    | Plantilla con escape, fragmentos falsificados, direcciones locales y recurso propio |
+| `tests/architecture/trusted-markup.test.ts`              | 4     | Ninguna vía trata una cadena como HTML ya escapado                                 |
 | `tests/unit/didactic-content/syllabus-generation.test.ts` | 21   | Condiciones, estimación, reserva por tema, fallidos, inciertas, límite y reanudación |
 | `tests/unit/didactic-content/topic-approval.test.ts`     | 31    | Edición, revisión, aprobación, invalidación por tema y por índice, y rechazo       |
 | `tests/unit/didactic-content/syllabus-version.test.ts`   | 15    | Cita y desarrollo por requisito, bloqueos, instantánea y versiones                 |
@@ -74,6 +85,28 @@ referencias heredadas, las de migraciones, la lista cerrada de rutas y la prueba
 En las pruebas unitarias, el proveedor y sus consumos son simulados. En las de integración se
 usa el adaptador determinista del producto, que no cuesta nada: el consumo que alcanza el
 límite se simula con una reserva preparada.
+
+## HTML de confianza (revisión del PR #32)
+
+La primera versión de esta fase añadía a la entrega web una función que aceptaba cualquier
+cadena como HTML ya escapado, reservada por convención a la salida del renderizador. La
+revisión la eliminó:
+
+- `src/platform/markup` es el único sitio que convierte texto en HTML. Un fragmento solo lo
+  crea su plantilla, que escapa cada valor para texto y para atributos entre comillas. Un
+  objeto con la misma forma que un fragmento se rechaza en ejecución.
+- El renderizador de bloques usa esa misma plantilla y devuelve un fragmento. La revisión, y
+  después la vista previa y el paquete, lo componen sin ninguna conversión.
+- Un enlace solo se emite con una dirección local, sin esquema ni servidor. Con cualquier
+  otra, la página de origen se muestra como texto.
+- La única vía sin escape envuelve el estilo y el script propios de la entrega web, cuya
+  huella lleva la política de contenido. Una prueba de arquitectura impide otro uso.
+- En las vistas, todo enlace interpolado empieza por una ruta literal del producto y solo
+  interpola identificadores generados por el servidor.
+
+Las pruebas no se apoyan en la política de contenido: comprueban el HTML producido. Cada
+carga hostil se coloca en todos los campos de un bloque y el resultado, sustituida su forma
+escapada, debe ser idéntico al de un texto inofensivo.
 
 ## Recorrido en un navegador
 
@@ -113,8 +146,11 @@ el adaptador determinista no puede producir una: es un dato simulado.
   Las respuestas de los temas del piloto son un texto de relleno que se declara como tal.
 - **Nadie ha validado la interpretación del piloto, ni aprobado su índice, sus temas ni
   ninguna versión.** Lo hecho son ensayos automatizados.
-- **La generación se ejecuta dentro de la petición**, tema a tema. Con el adaptador
-  determinista es inmediata; con un proveedor real habrá que decidir cómo mostrar el progreso.
+- **La generación se ejecuta dentro de la petición**, tema a tema, y la respuesta llega al
+  terminar el último. Con el adaptador determinista es inmediata. Con un proveedor real no
+  está comprobado que quepa en los tiempos de una petición, ni qué ve el docente mientras
+  espera o si cierra la página. Debe resolverse o validarse al incorporar el proveedor real
+  (T076 y T077); no se ha añadido ninguna infraestructura de trabajos en segundo plano.
 - **Un tema con contenido no se puede regenerar.** Solo se generan temas pendientes o
   fallidos; uno terminado se edita.
 - **Un tema por entrada.** Si se quita una entrada del índice, su tema se conserva, sin

@@ -129,7 +129,8 @@ adaptador determinista son cero y figuran como coste simulado.
 
 **Temario (fase 6)**. `/syllabus/:id` usa el identificador del índice. Lanzar la generación,
 reanudarla y pedir otro intento de un tema fallido son la misma acción, que lleva las cifras
-mostradas. La generación se ejecuta dentro de la petición y responde con una redirección y el
+mostradas. La generación se ejecuta dentro de la petición (limitación pendiente de resolver o validar
+con el proveedor real, T076) y responde con una redirección y el
 recuento de temas terminados, fallidos y no enviados. Aprobar la versión lleva una huella del
 estado mostrado: si el temario cambió, 409; si falta algo, 422 con los temas y los requisitos
 pendientes, cada uno con su referencia normativa. Consultar el presupuesto admite el perfil
