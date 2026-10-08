@@ -315,7 +315,8 @@ describe("aviso antes de la caducidad por inactividad", () => {
   });
 
   test("si el servidor ya no reconoce la sesión, lo dice en vez de ocultar el aviso", async () => {
-    for (const status of [0, 303, 403, 500]) {
+    // 0 es una redirección no seguida: la que lleva a la entrada.
+    for (const status of [0, 303, 401, 403]) {
       const tab = open();
       tab.advance(IDLE - MINUTE);
       press(tab);
@@ -327,6 +328,22 @@ describe("aviso antes de la caducidad por inactividad", () => {
       tab.advance(5 * MINUTE);
       expect(tab.requests, String(status)).toHaveLength(1);
     }
+  });
+
+  test("un error interno del servidor no da la sesión por terminada: se anuncia y se puede reintentar", async () => {
+    const tab = open();
+    tab.advance(IDLE - MINUTE);
+    press(tab);
+    await tab.requests[0]?.respond(500);
+    expect(tab.text).toContain("a punto de caducar");
+    expect(tab.live).toBe(
+      "No se ha podido ampliar la sesión. Comprueba la conexión y vuelve a intentarlo.",
+    );
+    // Las demás pestañas no reciben ningún final de sesión.
+    expect(tab.published()).toEqual({ idleAt: CLIENT_NOW + IDLE });
+    press(tab);
+    await tab.requests[1]?.respond(204);
+    expect(tab.box.hidden).toBe(true);
   });
 
   test("si falla la red, lo anuncia y deja volver a intentarlo", async () => {

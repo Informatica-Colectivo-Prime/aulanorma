@@ -46,6 +46,8 @@ es consecuencia del segundo límite, no del aviso.
   servidor: la actividad o la ampliación en una retrasa el aviso en las demás, y salir en una
   lo da por terminado en todas. Lo que una pestaña cuente a otra solo mueve su aviso: la
   sesión vive o no según el servidor.
+- Si el servidor responde con un error interno a una ampliación, el aviso no da la sesión por
+  terminada: lo anuncia y deja reintentarlo.
 - Una petición rechazada por venir de otro origen se descarta antes de mirar la sesión y no
   cuenta como actividad.
 
@@ -56,7 +58,7 @@ es consecuencia del segundo límite, no del aviso.
 | Plazos, ampliación, más de diez ampliaciones, caducidad sin actividad, duración máxima, sesiones revocadas, cerradas o desactivadas | `tests/unit/platform/identity.test.ts` |
 | La acción por su ruta: 204, registro, CSRF, origen, método, sin sesión, contraseña inicial pendiente, dos sesiones independientes, caducidad real adelantando el reloj | `tests/contract/session.contract.test.ts` |
 | El script real sobre el marcado real, en un DOM simulado: aparición, foco, anuncios, petición enviada, ampliaciones repetidas, caducidad, red caída, varias pestañas y duración máxima | `tests/contract/session-warning.contract.test.ts` |
-| En Chrome sin interfaz, contra el proceso local de la aplicación                     | Ensayo de más abajo                                      |
+| En Chrome sin interfaz, contra el proceso local de la aplicación, dos veces; la segunda, sobre el código final | Ensayo de más abajo |
 
 **Ensayo en navegador (2026-10-08).** Chrome 154 sin interfaz, manejado por el protocolo de
 depuración, contra `npm run dev` en `127.0.0.1:3000` en el equipo de desarrollo, con un
