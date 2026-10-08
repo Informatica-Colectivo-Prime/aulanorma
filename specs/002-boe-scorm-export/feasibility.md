@@ -452,6 +452,11 @@ causa real de cada uno.
 **Decisión**: seguir con `xmllint-wasm`. El origen y la redistribución de los esquemas deben
 resolverse antes de la fase 7.
 
+> **Nota posterior (2026-10-08)**. Esta decisión se sustituyó: el origen y las condiciones de
+> los esquemas no pudieron acreditarse ([scorm-schemas.md](./scorm-schemas.md)) y el piloto
+> no valida contra los XSD ([package-validation.md](./package-validation.md); research R8).
+> El resultado de esta comprobación de viabilidad se conserva tal como se obtuvo.
+
 ## 4. Hallazgo sobre la ubicación de los datos del piloto
 
 `tests/architecture/no-domain-specifics.test.ts` falla si los códigos del certificado o de la

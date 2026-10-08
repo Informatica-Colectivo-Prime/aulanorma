@@ -351,6 +351,35 @@ Detén el servidor con `Ctrl+C`.
 La configuración solo se valida al arrancar. Cualquier cambio en los ficheros `.env*` exige
 reiniciar `npm run dev` o `npm start`.
 
+### 3 sexies. Exportar y descargar el paquete
+
+Necesitas una versión del temario **aprobada y vigente** (apartado anterior). Desde
+«Temario», abre «Exportación».
+
+1. «Ver la vista previa del contenido» muestra lo que irá en el paquete. No ejecuta su
+   seguimiento. Sin versión vigente, la vista previa es un **borrador no entregable**.
+2. «Exportar paquete SCORM 1.2» genera el paquete, lo relee y lo comprueba. Si algo falla,
+   no queda ningún fichero y el intento figura como fallido.
+3. Descarga el paquete y sus instrucciones, y compara la huella mostrada con la del fichero:
+   `shasum -a 256 <fichero>.zip`.
+4. Descomprímelo en una carpeta nueva y abre `index.html`. Sin plataforma, el paquete avisa
+   de que el recorrido no se guardará: es lo correcto. Navegar y marcar temas funciona.
+5. Cambia un tema y abre de nuevo el enlace de descarga: se deniega, y el paquete sigue en el
+   historial como evidencia.
+
+Qué **no** acredita un paquete generado:
+
+- **Moodle.** No se ha importado en ninguna instalación. Las instrucciones lo dicen. Esa
+  prueba es condición obligatoria para aceptar el paquete.
+- **Los esquemas XSD ni la conformidad completa con SCORM 1.2.** El paquete se comprueba con
+  un analizador de XML ajeno y con las reglas del perfil que exporta AulaNorma; qué cubre y
+  qué no está en
+  [`package-validation.md`](specs/002-boe-scorm-export/package-validation.md).
+- **Un temario real.** Con las respuestas de ensayo, el paquete se identifica como «Paquete
+  de ensayo»: no lo uses con alumnado.
+
+El detalle está en [`us4-check.md`](specs/002-boe-scorm-export/us4-check.md).
+
 ### 4. Comprobar el rechazo de una configuración inválida
 
 En desarrollo, con un valor inválido en la terminal, que prevalece sobre

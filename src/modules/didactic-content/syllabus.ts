@@ -148,6 +148,11 @@ export interface SyllabusVersion {
   readonly current: boolean;
 }
 
+export interface VersionLocation {
+  readonly outlineId: string;
+  readonly providers: readonly string[];
+}
+
 // Lo que impide aprobar la versión.
 export interface VersionBlockers {
   readonly outlineNotApproved: boolean;
@@ -308,6 +313,9 @@ export interface Syllabus {
   ): VersionResult;
   // Instantánea guardada de una versión, como texto JSON.
   snapshotOf(versionId: string): string | undefined;
+  // Índice al que pertenece una versión y proveedores de generación de los
+  // que salieron sus temas.
+  locateVersion(versionId: string): VersionLocation | undefined;
 }
 
 export interface SyllabusOptions {
@@ -1531,6 +1539,29 @@ export function createSyllabus({
         .prepare("SELECT snapshot FROM syllabus_version WHERE id = ?")
         .get(versionId);
       return row === undefined ? undefined : text(row.snapshot);
+    },
+
+    locateVersion(versionId) {
+      if (!ID.test(versionId)) {
+        return undefined;
+      }
+      const row = db
+        .prepare("SELECT outline_id FROM syllabus_version WHERE id = ?")
+        .get(versionId);
+      if (row === undefined) {
+        return undefined;
+      }
+      const providers = db
+        .prepare(
+          "SELECT DISTINCT c.provider AS provider FROM syllabus_version_topic v " +
+            "JOIN topic_approval a ON a.id = v.topic_approval_id " +
+            "JOIN topic t ON t.id = a.topic_id " +
+            "JOIN generation_call c ON c.id = t.last_call_id " +
+            "WHERE v.syllabus_version_id = ? ORDER BY c.provider",
+        )
+        .all(versionId)
+        .map((item) => text(item.provider));
+      return { outlineId: text(row.outline_id), providers };
     },
   };
 }

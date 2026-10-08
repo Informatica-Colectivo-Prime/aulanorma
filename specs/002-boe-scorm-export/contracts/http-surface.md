@@ -137,6 +137,14 @@ pendientes, cada uno con su referencia normativa. Consultar el presupuesto admit
 `teacher` o el `admin`; modificar el límite y conciliar, solo `admin`. Las cantidades se
 escriben en unidades de la moneda, con seis decimales como máximo.
 
+**Exportación (fase 7)**. `/export/:id` y `/export/:id/preview` usan el identificador del
+índice; `/export/packages/:id` y `/export/packages/:id/instructions`, el de la exportación.
+Exportar (`/api/export/create`) lleva el identificador de la versión: si no está vigente o
+falta cobertura, 422 con lo pendiente; si no se pudo guardar, 500 sin fichero. Las dos
+descargas son peticiones GET que comprueban la vigencia cada vez y dejan registro, también
+cuando se deniegan (422) o no hay fichero (404). El paquete se sirve como `application/zip` y
+las instrucciones como texto, ambos como adjunto y sin caché. No hay ninguna ruta de borrado.
+
 Cada acción admite un cuerpo máximo: 4 KiB los formularios simples, 64 KiB los que llevan el
 texto de un requisito o un motivo, y 64 MiB la subida, sobre la que la ruta aplica además el
 tamaño máximo configurado.

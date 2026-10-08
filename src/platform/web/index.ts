@@ -203,6 +203,7 @@ const NOTICE_CODES = [
   "topic_resubmitted",
   "reference_checked",
   "reference_refused",
+  "export_created",
   "budget_limit_changed",
   "budget_reconciled",
   "budget_refused",
@@ -382,6 +383,7 @@ th{font-size:.9rem}
 .tag.good{border-color:var(--good);color:var(--good)}
 .source{white-space:pre-wrap;overflow-wrap:anywhere;font:.95rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--surface);border:1px solid var(--line);border-radius:.3rem;padding:1rem;margin:0 0 1rem}
 blockquote{margin:.25rem 0 0;padding:0 0 0 .75rem;border-left:.25rem solid var(--line);color:var(--muted)}
+code{overflow-wrap:anywhere}
 ul.tree{list-style:none;margin:0 0 1rem;padding:0}
 ul.tree li{border-bottom:1px solid var(--line);padding:.6rem 0}
 .d1{margin-left:1.5rem}
@@ -562,7 +564,8 @@ export interface PageReply {
 export interface FileReply {
   readonly file: {
     readonly body: Buffer;
-    readonly contentType: "application/pdf";
+    readonly contentType:
+      "application/pdf" | "application/zip" | "text/plain; charset=utf-8";
     readonly filename: string;
   };
 }
@@ -578,6 +581,9 @@ export interface ProtectedPageContext {
   readonly runtime: Runtime;
   // Segmentos variables del destino, ya acotados por la frontera HTTP.
   readonly param: (name: string) => string;
+  // Identificador de la petición, para la auditoría de lo que la página
+  // registre.
+  readonly correlationId: string;
 }
 
 export interface AccessOptions {
@@ -648,7 +654,8 @@ function sendFile(res: AnyResponse, { file }: FileReply): void {
       "Cache-Control": "no-store",
       "Content-Type": file.contentType,
       "Content-Length": String(file.body.length),
-      "Content-Disposition": `inline; filename="${file.filename}"`,
+      // Solo el PDF se muestra en el navegador; lo demás se descarga.
+      "Content-Disposition": `${file.contentType === "application/pdf" ? "inline" : "attachment"}; filename="${file.filename}"`,
       "Content-Security-Policy":
         "default-src 'none'; base-uri 'none'; form-action 'none'; " +
         "frame-ancestors 'none'",
@@ -748,7 +755,7 @@ export function protectedPage(
     if (notice !== undefined) {
       cookies.push(clearCookie(config, "notice"));
     }
-    const reply = render({ session, notice, runtime, param });
+    const reply = render({ session, notice, runtime, param, correlationId });
     if ("file" in reply) {
       sendFile(res, reply);
     } else {

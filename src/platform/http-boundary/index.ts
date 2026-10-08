@@ -95,6 +95,10 @@ export const ROUTES: readonly Route[] = Object.freeze([
   page("/topics/:id"),
   page("/topics/:id/blocks/new"),
   page("/topics/:id/blocks/:id"),
+  page("/export/:id"),
+  page("/export/:id/preview"),
+  page("/export/packages/:id"),
+  page("/export/packages/:id/instructions"),
   page("/budget"),
   action("/api/documents/upload", UPLOAD_BODY),
   action("/api/documents/resolve-page", FORM_BODY),
@@ -115,6 +119,7 @@ export const ROUTES: readonly Route[] = Object.freeze([
   action("/api/topics/reject", TEXT_FORM_BODY),
   action("/api/topics/resubmit", FORM_BODY),
   action("/api/references/check", FORM_BODY),
+  action("/api/export/create", FORM_BODY),
   action("/api/budget/limit", FORM_BODY),
   action("/api/budget/reconcile", TEXT_FORM_BODY),
 ]);

@@ -85,6 +85,7 @@ export type {
   TopicReview,
   TopicStatus,
   VersionBlockers,
+  VersionLocation,
   VersionResult,
 } from "./syllabus";
 

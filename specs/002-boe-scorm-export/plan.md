@@ -18,7 +18,9 @@ ingeniería existente: el mismo monolito Next.js con Pages Router, que escucha e
 de un proxy inverso; SQLite incluido en Node.js y un almacén de ficheros por huella; cuentas
 locales con sesión en el servidor; una interfaz propia de generación con un adaptador
 determinista, con el proveedor real todavía sin seleccionar; y un generador propio de un SCO
-único, cuyo manifiesto se valida contra los esquemas oficiales. Las decisiones y sus
+único, cuyo manifiesto se relee con un analizador ajeno y se comprueba con las reglas de su
+perfil; la validación contra los esquemas oficiales, prevista al principio, se sustituyó el
+2026-10-08 (research R8). Las decisiones y sus
 alternativas están en [research.md](./research.md); las que cambian la arquitectura
 aceptada, en el [ADR 0004](../../docs/adr/0004-product-surface-persistence-identity-and-generation.md),
 Propuesto.
@@ -38,7 +40,8 @@ Tres ideas sostienen el diseño:
 `>=24.21.0 <25`), sin cambios respecto a la base.
 
 **Primary Dependencies**: las existentes (Next.js 16.3.6 con Pages Router, React 19.3.0, Zod
-4.6.5, Pino 10.3.1). Nuevas de producción: `pdfjs-dist`, `fflate` y `xmllint-wasm`. Nueva de
+4.6.5, Pino 10.3.1). Nuevas de producción: `pdfjs-dist`, `fflate` y `libxml2-wasm` (esta última sustituye desde
+el 2026-10-08 a `xmllint-wasm`, que no llegó a instalarse). Nueva de
 desarrollo: `jsdom`. Herramienta externa nueva: `qpdf`, para la inspección estructural de los
 PDF, instalada como binario verificado y no como paquete de npm. Ningún SDK de proveedor de generación por ahora. Versiones exactas por
 fijar al añadirlas (research R10).
@@ -48,7 +51,7 @@ fijar al añadirlas (research R10).
 persistente y configurable, en disco local del servidor. Límites en research R1.
 
 **Testing**: Vitest, como en la base. Unitarias, de contrato (superficie HTTP, generación,
-paquete SCORM contra un doble de la API y contra los esquemas oficiales), de integración con
+paquete SCORM contra un doble de la API y contra las reglas de su perfil, con referencias ajenas), de integración con
 SQLite en un directorio temporal, y de arquitectura. Sin red en la integración continua.
 
 **Target Platform**: un servidor Linux con un único proceso de la aplicación, que escucha en
@@ -85,7 +88,7 @@ periodo del límite de coste en el principio IX).
 | 1   | Procedencia y cobertura visibles (I)             | Pasa      | Referencia normativa en cada requisito y bloque; cobertura calculada por vínculos, sin herencia; FR-013 bloquea la aprobación (data-model).              |
 | 2   | Cuatro capas y contratos (II)                    | Pasa      | Una tabla, un módulo; cada capa usa solo la API pública de la anterior; reglas de importación y pruebas de arquitectura ampliadas.                       |
 | 3   | Sin exportar ni descargar sin aprobación (III)   | Pasa      | Vigencia derivada comprobada en cada exportación y descarga; ninguna operación la omite (contracts/http-surface).                                        |
-| 4   | Salidas validadas por esquema (IV)               | Pasa      | Esquemas Zod versionados para interpretación, índice y temas; manifiesto validado contra los XSD oficiales; lo inválido se rechaza y se registra.        |
+| 4   | Salidas validadas por esquema (IV)               | Pasa      | Esquemas Zod versionados para interpretación, índice y temas; manifiesto releído con un analizador ajeno y comprobado con las reglas de su perfil (no contra los XSD, desde el 2026-10-08); lo inválido se rechaza y se registra.        |
 | 5   | Seguridad y privacidad (V)                       | Pasa      | Dos perfiles justificados; solo la entrada es accesible sin sesión y no concede nada más; contraseñas, sesiones, intentos y CSRF en research R2; PDF en R4. |
 | 6   | Paquete autónomo, íntegro y verificado (VI)      | Pasa      | Conformidad del manifiesto con tres comprobaciones independientes; huella del fichero final; ninguna compatibilidad sin la parte 3 del quickstart.       |
 | 7   | Porción vertical, UF0517 primero (VII)           | Pasa      | Solo UF0517; entrega por historias; prueba de arquitectura sin literales del certificado.                                                                |
@@ -153,7 +156,7 @@ src/
     └── content-export/            # Paquete SCORM, conformidad, exportaciones, descargas
 tests/
 ├── architecture/  contract/  integration/  unit/
-└── fixtures/                  # PDF sintéticos, XSD oficiales, respuestas grabadas
+└── fixtures/                  # PDF sintéticos, referencias SCORM, respuestas grabadas
 docs/engineering/
 └── deployment.md              # Despliegue aislado, copia y restauración
 ```
@@ -242,7 +245,7 @@ ejecutarlos en el destino es una tarea posterior, que necesita el dominio y el s
 
 | Decisiones técnicas (diseño y pruebas automáticas)                         | Comprobaciones manuales en Moodle (solo una instancia real)              |
 | -------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Estructura del paquete y conformidad del manifiesto con los XSD oficiales  | Que Moodle lo importe sin errores                                         |
+| Estructura del paquete y reglas del perfil exportado (sin XSD)             | Que Moodle lo importe sin errores: **condición de aceptación**            |
 | Codificación del estado y máximo de temas                                  | Que conserve el recorrido al salir y volver en el mismo intento           |
 | Llamadas a la API y su orden, probadas contra un doble                     | Que muestre la actividad finalizada y sin calificación                    |
 | Ausencia de URL externas en el paquete                                     | Que no haya peticiones a otros servidores durante el recorrido            |
@@ -271,7 +274,7 @@ principio XII.
 | `qpdf` (herramienta externa)            | Estructura interpretada del PDF para aplicar la política          | Las consultas de `pdfjs-dist` y la búsqueda en bytes fallaron      |
 | `pdfjs-dist`                            | Texto por página del PDF                                          | Una herramienta del sistema difiere entre macOS y Linux            |
 | `fflate`                                | Crear y releer el ZIP                                             | Un escritor propio solo fallaría al importar                       |
-| `xmllint-wasm`                          | Conformidad del manifiesto con un criterio externo al generador   | Una validación propia repite las suposiciones del generador        |
+| `libxml2-wasm`                        | Leer el manifiesto con un analizador mantenido, ajeno al generador | Un lector propio repite las suposiciones del generador; sustituye a `xmllint-wasm` |
 | `jsdom` (desarrollo)                    | Probar el seguimiento del paquete contra un doble                 | Un navegador automatizado es desproporcionado                      |
 
 ## Datos externos que bloquean tareas concretas

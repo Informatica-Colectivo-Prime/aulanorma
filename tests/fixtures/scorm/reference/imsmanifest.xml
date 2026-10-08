@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Paquete SCORM 1.2 de referencia, escrito a mano para las pruebas.
+     No lo ha producido el generador de AulaNorma. -->
+<imscp:manifest identifier="MANIFEST-REFERENCIA-0001" version="1.1"
+    xmlns:imscp="http://www.imsproject.org/xsd/imscp_rootv1p1p2"
+    xmlns:adl="http://www.adlnet.org/xsd/adlcp_rootv1p2">
+  <imscp:metadata>
+    <imscp:schema>ADL SCORM</imscp:schema>
+    <imscp:schemaversion>1.2</imscp:schemaversion>
+  </imscp:metadata>
+  <imscp:organizations default='ORG-A'>
+    <imscp:organization identifier='ORG-A'>
+      <imscp:title>Curso de referencia &amp; ejemplo</imscp:title>
+      <imscp:item identifier='ITEM-1'>
+        <imscp:title>Bloque primero</imscp:title>
+        <imscp:item identifier='ITEM-1-1' identifierref='RES-LECCION' isvisible='true'>
+          <imscp:title><![CDATA[Lección <uno>]]></imscp:title>
+        </imscp:item>
+        <imscp:item identifier='ITEM-1-2' identifierref='RES-ANEXO'>
+          <imscp:title>Anexo</imscp:title>
+        </imscp:item>
+      </imscp:item>
+    </imscp:organization>
+  </imscp:organizations>
+  <imscp:resources>
+    <imscp:resource identifier='RES-LECCION' type='webcontent' adl:scormtype='sco' href='content/leccion.html?modo=1#inicio'>
+      <imscp:file href='content/leccion.html'/>
+      <imscp:file href='content/comun.js'/>
+      <imscp:dependency identifierref='RES-COMUN'/>
+    </imscp:resource>
+    <imscp:resource identifier='RES-ANEXO' type='webcontent' adl:scormtype='asset' href='content/anexo.html'>
+      <imscp:file href='content/anexo.html'/>
+    </imscp:resource>
+    <imscp:resource identifier='RES-COMUN' type='webcontent' adl:scormtype='asset'>
+      <imscp:file href='content/comun.js'/>
+    </imscp:resource>
+  </imscp:resources>
+</imscp:manifest>

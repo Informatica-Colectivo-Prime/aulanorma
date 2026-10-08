@@ -37,7 +37,7 @@ src/
     ├── normative-source/          # Documentos, páginas y tratamiento del PDF (pdf/)
     ├── structured-interpretation/ # Inventario, correcciones, validación y rechazo
     ├── didactic-content/          # Índice, cobertura, temario y aprobaciones
-    └── content-export/            # Todavía vacía
+    └── content-export/            # Paquete SCORM 1.2, comprobación y descargas
 prompts/                   # Prompts versionados de la generación
 ```
 
@@ -71,7 +71,7 @@ módulo pasó de llamarse `moodle-publication` a `src/modules/content-export`.
 
 **Estado actual**: `normative-source` y `structured-interpretation` están implementadas;
 `didactic-content` contiene el índice del temario, su cobertura y su aprobación, y el temario,
-con sus temas, sus aprobaciones y sus versiones; `content-export` sigue vacía, con `export {};` en su `index.ts`. Nada es
+con sus temas, sus aprobaciones y sus versiones; `content-export` genera el paquete SCORM 1.2 de una versión aprobada, lo comprueba al releerlo y registra exportaciones y descargas. Nada es
 específico de ningún certificado (FR-024): el código de la unidad es un dato.
 
 ### Índice, cobertura y aprobación
@@ -161,7 +161,7 @@ su API pública (`index.ts`). Es la matriz de
 | `structured-interpretation`              | Sí                       | Sí                 | —                           | No                 | No               |
 | `didactic-content`                       | Sí                       | No                 | Sí                          | —                  | No               |
 | `content-export`                         | Sí                       | No                 | No                          | Sí                 | —                |
-| Entrega: rutas de producto y `src/views` | **Sí, solo API pública** | **Sí**             | **Sí**                      | **Sí**             | **No**           |
+| Entrega: rutas de producto y `src/views` | **Sí, solo API pública** | **Sí**             | **Sí**                      | **Sí**             | **Sí**           |
 | Entrega: `server.mjs` y `/api/health`    | **Sí, solo API pública** | **No**             | **No**                      | **No**             | **No**           |
 
 Reglas:
@@ -173,8 +173,8 @@ Reglas:
   en la dirección que fija el principio II.
 - **`platform`** no depende de ninguna capa de dominio.
 - **Entrega abierta capa a capa**: las rutas de producto importan `normative-source`,
-  `structured-interpretation` y, desde la historia del índice, `didactic-content`, por su API
-  pública. `content-export` sigue cerrada a la entrega hasta que una ruta la necesite.
+  `structured-interpretation`, desde la historia del índice `didactic-content` y, desde la de
+  exportación, `content-export`, por su API pública.
   `server.mjs` y la comprobación de estado no importan ninguna.
 - **Vistas**: `src/views` reúne el HTML que comparten una página y la acción que, ante un
   conflicto o un bloqueo, responde con ese mismo formulario. Solo importa `@/platform/web` y

@@ -52,6 +52,7 @@ const DELIVERY_LAYERS: readonly Layer[] = [
   "normative-source",
   "structured-interpretation",
   "didactic-content",
+  "content-export",
 ];
 const VIEWS = "src/views/index.ts";
 const PRODUCT_PAGE = "src/pages/login.ts";

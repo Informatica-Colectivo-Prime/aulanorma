@@ -1151,6 +1151,11 @@ async function checkProductSurface(secure) {
     `/topics/${"a".repeat(32)}/blocks`,
     "/budget/",
     "/api/budget",
+    "/export",
+    `/export/${"a".repeat(32)}/delete`,
+    `/export/packages/${"a".repeat(32)}/delete`,
+    "/api/export",
+    "/api/export/delete",
     "/api/syllabus/force-approve",
     "/api/documents",
   ]) {
@@ -1182,6 +1187,10 @@ async function checkProductSurface(secure) {
     `/topics/${"a".repeat(32)}`,
     `/topics/${"a".repeat(32)}/blocks/new`,
     `/topics/${"a".repeat(32)}/blocks/${"b".repeat(32)}`,
+    `/export/${"a".repeat(32)}`,
+    `/export/${"a".repeat(32)}/preview`,
+    `/export/packages/${"a".repeat(32)}`,
+    `/export/packages/${"a".repeat(32)}/instructions`,
     "/budget",
   ]) {
     const name = `GET ${target} sin sesión`;
@@ -1297,6 +1306,7 @@ async function checkProductSurface(secure) {
     "/api/topics/reject",
     "/api/topics/resubmit",
     "/api/references/check",
+    "/api/export/create",
     "/api/budget/limit",
     "/api/budget/reconcile",
   ]) {
@@ -1383,6 +1393,7 @@ async function checkProductSurface(secure) {
     "/api/topics/reject",
     "/api/topics/resubmit",
     "/api/references/check",
+    "/api/export/create",
     "/api/budget/limit",
     "/api/budget/reconcile",
   ]) {

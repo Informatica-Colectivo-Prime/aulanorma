@@ -10,3 +10,6 @@ next-env.d.ts
 .opencode/
 specs/
 docs/adr/
+tests/fixtures/scorm/third-party/**/imsmanifest.xml
+tests/fixtures/scorm/third-party/**/*.html
+tests/fixtures/scorm/third-party/**/LICENSE

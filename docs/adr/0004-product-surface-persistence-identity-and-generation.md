@@ -18,10 +18,12 @@ consultar el presupuesto, modificar el límite y conciliar llegan con la histori
 
 Con la historia 3 (fase 6) quedan implementadas y verificadas esas páginas del presupuesto.
 
+Con la historia 4 (fase 7) queda implementada y verificada, de la decisión 9, la apertura de
+la entrega a la capa `content-export`.
+
 **No están implementadas**, y quedan registradas como la dirección acordada: de la decisión
 6, cualquier proveedor real, que sigue sin seleccionar, y con él sus precios y la moneda del
-presupuesto; el despliegue real de la decisión 7; y la apertura de la entrega a la capa
-`content-export`. Si su implementación las desmiente, se sustituirán con un ADR nuevo.
+presupuesto; y el despliegue real de la decisión 7. Si su implementación las desmiente, se sustituirán con un ADR nuevo.
 
 **Fecha**: 2026-10-07
 
@@ -172,6 +174,11 @@ los mismos. El ADR 0003 es independiente y trata de la cuarta capa.
   PDF tras la comprobación de viabilidad (research R4), en el servidor de destino y en la
   integración continua.
 - Origen de referencia y redistribución de los esquemas oficiales de SCORM 1.2 (research R8).
+  **Resuelta el 2026-10-08**: no se pudieron acreditar las condiciones de uso de los
+  esquemas, y el mantenedor sustituyó la validación con XSD por la lectura del manifiesto con
+  un analizador ajeno, las reglas del perfil exportado, pruebas negativas y referencias
+  ajenas, con la verificación en Moodle como condición obligatoria de aceptación. No equivale
+  a los XSD ni acredita conformidad completa con SCORM.
 
 **Nota de revisión (aceptación)**: antes de aceptarlo se corrigió la decisión 1, para
 recoger que las páginas escriben su respuesta con una plantilla propia, y se añadieron el área

@@ -359,6 +359,11 @@ renderizador garantiza que la vista previa y el paquete muestran lo mismo.
 > Los esquemas no restringen `masteryscore`, así que esa regla va en la comprobación propia.
 > Quedan por decidir el origen de referencia de los esquemas y si pueden redistribuirse.
 
+> **Revisión del 2026-10-08 (decisión del mantenedor)**. La validación contra los XSD se
+> **sustituye** por una estrategia explícita, descrita más abajo en «Conformidad del
+> manifiesto». La decisión anterior se conserva en ese apartado, con el motivo de la
+> sustitución.
+
 **Decisión**: SCORM 1.2, un único SCO y generador propio. El manifiesto `imsmanifest.xml` se
 produce desde una plantilla con escapado, con una organización, un ítem y un recurso `sco`.
 El contenido es una página `index.html` con todos los temas, una hoja de estilos y un script,
@@ -377,8 +382,49 @@ envoltorio de la API de SCORM es propio y mínimo.
 
 **Tamaño máximo de temario**: 200 temas por paquete, comprobado al exportar (FR-048).
 
-**Conformidad del manifiesto**. Una validación escrita por quien escribe el generador solo
-repite sus suposiciones. Por eso hay tres comprobaciones independientes entre sí:
+**Conformidad del manifiesto (decisión vigente desde el 2026-10-08)**. Una validación escrita
+por quien escribe el generador solo repite sus suposiciones. La estrategia del piloto tiene
+cuatro mecanismos:
+
+1. **Lectura del XML con un analizador mantenido y ajeno al generador.** El generador escribe
+   el manifiesto con una plantilla de texto; al releerlo lo analiza libxml2, con
+   `libxml2-wasm`, sin recuperación ni recursos externos, y cualquier error o aviso del
+   analizador es un rechazo.
+2. **Reglas del perfil SCORM 1.2 que exporta AulaNorma**, separadas del análisis sintáctico:
+   estructura del manifiesto y del ZIP, un único SCO, versión aprobada, ninguna dirección
+   externa, ningún dato de usuarios y una forma restringida del manifiesto.
+3. **Pruebas negativas y referencias ajenas**: paquetes incorrectos hechos a mano que deben
+   rechazarse, y manifiestos no producidos por el generador que deben aceptarse.
+4. **Verificación real en Moodle** de la importación, el seguimiento, la reanudación y la
+   finalización, **como condición obligatoria de aceptación**.
+
+Esta estrategia **no equivale a validar contra los XSD** y **no acredita conformidad completa
+con SCORM**. No es un validador de paquetes SCORM en general. Qué comprueba exactamente cada
+mecanismo y qué deja fuera está en [package-validation.md](./package-validation.md).
+
+**Por qué se sustituyó la validación con XSD.** No se pudieron acreditar las condiciones de
+uso de los esquemas ([scorm-schemas.md](./scorm-schemas.md)): el de ADL no se obtuvo de su
+editor, no lleva ningún aviso y su especificación dice «All Rights Reserved» sin conceder
+permisos; los de IMS pueden descargarse y usarse, pero su licencia no concede de forma
+expresa redistribuirlos. Sin el esquema de ADL no hay validación de un manifiesto de SCORM
+1.2. El mantenedor decidió no depender de ellos en el piloto.
+
+**Qué se pierde con el cambio.** Un criterio externo y completo sobre la forma del
+manifiesto: el orden y la cardinalidad de los elementos, los tipos de los valores y los
+atributos de cada elemento. Lo compensan, sin igualarlo, el analizador ajeno, las
+referencias de terceros y, sobre todo, la prueba en Moodle, que deja de ser solo una
+comprobación de compatibilidad y pasa a ser la que decide la aceptación.
+
+**Sobre el analizador elegido.** `libxml2-wasm` 0.7.2: libxml2 compilado a WebAssembly,
+estricto, mantenido, sin dependencias ni scripts de instalación. Sustituye desde el
+2026-10-08 a `@xmldom/xmldom`, que fue la primera elección de esta estrategia: está mantenido,
+pero es tolerante y aceptaba sin avisar cinco errores de buena formación. Cubrirlos con
+reglas léxicas propias era volver a analizar XML a mano, así que se cambió de analizador.
+`saxes`, también estricto, tiene el repositorio archivado desde 2025. La comprobación del
+candidato está en [package-validation.md](./package-validation.md).
+
+**Decisión anterior, sustituida (2026-10-07)**. Se conserva como historial. Preveía tres
+comprobaciones independientes entre sí:
 
 1. **Esquemas oficiales**. El manifiesto se valida contra los XSD publicados de SCORM 1.2
    (empaquetado de contenidos de IMS y extensión de ADL), guardados en el repositorio con su
@@ -394,8 +440,9 @@ repite sus suposiciones. Por eso hay tres comprobaciones independientes entre s�
    generador pasa las dos comprobaciones anteriores, para detectar un validador que solo
    acepte lo que AulaNorma genera.
 
-Ninguna de las tres acredita la compatibilidad con Moodle: la importación y el seguimiento
-en una instancia real siguen siendo obligatorios.
+Ninguna de las tres acreditaba la compatibilidad con Moodle: la importación y el seguimiento
+en una instancia real ya eran obligatorios. De esta decisión se mantienen la segunda y la
+tercera comprobación; la primera es la que se sustituye.
 
 **Justificación**: el principio V limita el código del paquete al necesario; un SCO único no
 necesita un empaquetador genérico; los esquemas oficiales son un criterio externo al
@@ -403,7 +450,14 @@ generador.
 
 **Alternativas consideradas**:
 
-- **Solo validación estructural propia**: es lo que se descarta ahora, por circular.
+- **Solo validación estructural propia**: se descartó por circular. La estrategia vigente no
+  vuelve a ella: añade un analizador ajeno, referencias de terceros y la prueba en Moodle
+  como condición de aceptación.
+- **Validación con XSD** (decisión anterior): sustituida el 2026-10-08, por lo dicho arriba.
+- **Obtener los esquemas en la preparación del entorno**, sin redistribuirlos: resolvía la
+  redistribución, pero seguía necesitando usar el esquema de ADL sin permiso acreditado.
+- **`saxes`**: analizador estricto, con el repositorio archivado.
+- **`@xmldom/xmldom`**: mantenido, pero tolerante con errores de buena formación.
 - **Validador XSD con código nativo**: incompatible con `ignore-scripts=true`.
 - **Banco de pruebas de conformidad de ADL**: pensado para ejecución manual en entornos
   antiguos; no es automatizable aquí.
@@ -415,9 +469,13 @@ generador.
 (dependencia solo de desarrollo) contra un doble de la API de SCORM 1.2 que registra las
 llamadas y aplica los límites del formato (SC-017).
 
-**[por verificar]**: que `xmllint-wasm` valida esos esquemas sin acceso a la red, resolviendo
+**[por verificar] (de la decisión anterior)**: que `xmllint-wasm` valida esos esquemas sin acceso a la red, resolviendo
 en local sus importaciones; y las condiciones de redistribución de los XSD, para guardarlos
 en el repositorio o, si no se pudiera, obtenerlos con procedencia en la preparación.
+
+**Estado (2026-10-08)**: esa verificación queda sin objeto. No se incorporó ningún XSD ni se
+instaló `xmllint-wasm`; la decisión vigente está al principio de «Conformidad del
+manifiesto».
 
 ## R9. Estructura de módulos y migración a `content-export`
 
@@ -438,8 +496,13 @@ al final.
 | -------------- | ---------- | ------------------------------------------ | ------------------------------- |
 | `pdfjs-dist`   | producción | Texto por página y análisis del PDF        | Herramienta del sistema         |
 | `fflate`       | producción | Crear y releer el ZIP del paquete          | Escritor ZIP propio             |
-| `xmllint-wasm` | producción | Validar el manifiesto contra los XSD       | Validación circular             |
+| `libxml2-wasm` | producción | Leer el manifiesto con un analizador ajeno | Lector de XML propio          |
 | `jsdom`        | desarrollo | Prueba de contrato del seguimiento         | Navegador automatizado          |
+
+`xmllint-wasm` figuraba aquí como dependencia de producción para validar contra los XSD. Se
+retiró el 2026-10-08 sin llegar a instalarse, y la sustituye `libxml2-wasm` (MIT, sin
+dependencias propias), con otro cometido: leer el manifiesto, no validarlo contra esquemas.
+Entre medias se usó `@xmldom/xmldom`, retirado por tolerante.
 
 Además, una **herramienta externa**, que no es un paquete de npm: **qpdf** (12.4.2 en la
 viabilidad), para la inspección estructural de los PDF. Se instalaría como las herramientas

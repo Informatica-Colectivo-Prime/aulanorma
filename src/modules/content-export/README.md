@@ -13,8 +13,25 @@ sustituye por la exportación y fija esta ubicación, `src/modules/content-expor
 
 ## Estado
 
-Vacía en esta funcionalidad. `index.ts` solo contiene `export {};`: no hay lógica de producto,
-datos de ningún certificado ni exportación.
+Implementada en la fase 7 de `specs/002-boe-scorm-export`:
+
+- `package/`: el documento único del paquete, con el renderizador de `didactic-content`, y
+  sus dos recursos, `assets/style.css` y `assets/app.js` (navegación y seguimiento con la API
+  de SCORM 1.2).
+- `build.ts`: manifiesto y ZIP, con entradas en orden y fecha fijos.
+- `xml.ts`: lectura del manifiesto con libxml2 (`libxml2-wasm`), un analizador estricto,
+  mantenido y ajeno al generador, sin recuperación ni recursos externos. Solo lo configura,
+  adapta su resultado y libera sus recursos; no sabe nada de SCORM.
+- `conformance.ts`: reglas del perfil SCORM 1.2 que exporta AulaNorma, aplicadas al releer
+  el ZIP. **No equivale a validar contra los XSD ni acredita conformidad completa con
+  SCORM**, y no es un validador general: véase
+  [`package-validation.md`](../../../specs/002-boe-scorm-export/package-validation.md).
+- `instructions/`: instrucciones de incorporación manual. No nombran ninguna versión de
+  Moodle, porque no se ha comprobado ninguna.
+- `index.ts`: exportar, descargar, vista previa e historial. La vigencia de la versión y la
+  cobertura se comprueban en cada exportación y en cada descarga.
+
+No hay ningún dato de ningún certificado: el contenido llega de la versión aprobada.
 
 ## Dependencias permitidas
 
@@ -25,8 +42,8 @@ datos de ningún certificado ni exportación.
 
 El único punto de acceso a esta capa es su `index.ts` (`@/modules/content-export`). Importar
 sus rutas internas (`@/modules/content-export/<interno>`) está prohibido. Según la matriz de
-dependencias, ninguna otra capa puede importarla, y tampoco `platform` ni la entrega HTTP
-(`server.mjs` y `src/pages/api/health.ts`).
+dependencias, ninguna otra capa puede importarla, y tampoco `platform`, `server.mjs` ni la
+comprobación de estado. La importan las páginas de producto y sus vistas.
 
 ## Cómo se imponen los límites
 

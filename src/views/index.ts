@@ -49,7 +49,9 @@ import type {
 import { outlineNotice } from "./outline";
 
 export * from "./outline";
+export * from "./export";
 export * from "./syllabus";
+export { KIND_NAMES } from "./shared";
 export type {
   BudgetFigures,
   CostFigures,
