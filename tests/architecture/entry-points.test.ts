@@ -430,6 +430,7 @@ describe("otros puntos de entrada", () => {
       "src/pages/interpretations/[id]/requirements/new.ts",
       "src/pages/interpretations/[id]/unit.ts",
       "src/pages/login.ts",
+      "src/pages/metrics/index.ts",
       "src/pages/outlines/[id]/entries/[eid].ts",
       "src/pages/outlines/[id]/entries/new.ts",
       "src/pages/outlines/[id]/index.ts",

@@ -482,6 +482,11 @@ export function layout({ title, session, content }: LayoutProps): Html {
                     <li><a href="/history">Historial</a></li>`
                 : null
             }
+            ${
+              session.user.roles.includes("admin")
+                ? html`<li><a href="/metrics">Métricas</a></li>`
+                : null
+            }
             <li><a href="/account/password">Contraseña</a></li>
             <li>
               <form method="post" action="/api/session/sign-out">

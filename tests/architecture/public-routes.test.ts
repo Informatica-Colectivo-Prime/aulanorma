@@ -162,6 +162,7 @@ const SURFACE: readonly SurfaceRoute[] = [
   page("/history/interpretations/:id", "history/interpretations/[id].ts"),
   page("/history/outlines/:id", "history/outlines/[id].ts"),
   page("/history/topics/:id", "history/topics/[id].ts"),
+  page("/metrics", "metrics/index.ts"),
   action("/api/documents/upload", UPLOAD, "protectedUpload"),
   action("/api/documents/resolve-page"),
   action("/api/interpretations/request"),

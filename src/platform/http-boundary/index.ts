@@ -105,6 +105,7 @@ export const ROUTES: readonly Route[] = Object.freeze([
   page("/history/interpretations/:id"),
   page("/history/outlines/:id"),
   page("/history/topics/:id"),
+  page("/metrics"),
   action("/api/documents/upload", UPLOAD_BODY),
   action("/api/documents/resolve-page", FORM_BODY),
   action("/api/interpretations/request", FORM_BODY),

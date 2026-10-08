@@ -174,6 +174,13 @@ export interface ContentExport {
     },
   ): DownloadResult;
   outlineOfExport(exportId: string): string | undefined;
+  // Recuento de exportaciones y descargas registradas, por resultado.
+  statistics(): ExportStatistics;
+}
+
+export interface ExportStatistics {
+  readonly exports: Readonly<Record<ExportRecord["status"], number>>;
+  readonly downloads: Readonly<Record<DownloadOutcome, number>>;
 }
 
 export interface ContentExportOptions {
@@ -360,6 +367,37 @@ export function createContentExport({
   };
 
   return {
+    statistics() {
+      const exports = { succeeded: 0, failed: 0 };
+      for (const row of db
+        .prepare(
+          "SELECT status, count(*) AS total FROM package_export GROUP BY status",
+        )
+        .all()) {
+        if (row.status === "succeeded" || row.status === "failed") {
+          exports[row.status] = Number(row.total);
+        }
+      }
+      const downloads = {
+        granted: 0,
+        not_current: 0,
+        incomplete: 0,
+        unavailable: 0,
+      };
+      for (const row of db
+        .prepare(
+          "SELECT result, count(*) AS total FROM package_download " +
+            "GROUP BY result",
+        )
+        .all()) {
+        const key = String(row.result);
+        if (key in downloads) {
+          downloads[key as DownloadOutcome] = Number(row.total);
+        }
+      }
+      return { exports, downloads };
+    },
+
     overview(outlineId) {
       const review = syllabus.review(outlineId);
       if (review === undefined) {

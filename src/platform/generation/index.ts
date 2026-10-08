@@ -174,6 +174,22 @@ export interface Generation {
   listRuns(kind: GenerationRunKind, targetId: string): readonly GenerationRun[];
   runCost(runId: string): RunCost;
   listCalls(runId: string): readonly GenerationCall[];
+  // Recuento de lo registrado, para las métricas mínimas.
+  summary(): GenerationSummary;
+}
+
+export interface GenerationSummary {
+  readonly runs: Readonly<Record<GenerationRunStatus, number>>;
+  readonly calls: number;
+  readonly callsByResult: Readonly<Record<CallValidation, number>>;
+  // Latencia de las llamadas registradas, en milisegundos; `null` sin
+  // llamadas.
+  readonly latencyMs: {
+    readonly mean: number;
+    readonly p95: number;
+    readonly max: number;
+  } | null;
+  readonly providers: readonly string[];
 }
 
 function text(value: unknown): string {
@@ -430,6 +446,62 @@ export function createGeneration({
             VALIDATIONS.find((item) => item === row.validation_result) ??
             "provider_error",
         }));
+    },
+
+    summary() {
+      const countBy = <Key extends string>(
+        keys: readonly Key[],
+        sql: string,
+      ): Record<Key, number> => {
+        const counts = Object.fromEntries(
+          keys.map((key) => [key, 0]),
+        ) as Record<Key, number>;
+        for (const row of db.prepare(sql).all()) {
+          const key = keys.find((item) => item === row.key);
+          if (key !== undefined) {
+            counts[key] = integer(row.total);
+          }
+        }
+        return counts;
+      };
+      const latencies = db
+        .prepare("SELECT latency_ms FROM generation_call ORDER BY latency_ms")
+        .all()
+        .map((row) => integer(row.latency_ms));
+      return {
+        runs: countBy(
+          RUN_STATUSES,
+          "SELECT status AS key, count(*) AS total FROM generation_run " +
+            "GROUP BY status",
+        ),
+        calls: latencies.length,
+        callsByResult: countBy(
+          VALIDATIONS,
+          "SELECT validation_result AS key, count(*) AS total " +
+            "FROM generation_call GROUP BY validation_result",
+        ),
+        latencyMs:
+          latencies.length === 0
+            ? null
+            : {
+                mean: Math.round(
+                  latencies.reduce((sum, value) => sum + value, 0) /
+                    latencies.length,
+                ),
+                // Percentil 95 por rango más cercano.
+                p95:
+                  latencies[Math.ceil(latencies.length * 0.95) - 1] ??
+                  latencies.at(-1) ??
+                  0,
+                max: latencies.at(-1) ?? 0,
+              },
+        providers: db
+          .prepare(
+            "SELECT DISTINCT provider FROM generation_call ORDER BY provider",
+          )
+          .all()
+          .map((row) => text(row.provider)),
+      };
     },
   };
 }

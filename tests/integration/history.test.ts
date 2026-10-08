@@ -38,6 +38,7 @@ import * as topicHistory from "@/pages/history/topics/[id]";
 import * as homePage from "@/pages/index";
 import * as interpretationPage from "@/pages/interpretations/[id]/index";
 import * as loginPage from "@/pages/login";
+import * as metricsPage from "@/pages/metrics/index";
 import * as outlinePage from "@/pages/outlines/[id]/index";
 import * as syllabusPage from "@/pages/syllabus/[id]";
 import * as blockPage from "@/pages/topics/[id]/blocks/[bid]";
@@ -628,5 +629,114 @@ describe("acceso al historial", () => {
       expect(route.methods).toEqual(["GET"]);
       expect(route.maxBody).toBe(0);
     }
+  });
+});
+
+// Métricas mínimas del principio XI (T085): errores, latencia, coste de
+// generación y estado de las exportaciones, a partir de lo ya registrado.
+describe("métricas mínimas", () => {
+  // Pares de término y valor de las listas de la página.
+  function figures(reply: Reply): Record<string, string> {
+    return Object.fromEntries(
+      [...reply.body.matchAll(/<dt>(.*?)<\/dt>\s*<dd>(.*?)<\/dd>/gs)].map(
+        (match) => [
+          (match[1] ?? "").replace(/\s+/g, " ").trim(),
+          (match[2] ?? "")
+            .replace(/<[^>]+>/g, " ")
+            .replace(/\s+/g, " ")
+            .trim(),
+        ],
+      ),
+    );
+  }
+
+  test("sin nada registrado, lo dice y no inventa cifras", async () => {
+    await enter("admin1", ["admin"]);
+    const reply = await client.get(metricsPage);
+    expect(reply.status).toBe(200);
+    const page = flat(reply);
+    expect(page).toContain(
+      "Todavía no hay ninguna llamada de generación registrada.",
+    );
+    expect(page).toContain("La de las peticiones web no se registra.");
+    expect(page).not.toContain("Coste simulado");
+    const values = figures(reply);
+    expect(values["Paquetes generados y comprobados"]).toBe("0");
+    expect(values["Exportaciones fallidas"]).toBe("0");
+    expect(values["Descargas entregadas"]).toBe("0");
+    expect(values["Intentos denegados"]).toBe("0");
+  });
+
+  test("tras el recorrido cuenta errores, latencia, coste y exportaciones", async () => {
+    await enter("docente1", ["teacher"]);
+    await journey();
+    // Un intento denegado: el docente no puede ver las métricas.
+    expect((await client.get(metricsPage)).status).toBe(403);
+    await enter("admin1", ["admin"]);
+
+    const reply = await client.get(metricsPage);
+    expect(reply.status).toBe(200);
+    const values = figures(reply);
+    // La descarga con la versión invalidada y el acceso del docente.
+    expect(
+      client.runtime.audit
+        .list()
+        .filter((event) => event.result === "denied")
+        .map((event) => event.action),
+    ).toEqual(["export.download", "access.denied"]);
+    expect(values["Intentos denegados"]).toBe("2");
+    expect(values["Operaciones registradas con error"]).toBe(
+      String(
+        client.runtime.audit.list().filter((event) => event.result === "failed")
+          .length,
+      ),
+    );
+    // Una llamada de interpretación, una de índice y una por tema.
+    const calls = 2 + TITLES.length;
+    expect(values["Llamadas de generación medidas"]).toBe(String(calls));
+    expect(values["Llamadas de generación sin respuesta aceptada"]).toMatch(
+      new RegExp(`^0 de ${String(calls)}:`),
+    );
+    expect(values["Generaciones fallidas, incompletas o sin terminar"]).toBe(
+      "0 fallidas, 0 incompletas y 0 sin terminar, frente a 3 completadas",
+    );
+    for (const key of ["Media", "Percentil 95", "Máxima"]) {
+      expect(values[key]).toMatch(/^\d+ ms$/);
+    }
+    expect(Number.parseInt(values["Máxima"] ?? "", 10)).toBeGreaterThanOrEqual(
+      Number.parseInt(values["Percentil 95"] ?? "", 10),
+    );
+    expect(values["Paquetes generados y comprobados"]).toBe("1");
+    expect(values["Exportaciones fallidas"]).toBe("0");
+    // El paquete y sus instrucciones, y un intento con la versión invalidada.
+    expect(values["Descargas entregadas"]).toBe("2");
+    expect(values["Descargas denegadas"]).toMatch(
+      /^1: 1 por versión sin vigencia, 0 por requisitos sin cubrir y 0 sin fichero descargable$/,
+    );
+    expect(values["Consumo confirmado"]).toContain("moneda sin fijar");
+    const page = flat(reply);
+    // Las cifras del adaptador determinista no se presentan como reales.
+    expect(page).toContain("estas cifras no son las de ningún proveedor");
+    expect(page).toContain("Coste simulado");
+    // Solo lectura.
+    expect(reply.body.match(/<form /g)).toHaveLength(1);
+  });
+
+  test("solo para administración: sin sesión lleva a la entrada y un docente recibe 403", async () => {
+    expect((await client.get(metricsPage)).location).toBe("/login");
+    await enter("docente1", ["teacher"]);
+    const reply = await client.get(metricsPage);
+    expect(reply.status).toBe(403);
+    expect(reply.body).not.toContain("Percentil");
+    expect(client.runtime.audit.list().at(-1)).toMatchObject({
+      action: "access.denied",
+      details: { operation: "metrics.view", required: "admin" },
+    });
+    expect(flat(await client.get(homePage))).not.toContain('href="/metrics"');
+    expect(ROUTES.find((route) => route.target === "/metrics")).toEqual({
+      target: "/metrics",
+      methods: ["GET"],
+      maxBody: 0,
+    });
   });
 });

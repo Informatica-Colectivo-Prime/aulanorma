@@ -546,6 +546,7 @@ describe("conservación (SC-031)", () => {
       "outlineOfExport",
       "overview",
       "preview",
+      "statistics",
     ]);
   });
 });

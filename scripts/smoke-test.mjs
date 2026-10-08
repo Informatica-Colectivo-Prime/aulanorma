@@ -1197,6 +1197,7 @@ async function checkProductSurface(secure) {
     `/history/interpretations/${"a".repeat(32)}`,
     `/history/outlines/${"a".repeat(32)}`,
     `/history/topics/${"a".repeat(32)}`,
+    "/metrics",
   ]) {
     const name = `GET ${target} sin sesión`;
     const response = await rawRequest("GET", target, {

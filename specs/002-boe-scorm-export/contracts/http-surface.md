@@ -97,6 +97,7 @@ operación, quién puede ejecutarla y sus condiciones.
 | `/history/interpretations/:id` | `GET`             | Historial de una interpretación           |
 | `/history/outlines/:id` | `GET`                    | Historial de un índice, su temario y sus exportaciones |
 | `/history/topics/:id`   | `GET`                    | Historial de un tema                      |
+| `/metrics`              | `GET`                    | Consultar las métricas mínimas (solo `admin`) |
 
 Las demás operaciones de la tabla siguiente todavía no existen. Los destinos son exactos: no
 admiten parámetros de consulta ni barra final. `:id` es un identificador opaco de 32 cifras
@@ -183,6 +184,7 @@ tamaño máximo configurado.
 | Descargar paquete e instrucciones            | `teacher`         | Versión vigente en el momento de cada descarga                     | FR-035, FR-040, FR-062     |
 | Consultar historial y registros              | `teacher`, `admin` | —                                                                 | FR-028, FR-039             |
 | Consultar presupuesto                        | `teacher`, `admin` | —                                                                 | FR-027                     |
+| Consultar las métricas mínimas               | `admin`           | Recuentos de lo ya registrado; sin series ni alertas               | Constitución, principio XI |
 | Modificar límite de coste                    | `admin`           | Registra valor anterior y nuevo; no inicia nada                    | FR-027, FR-028, FR-066     |
 | Conciliar una operación incierta             | `admin`           | Registra actor, fecha e importe confirmado                         | FR-021, FR-028             |
 
