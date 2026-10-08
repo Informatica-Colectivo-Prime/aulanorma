@@ -11,7 +11,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import {
   existsSync,
-  mkdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -27,7 +26,12 @@ import type {
 } from "@/modules/didactic-content";
 import type { Audit } from "@/platform/audit";
 import { DETERMINISTIC_PROVIDER } from "@/platform/generation";
-import { transaction } from "@/platform/persistence";
+import {
+  ensureDirectory,
+  PACKAGE_DIRECTORY,
+  syncToDisk,
+  transaction,
+} from "@/platform/persistence";
 import type { Database } from "@/platform/persistence";
 import { buildPackage, manifestIdentifier } from "./build";
 import type { PackageAssets } from "./build";
@@ -52,7 +56,6 @@ export type { PackageSource, Snapshot } from "./package/index";
 export { parseXml } from "./xml";
 
 export const EXPORT_FORMAT = "scorm-1.2";
-const EXPORT_DIRECTORY = "exports";
 const ID = /^[0-9a-f]{32}$/;
 
 export type ExportFailure =
@@ -215,7 +218,7 @@ export function createContentExport({
   now,
   writeFile = writeFileSync,
 }: ContentExportOptions): ContentExport {
-  const directory = `${dataDir}/${EXPORT_DIRECTORY}`;
+  const directory = `${dataDir}/${PACKAGE_DIRECTORY}`;
   const pathOf = (exportId: string): string => `${directory}/${exportId}.zip`;
 
   const deliverabilityOf = (
@@ -540,9 +543,14 @@ export function createContentExport({
       const target = pathOf(id);
       const temporary = `${target}.${randomBytes(6).toString("hex")}.tmp`;
       try {
-        mkdirSync(directory, { recursive: true });
+        ensureDirectory(dataDir, PACKAGE_DIRECTORY);
+        // El paquete se publica antes de referenciarlo: sincronizado a
+        // disco, renombrado a su nombre definitivo y con el directorio
+        // sincronizado. Solo entonces se confirma su fila (research.md, R11).
         writeFile(temporary, built.built.zip);
+        syncToDisk(temporary);
         renameSync(temporary, target);
+        syncToDisk(directory);
         const stored = readFileSync(target);
         if (
           createHash("sha256").update(stored).digest("hex") !==

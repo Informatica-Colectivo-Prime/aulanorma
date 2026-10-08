@@ -581,6 +581,38 @@ no cuenta como copia.
 *Proporción*: una copia completa periódica basta para el volumen del piloto. No se plantean
 copias incrementales, réplica ni recuperación a un instante.
 
+> **Resultado de la implementación (2026-10-08)**. La copia y su verificación están en
+> `src/platform/persistence` y se ejecutan con `scripts/ops/backup.mjs`; la restauración
+> comprobada, con `scripts/ops/verify-restore.mjs`. Tres precisiones sobre lo decidido arriba:
+>
+> - **Los paquetes exportados no se nombran por su huella**, sino por el identificador de su
+>   exportación (`exports/<id>.zip`), con la huella en su fila. Las tres reglas de escritura
+>   se cumplen igual: el paquete se sincroniza a disco, se renombra y se sincroniza su
+>   directorio antes de confirmar la fila, y nunca se reescribe. La sincronización a disco
+>   del paquete faltaba y se añadió con esta entrega.
+> - **Revocar las sesiones es un paso de la restauración, no del arranque.** Un reinicio
+>   normal conserva las sesiones abiertas; el arranque solo aplica la regla de las
+>   generaciones. Por eso un directorio restaurado se pone en servicio únicamente a través
+>   del script, que revoca las sesiones y aplica esa misma regla.
+> - **La copia lleva un registro con su inventario y sus huellas**, y una restauración
+>   rechaza una copia fallida, alterada, incompleta o con ficheros de más. La huella no es
+>   una firma.
+>
+> - **Una restauración trabaja en un directorio interno del destino** y solo le pasa el
+>   contenido, con la base de datos al final, si todas las comprobaciones y las reglas de las
+>   operaciones en curso pasan. Si algo falla no queda nada, y un directorio de trabajo
+>   abandonado impide abrir la base de datos.
+> - **Los directorios que se crean al publicar también se sincronizan**, y un fichero que ya
+>   existía se sincroniza de nuevo antes de darlo por publicado.
+> - **`AULANORMA_ENVIRONMENT` admite `production`** para el piloto desplegado. Solo se anota
+>   en los registros y exige un origen HTTPS también en modo desarrollo.
+>
+> La resistencia a una caída completa de la máquina no está probada: las pruebas comprueban
+> el orden de las llamadas, no el estado del disco tras un corte de corriente.
+>
+> Comprobado con pruebas automáticas y con un ensayo local; nada en un servidor
+> ([`deploy-check.md`](./deploy-check.md)).
+
 **Alternativas consideradas**: uso exclusivamente local (descartado por el mantenedor);
 contenedor (aísla más, pero depende de lo que haya en el destino, aún por concretar; el
 procedimiento se escribe de modo que pueda adoptarse); TLS en la propia aplicación (duplica

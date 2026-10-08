@@ -22,6 +22,7 @@ import { randomBytes } from "node:crypto";
 import type { Audit } from "@/platform/audit";
 import { transaction } from "@/platform/persistence";
 import type { Database } from "@/platform/persistence";
+import { recoverInterruptedReservations } from "./recovery";
 
 export type ReservationState =
   "reserved" | "sent" | "settled" | "released" | "uncertain";
@@ -289,24 +290,7 @@ export function createBudget({
     },
 
     recoverInterrupted() {
-      return transaction(db, () => ({
-        uncertain: Number(
-          db
-            .prepare(
-              "UPDATE budget_reservation SET state = 'uncertain' " +
-                "WHERE state = 'sent'",
-            )
-            .run().changes,
-        ),
-        released: Number(
-          db
-            .prepare(
-              "UPDATE budget_reservation SET state = 'released', " +
-                "closed_at = ? WHERE state = 'reserved'",
-            )
-            .run(now()).changes,
-        ),
-      }));
+      return transaction(db, () => recoverInterruptedReservations(db, now()));
     },
 
     get(reservationId) {

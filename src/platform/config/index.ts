@@ -50,7 +50,10 @@ const LOG_LEVEL = z.enum([
   "trace",
   "silent",
 ]);
-const ENVIRONMENT = z.enum(["development", "test", "ci"]);
+// Solo se anota en los registros: ningún permiso ni comportamiento depende de
+// él. `production` es el del piloto desplegado y exige un origen HTTPS también
+// en modo desarrollo.
+const ENVIRONMENT = z.enum(["development", "test", "ci", "production"]);
 
 export type LogLevel = z.infer<typeof LOG_LEVEL>;
 export type Environment = z.infer<typeof ENVIRONMENT>;
@@ -60,8 +63,9 @@ const DATA_DIR = z.string().regex(/^\/[^\0]+$/);
 
 // Origen público exacto de la aplicación, sin ruta: `https://…` o
 // `http://127.0.0.1:…` o `http://localhost:…`. El origen HTTP solo vale en
-// modo desarrollo (`NODE_ENV=development`, el de `npm run dev`): en cualquier
-// otro modo, incluido el de `npm start`, el origen debe ser HTTPS. De él
+// modo desarrollo (`NODE_ENV=development`, el de `npm run dev`) y nunca con el
+// entorno `production`: en cualquier otro caso, incluido el modo de
+// `npm start`, el origen debe ser HTTPS. De él
 // dependen el prefijo `__Host-` y el atributo `Secure` de las cookies, que
 // ninguna cabecera de una petición puede cambiar.
 function parseOrigin(value: string): URL | undefined {
@@ -89,8 +93,15 @@ function isPublicOrigin(value: string): boolean {
 }
 const PUBLIC_ORIGIN = z.string().refine(isPublicOrigin);
 
-function originAllowedInMode(origin: string, nodeEnv: string | undefined) {
-  return origin.startsWith("https:") || nodeEnv === "development";
+function originAllowedInMode(
+  origin: string,
+  nodeEnv: string | undefined,
+  environment: string | undefined,
+) {
+  return (
+    origin.startsWith("https:") ||
+    (nodeEnv === "development" && environment !== "production")
+  );
 }
 
 // Entero positivo escrito en decimal, sin signo ni ceros iniciales.
@@ -136,8 +147,8 @@ function failure(problems: readonly ConfigProblem[]): ConfigResult {
 // Valida una fuente inyectada. Es pura: no lee `process.env`, no modifica la
 // fuente y devuelve todos los problemas a la vez, sin ningún valor. Las
 // claves sin el prefijo `AULANORMA_`, incluido `__NEXT_PROCESSED_ENV`, no
-// pertenecen al esquema y se ignoran, salvo `NODE_ENV`, que solo decide si se
-// admite un origen público HTTP.
+// pertenecen al esquema y se ignoran, salvo `NODE_ENV`, que solo decide, junto
+// con el entorno, si se admite un origen público HTTP.
 export function validateConfig(source: ConfigSource): ConfigResult {
   const problems: ConfigProblem[] = [];
   const logLevel = SCHEMA.AULANORMA_LOG_LEVEL.safeParse(
@@ -153,7 +164,12 @@ export function validateConfig(source: ConfigSource): ConfigResult {
     source.AULANORMA_PUBLIC_ORIGIN,
   );
   const publicOrigin =
-    anyOrigin.success && !originAllowedInMode(anyOrigin.data, source.NODE_ENV)
+    anyOrigin.success &&
+    !originAllowedInMode(
+      anyOrigin.data,
+      source.NODE_ENV,
+      source.AULANORMA_ENVIRONMENT,
+    )
       ? ({ success: false } as const)
       : anyOrigin;
   const sessionIdleMinutes = SCHEMA.AULANORMA_SESSION_IDLE_MINUTES.safeParse(

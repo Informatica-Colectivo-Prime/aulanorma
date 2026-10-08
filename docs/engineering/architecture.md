@@ -16,6 +16,8 @@ sustituye en parte; los dos están en estado **Aceptado**.
 server.mjs                 # Adaptador de arranque: migraciones, frontera HTTP y Next.js
 scripts/preflight.mjs      # Validación de la configuración antes de arrancar server.mjs
 scripts/admin/users.mjs    # Altas, perfiles, contraseñas iniciales y cierre de sesiones
+scripts/ops/backup.mjs     # Copia de seguridad en línea, verificada
+scripts/ops/verify-restore.mjs  # Restauración comprobada en un directorio limpio
 src/
 ├── pages/                 # Entrega: lista cerrada de rutas
 │   ├── api/health.ts              # Comprobación de estado, sin sesión (excepción cerrada)
@@ -229,8 +231,10 @@ dominio.
 ### Módulos portables
 
 Los índices de `config`, `logging`, `http-boundary`, `persistence`, `audit` e `identity` los
-cargan directamente con Node.js `scripts/preflight.mjs`, `server.mjs` o
-`scripts/admin/users.mjs`, sin compilarlos. Por eso:
+cargan directamente con Node.js `scripts/preflight.mjs`, `server.mjs`,
+`scripts/admin/users.mjs` o los scripts de `scripts/ops/`, sin compilarlos. También
+`src/platform/generation/recovery.ts`, que contiene solo la regla de recuperación de las
+reservas y que usan el presupuesto y la comprobación de una restauración. Por eso:
 
 - solo importan paquetes npm o módulos incluidos en Node.js, sin importaciones relativas ni
   alias `@/`; lo que necesitan de otra área lo reciben como argumento;

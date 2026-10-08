@@ -207,10 +207,16 @@ huella y lo abre sin conexión.
 **Purpose**: dejar el piloto accesible por HTTPS desde otros equipos, con datos persistentes
 y copia restaurable. No se toca ningún servidor hasta T074.
 
-- [ ] T070 [P] Crear `scripts/ops/backup.mjs`: copia en línea de la base con `backup`, después copia del almacén de ficheros, verificación en la propia copia de que cada referencia de la instantánea tiene su fichero con la huella correcta (si no, la copia se marca como fallida), y registro con fecha, tamaño y huella
-- [ ] T071 [P] Crear `scripts/ops/verify-restore.mjs`: restaura en un directorio limpio, ejecuta la verificación de integridad de SQLite, comprueba que cada fichero referenciado existe y coincide con su huella, revoca todas las sesiones y confirma que las generaciones enviadas y sin liquidar figuran como inciertas
-- [ ] T072 Escribir `tests/integration/backup-restore.test.ts`, que hace una copia con escrituras, una exportación y una generación enviada en curso, la restaura y comprueba referencias, huellas, sesiones revocadas y operaciones inciertas (SC-040); incluye el caso de un fichero publicado sin referencia, que no debe hacer fallar la copia
-- [ ] T073 Escribir `docs/engineering/deployment.md`: cuenta de sistema sin privilegios, servicio propio, directorio de datos, fichero de entorno, proxy inverso con TLS y HSTS que reenvía a `127.0.0.1:3000`, origen público, límites de tamaño coherentes, copia y restauración, y los límites de SQLite y del estado *release candidate* de `node:sqlite`
+T070 a T073 están hechas sin dominio, servidor ni credenciales: los scripts y sus pruebas se
+han ejecutado en local y en la integración continua, y el procedimiento de
+`docs/engineering/deployment.md` **no se ha ejecutado en ningún servidor**. La evidencia
+está en [`deploy-check.md`](./deploy-check.md). El despliegue, el acceso por HTTPS y la
+restauración probada en el destino siguen siendo T074.
+
+- [X] T070 [P] Crear `scripts/ops/backup.mjs`: copia en línea de la base con `backup`, después copia del almacén de ficheros, verificación en la propia copia de que cada referencia de la instantánea tiene su fichero con la huella correcta (si no, la copia se marca como fallida), y registro con fecha, tamaño y huella
+- [X] T071 [P] Crear `scripts/ops/verify-restore.mjs`: restaura en un directorio limpio, ejecuta la verificación de integridad de SQLite, comprueba que cada fichero referenciado existe y coincide con su huella, revoca todas las sesiones y confirma que las generaciones enviadas y sin liquidar figuran como inciertas
+- [X] T072 Escribir `tests/integration/backup-restore.test.ts`, que hace una copia con escrituras, una exportación y una generación enviada en curso, la restaura y comprueba referencias, huellas, sesiones revocadas y operaciones inciertas (SC-040); incluye el caso de un fichero publicado sin referencia, que no debe hacer fallar la copia
+- [X] T073 Escribir `docs/engineering/deployment.md`: cuenta de sistema sin privilegios, servicio propio, directorio de datos, fichero de entorno, proxy inverso con TLS y HSTS que reenvía a `127.0.0.1:3000`, origen público, límites de tamaño coherentes, copia y restauración, y los límites de SQLite y del estado *release candidate* de `node:sqlite`
 - [ ] T074 ⛔ BLOQUEADA (dominio y servidor de destino) Desplegar el piloto siguiendo `docs/engineering/deployment.md`, sin modificar los servicios existentes, medir el coste de `scrypt` en el destino y registrar una copia con su restauración probada
 
 **Checkpoint**: acceso por HTTPS desde otro equipo y una restauración comprobada.
@@ -277,7 +283,7 @@ FR-066, SC-005 y SC-032), antes de la fase 6. Ver las revisiones de
 - **Fase 6**, completada, dependía de la fase 5.
 - **Fases 4 → 5 → 6 → 7** van en ese orden: cada historia usa lo aprobado en la anterior.
 - **T058** se apoya en T040 y condiciona la aprobación de T046 y T054 tras un sustituto.
-- **Fase 8**: T070 a T073 dependen de T014 a T016; T072 necesita además T050 y T066.
+- **Fase 8**: T070 a T073, completadas, dependían de T014 a T016; T072, además, de T050 y T066. T074 sigue bloqueada.
 - **Fase 9** depende de la fase 6 y de su dato.
 - **Fase 10**: T078 puede hacerse ya; el resto depende de la fase 7 y de sus datos.
 - **Fase 11**: T082 a T085 y T087 dependen de la fase 7; T086 es la última.
@@ -289,15 +295,15 @@ bloqueada.
 
 | Estado                                        | Tareas                                                                 |
 | --------------------------------------------- | ---------------------------------------------------------------------- |
-| Completadas                                   | T001–T064, T066–T069                                                   |
-| Ejecutables, en este orden                    | T070–T073, T078, T082–T087                                             |
+| Completadas                                   | T001–T064, T066–T073                                                   |
+| Ejecutables, en este orden                    | T078, T082–T087                                                        |
 | Abierta por la referencia ajena               | T065 (falta un paquete completo de un tercero)                         |
 | Bloqueada por el dominio y el servidor        | T074                                                                   |
 | Bloqueadas por el proveedor de generación     | T075; y por depender de ella, T076 y T077                              |
 | Bloqueadas por el Moodle de pruebas           | T079; y por depender de ella, T080                                     |
 | Bloqueada por las tres anteriores             | T081, que depende de T074, T077 y T079                                 |
 
-De las 87 tareas, 68 están completadas, 11 son ejecutables, 1 está abierta a falta de un
+De las 87 tareas, 72 están completadas, 7 son ejecutables, 1 está abierta a falta de un
 paquete de referencia completo de un tercero (T065) y 7 están bloqueadas. T086 no cierra la aceptación mientras quede alguna bloqueada. Ninguna evidencia
 de las tareas bloqueadas se simula: el recorrido con respuestas deterministas se registra
 como ensayo.

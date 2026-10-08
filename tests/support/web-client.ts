@@ -114,6 +114,8 @@ export interface RequestOptions {
 export interface WebClientOptions {
   // Modo desarrollo: `NODE_ENV=development` y el origen HTTP local.
   readonly development?: boolean;
+  // Valor de `AULANORMA_ENVIRONMENT`. Por defecto, `test`.
+  readonly environment?: string;
 }
 
 export interface WebClient {
@@ -157,6 +159,9 @@ export function createWebClient(options: WebClientOptions = {}): WebClient {
     ...ENVIRONMENT,
     AULANORMA_PUBLIC_ORIGIN: origin,
     AULANORMA_DATA_DIR: dataDir,
+    ...(options.environment === undefined
+      ? {}
+      : { AULANORMA_ENVIRONMENT: options.environment }),
     ...(options.development === true ? { NODE_ENV: "development" } : {}),
   })) {
     previous.set(key, process.env[key]);
