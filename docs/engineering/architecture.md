@@ -155,6 +155,15 @@ permisos. Cualquier error, aviso o resultado no comprobable acaba en rechazo, y 
 nunca se modifica. Es contención, no un aislamiento de seguridad. La revisión de lo extraído
 es siempre humana.
 
+### Caducidad de la sesión
+
+Una sesión caduca por inactividad y, aparte, termina al alcanzar su duración máxima. Antes de
+lo primero, cada página avisa y ofrece ampliarla con `POST /api/session/extend`, una acción
+protegida como las demás: el servidor decide, y el script del documento no hace ninguna
+consulta por su cuenta. La duración máxima no se amplía. El detalle, las pruebas y lo que
+queda sin resolver están en
+[`session-limits.md`](../../specs/002-boe-scorm-export/session-limits.md).
+
 ### Historial y métricas
 
 Las páginas de `src/pages/history/` reúnen, por orden de fecha, lo que cada capa ya tiene

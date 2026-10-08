@@ -24,12 +24,21 @@ Estados usados: **Comprobado** (con el método indicado), **Corregido** (fallaba
 corregido en esta entrega), **Sin comprobar** (necesita una evaluación que no se ha hecho) y
 **No aplica**.
 
+## Procedencia de los ensayos
+
+Todo lo que este documento y [`session-limits.md`](./session-limits.md) llaman ensayo se
+hizo en el equipo de desarrollo, contra el proceso local de la aplicación (`npm run dev` en
+`127.0.0.1:3000`) y con datos de ensayo. **No se ha ejecutado ni modificado nada en ningún
+servidor remoto**: el piloto no está desplegado.
+
 ## Defectos encontrados y corregidos
 
 | Defecto                                                                                                             | Criterio | Corrección                                                                                  |
 | ------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------- |
 | El indicador de foco de la interfaz, ámbar sobre blanco, tenía un contraste de 2,0:1 con el fondo                    | 1.4.11   | Contorno oscuro, 16,6:1 sobre blanco, con un halo blanco para los fondos de color           |
 | Las tablas anchas se desplazan dentro de una zona que no recibía el foco: sin ratón no podía desplazarse en todos los navegadores | 2.1.1 | La zona recibe el foco, se anuncia como región y lleva el nombre de su tabla                |
+| La sesión caducaba por inactividad sin avisar ni dejar ampliarla                                                    | 2.2.1    | Aviso dos minutos antes, con el foco y una acción para continuar. No resuelve la duración máxima |
+| Con un periodo de inactividad de un minuto, una sesión en uso caducaba porque su actividad no llegaba a anotarse    | —        | La actividad se anota como mucho cada décima parte del periodo                              |
 | Las casillas de verificación de la interfaz medían unos 13 px                                                       | 2.5.8    | 24 px de lado                                                                               |
 
 ## Contraste calculado
@@ -78,7 +87,7 @@ Son decorativos: ninguna información depende de ellos.
 | 2.1.1 Teclado                              | Corregido en parte | Todo son enlaces, botones y campos nativos, y las zonas desplazables ya reciben el foco. No se ha recorrido con teclado en un navegador |
 | 2.1.2 Sin trampas para el foco             | Sin comprobar | No hay diálogos ni componentes propios; falta recorrerlo                                             |
 | 2.1.4 Atajos de una tecla                  | No aplica     | No hay atajos                                                                                        |
-| 2.2.1 Tiempo ajustable                     | Sin comprobar | La sesión caduca por inactividad sin aviso previo. Hay que decidir si entra en la excepción por seguridad o si se avisa antes |
+| 2.2.1 Tiempo ajustable                     | **Sin resolver** | La caducidad por inactividad ya avisa dos minutos antes y se puede ampliar. La duración máxima de 12 horas no se puede ampliar ni entra en una excepción: ver [`session-limits.md`](./session-limits.md) |
 | 2.2.2 Pausar, detener, ocultar             | No aplica     | Nada se mueve ni se actualiza solo                                                                   |
 | 2.3.1 Destellos                            | No aplica     | No hay                                                                                               |
 | 2.4.1 Evitar bloques                       | Comprobado    | Enlace para saltar al contenido, en la interfaz y en el paquete                                      |
@@ -118,12 +127,17 @@ Son decorativos: ninguna información depende de ellos.
 
 ## Qué falta para cerrar T082
 
+El recorrido manual, paso a paso y con sus tablas para anotar, está en
+[`accessibility-walkthrough.md`](./accessibility-walkthrough.md). Las pruebas automáticas no
+sustituyen esas evidencias.
+
 1. Recorrer la interfaz y el paquete solo con teclado, en al menos dos navegadores.
 2. Recorrerlos con un lector de pantalla y anotar cómo se anuncian formularios, errores,
    avisos, tablas y el seguimiento del paquete.
 3. Probar al 200 % y al 400 % de ampliación, a 320 px de ancho y con el espaciado de texto
    aumentado.
-4. Decidir qué hacer con la caducidad de la sesión (2.2.1).
+4. Decidir cómo se resuelve la duración máxima de la sesión (2.2.1): la evaluación y la
+   propuesta están en [`session-limits.md`](./session-limits.md).
 5. Ampliar las pruebas automáticas de estructura a todas las páginas: hoy cubren la entrada,
    el historial y las métricas.
 6. Repetir la lista sobre el paquete dentro de Moodle, que añade su propio marco.

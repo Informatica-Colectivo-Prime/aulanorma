@@ -254,7 +254,11 @@ recorre, se abandona, se reanuda y se finaliza con un alumno de prueba.
 Estado a 2026-10-08. T083, T084, T085 y T087 están hechas. **T082 está empezada y no se
 cierra**: [`accessibility.md`](./accessibility.md) registra lo comprobado por lectura del
 marcado, pruebas automáticas y cálculo de contraste, con tres defectos corregidos; falta la
-evaluación con teclado, lector de pantalla y ampliación en navegadores reales. **T086 no se
+evaluación con teclado, lector de pantalla y ampliación en navegadores reales, en la
+interfaz y en el paquete, con el recorrido de
+[`accessibility-walkthrough.md`](./accessibility-walkthrough.md). La caducidad por
+inactividad ya avisa y se puede ampliar; la duración máxima de 12 horas sigue sin resolver y
+WCAG 2.2.1 no se declara cumplido ([`session-limits.md`](./session-limits.md)). **T086 no se
 ha ejecutado**: es la última, y no se completa mientras T082 siga abierta y T065 pendiente.
 T085 expone las métricas en una página de administración; su alcance y sus límites están en
 la propia página y en `docs/engineering/architecture.md`.
