@@ -39,9 +39,9 @@
     "verify:negative": "node scripts/negative-checks.mjs"
   },
   "dependencies": {
-    "@next/env": "16.3.6",
+    "@next/env": "16.3.8",
     "fflate": "0.8.3",
-    "next": "16.3.6",
+    "next": "16.3.8",
     "pdfjs-dist": "6.4.299",
     "pino": "10.3.1",
     "react": "19.3.0",

@@ -20,6 +20,32 @@ describe("plantilla", () => {
     );
   });
 
+  test.each([
+    `<script>alert(1)</script>`,
+    `" onload="x" '`,
+    `&amp; &lt; &#39; &`,
+    `línea\notra\ttabulada`,
+    `ñ € 日本語 \u202e 𝒳`,
+    ``,
+  ])("no quita ni altera nada: el texto se recupera íntegro de %j", (value) => {
+    const { text } = h`<p title="${value}">${value}</p>`;
+    // Entre los delimitadores de la plantilla no queda marcado.
+    const [attribute = "", content = ""] = text
+      .slice('<p title="'.length, -"</p>".length)
+      .split('">');
+    for (const part of [attribute, content]) {
+      expect(part).not.toMatch(/[<>"']/);
+      expect(
+        part
+          .replaceAll("&lt;", "<")
+          .replaceAll("&gt;", ">")
+          .replaceAll("&quot;", '"')
+          .replaceAll("&#39;", "'")
+          .replaceAll("&amp;", "&"),
+      ).toBe(value);
+    }
+  });
+
   test("compone fragmentos y listas de fragmentos sin escaparlos de nuevo", () => {
     const item = h`<li>${"a & b"}</li>`;
     expect(h`<ul>${[item, item]}</ul>${item}${null}${undefined}${3}`.text).toBe(

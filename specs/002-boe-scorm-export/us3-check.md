@@ -69,8 +69,8 @@ CHK032 se cerró antes de esta fase con la redacción; aquí está el comportami
 
 | Fichero                                                  | Casos | Qué cubre                                                                          |
 | -------------------------------------------------------- | ----- | ---------------------------------------------------------------------------------- |
-| `tests/unit/didactic-content/render.test.ts`             | 37    | Esquema del contenido, texto editable y renderizador con casos de inyección (SC-046) |
-| `tests/unit/platform/markup.test.ts`                     | 29    | Plantilla con escape, fragmentos falsificados, direcciones locales y recurso propio |
+| `tests/unit/didactic-content/render.test.ts`             | 45    | Esquema del contenido, texto editable y renderizador con casos de inyección (SC-046) |
+| `tests/unit/platform/markup.test.ts`                     | 35    | Plantilla con escape, fragmentos falsificados, direcciones locales y recurso propio |
 | `tests/architecture/trusted-markup.test.ts`              | 4     | Ninguna vía trata una cadena como HTML ya escapado                                 |
 | `tests/unit/didactic-content/syllabus-generation.test.ts` | 21   | Condiciones, estimación, reserva por tema, fallidos, inciertas, límite y reanudación |
 | `tests/unit/didactic-content/topic-approval.test.ts`     | 31    | Edición, revisión, aprobación, invalidación por tema y por índice, y rechazo       |
@@ -107,6 +107,12 @@ revisión la eliminó:
 Las pruebas no se apoyan en la política de contenido: comprueban el HTML producido. Cada
 carga hostil se coloca en todos los campos de un bloque y el resultado, sustituida su forma
 escapada, debe ser idéntico al de un texto inofensivo.
+
+Tampoco dan por buena una inyección que desaparece. Una segunda lectura parte el resultado
+en etiquetas y texto: cada etiqueta debe ser, carácter a carácter, una de las que escribe el
+renderizador, y el texto descodificado debe contener la carga íntegra en cada uno de los
+trece campos. Se comprobó con tres mutaciones de la plantilla que las pruebas fallan si el
+texto se elimina, si se le quitan las etiquetas o si no se escapa.
 
 ## Recorrido en un navegador
 
