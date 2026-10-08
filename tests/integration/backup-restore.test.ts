@@ -24,8 +24,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createAudit } from "@/platform/audit";
-import { createBudget } from "@/platform/generation";
-import { createIdentity } from "@/platform/identity";
+import {
+  createBudget,
+  recoverInterruptedReservations,
+} from "@/platform/generation";
+import { createIdentity, revokeEverySession } from "@/platform/identity";
 import type { Identity } from "@/platform/identity";
 import {
   BACKUP_RECORD,
@@ -35,9 +38,14 @@ import {
   openDatabase,
   putBlob,
   restoreBackup,
+  transaction,
   verifyBackup,
 } from "@/platform/persistence";
-import type { BackupResult, Database } from "@/platform/persistence";
+import type {
+  BackupRecord,
+  BackupResult,
+  Database,
+} from "@/platform/persistence";
 import { createExportFixture, PRESENTATION } from "../support/export-fixture";
 import type { ExportFixture } from "../support/export-fixture";
 import { TEACHER } from "../support/outline-fixture";
@@ -165,6 +173,32 @@ function verifyRestore(
 
 function sha256(file: string): string {
   return createHash("sha256").update(readFileSync(file)).digest("hex");
+}
+
+// Reescribe el registro de una copia para que vuelva a cuadrar con sus
+// ficheros: así una copia defectuosa supera la primera comprobación y el
+// fallo aparece después, con los ficheros ya copiados.
+function rewriteRecord(directory: string, record: BackupRecord): void {
+  const inventory = record.inventory
+    .filter((entry) => existsSync(path.join(directory, entry.path)))
+    .map((entry) => {
+      const content = readFileSync(path.join(directory, entry.path));
+      return {
+        path: entry.path,
+        sizeBytes: content.length,
+        sha256: createHash("sha256").update(content).digest("hex"),
+      };
+    });
+  const digest = createHash("sha256");
+  for (const entry of inventory) {
+    digest.update(
+      `${entry.sha256}  ${String(entry.sizeBytes)}  ${entry.path}\n`,
+    );
+  }
+  writeFileSync(
+    path.join(directory, BACKUP_RECORD),
+    JSON.stringify({ ...record, inventory, sha256: digest.digest("hex") }),
+  );
 }
 
 function stateOf(database: Database, reservationId: string): unknown {
@@ -468,6 +502,10 @@ describe("restauración comprobada", () => {
         );
       }
       expect(statSync(target).mode & 0o777).toBe(0o700);
+      // Solo los datos: ni directorio de trabajo ni auxiliares de SQLite.
+      expect(
+        readdirSync(target).filter((name) => !name.startsWith("aulanorma.db-")),
+      ).toEqual(["aulanorma.db", "blobs", "exports"]);
 
       // Ninguna sesión anterior sirve; la cuenta sí puede volver a entrar.
       const again = identityOn(restored);
@@ -596,7 +634,7 @@ describe("restauración comprobada", () => {
   test("detecta en el directorio restaurado una referencia sin su fichero", async () => {
     const { directory } = await backupNow();
     const target = path.join(root, "restaurado");
-    expect(restoreBackup(directory, target).ok).toBe(true);
+    expect(restoreBackup(directory, target, () => []).ok).toBe(true);
     const [reference] = fileReferences(db).filter(
       (item) => item.kind === "package",
     );
@@ -617,6 +655,194 @@ describe("restauración comprobada", () => {
     } finally {
       restored.close();
     }
+  });
+
+  describe("una restauración fallida no deja nada que parezca listo", () => {
+    const blob = (): string =>
+      `blobs/${documentSha256.slice(0, 2)}/${documentSha256}`;
+
+    // El destino no existía, o existía vacío: en los dos casos queda igual.
+    function expectNothingLeft(directory: string, problem: string): void {
+      const fresh = path.join(root, "nuevo");
+      const first = verifyRestore(directory, fresh);
+      expect(first.code).toBe(1);
+      expect(first.report.ok).toBe(false);
+      expect(first.report.problems).toContain(problem);
+      expect(existsSync(fresh)).toBe(false);
+
+      const empty = path.join(root, "vacío");
+      mkdirSync(empty);
+      expect(verifyRestore(directory, empty).code).toBe(1);
+      expect(readdirSync(empty)).toEqual([]);
+    }
+
+    test("falta un fichero referenciado en una copia cuyo registro cuadra", async () => {
+      const { directory, record } = await backupNow();
+      rmSync(path.join(directory, blob()));
+      rewriteRecord(directory, record);
+      expect(verifyBackup(directory).ok).toBe(true);
+
+      expectNothingLeft(directory, `Falta ${blob()}.`);
+    });
+
+    test("un fichero referenciado con otro contenido en una copia cuyo registro cuadra", async () => {
+      const { directory, record } = await backupNow();
+      writeFileSync(path.join(directory, blob()), "otro contenido");
+      rewriteRecord(directory, record);
+      expect(verifyBackup(directory).ok).toBe(true);
+
+      expectNothingLeft(directory, `${blob()} no coincide con su huella.`);
+    });
+
+    test("la base de datos de la copia está dañada", async () => {
+      const { directory, record } = await backupNow();
+      const file = path.join(directory, "aulanorma.db");
+      const content = readFileSync(file);
+      // Se conserva la cabecera y se destroza el resto.
+      content.fill(0x5a, 4096);
+      writeFileSync(file, content);
+      rewriteRecord(directory, record);
+      expect(verifyBackup(directory).ok).toBe(true);
+
+      for (const name of ["nuevo", "vacío"]) {
+        const target = path.join(root, name);
+        if (name === "vacío") {
+          mkdirSync(target);
+        }
+        const result = run(RESTORE_SCRIPT, [directory, target]);
+        expect(result.code).toBe(1);
+        expect(result.stderr).not.toBe("");
+        expect(existsSync(target) ? readdirSync(target) : []).toEqual([]);
+      }
+    });
+
+    test("las reglas de las operaciones en curso encuentran un problema o fallan", async () => {
+      const { directory } = await backupNow();
+      const target = path.join(root, "nuevo");
+
+      const refused = restoreBackup(directory, target, () => [
+        "Quedan sesiones sin revocar.",
+      ]);
+      expect(refused.ok).toBe(false);
+      expect(refused.integrity).toBe("ok");
+      expect(refused.problems).toEqual(["Quedan sesiones sin revocar."]);
+      expect(existsSync(target)).toBe(false);
+
+      expect(() =>
+        restoreBackup(directory, target, () => {
+          throw new Error("fallo a medias");
+        }),
+      ).toThrow("fallo a medias");
+      expect(existsSync(target)).toBe(false);
+
+      // Lo que la regla llegó a escribir antes de fallar no sobrevive.
+      expect(() =>
+        restoreBackup(directory, target, (restored) => {
+          revokeEverySession(restored, 1);
+          throw new Error("fallo tras escribir");
+        }),
+      ).toThrow("fallo tras escribir");
+      expect(existsSync(target)).toBe(false);
+
+      // La misma copia sigue sirviendo.
+      expect(verifyRestore(directory, target).code).toBe(0);
+    });
+
+    test("interrumpida a medias: el directorio no se abre ni admite otra restauración", async () => {
+      const { directory } = await backupNow();
+      const target = path.join(root, "interrumpido");
+      // Lo que deja un proceso que muere durante la restauración: su
+      // directorio de trabajo, con la base de datos dentro.
+      const work = path.join(target, ".restore-0123456789abcdef");
+      mkdirSync(work, { recursive: true });
+      writeFileSync(
+        path.join(work, "aulanorma.db"),
+        readFileSync(path.join(directory, "aulanorma.db")),
+      );
+
+      expect(() => openDatabase(target)).toThrow("restauración sin terminar");
+      expect(existsSync(path.join(target, "aulanorma.db"))).toBe(false);
+      const again = verifyRestore(directory, target);
+      expect(again.code).toBe(1);
+      expect(again.report.problems).toEqual([
+        "El directorio de destino no está vacío.",
+      ]);
+    });
+  });
+
+  describe("reglas de las operaciones en curso, aplicadas directamente", () => {
+    test("revocar todas las sesiones: ninguna anterior sirve y las posteriores sí", async () => {
+      expect(identity.resolveSession(cookie)).not.toBeNull();
+      expect(identity.resolveEntry(entryCookie)).not.toBeNull();
+      // La sesión de entrada con la que se entró ya estaba revocada.
+      const earlier = db
+        .prepare("SELECT revoked_at FROM session WHERE revoked_at IS NOT NULL")
+        .all()
+        .map((row) => row.revoked_at);
+      expect(earlier).toHaveLength(1);
+      const at = Date.now() + 60_000;
+
+      expect(revokeEverySession(db, at)).toBe(2);
+
+      expect(identity.resolveSession(cookie)).toBeNull();
+      expect(identity.resolveEntry(entryCookie)).toBeNull();
+      expect(
+        db
+          .prepare("SELECT revoked_at FROM session ORDER BY revoked_at")
+          .all()
+          .map((row) => row.revoked_at),
+      ).toEqual([...earlier, at, at]);
+      // No vuelve a tocar las ya revocadas.
+      expect(revokeEverySession(db, at + 1)).toBe(0);
+      expect(
+        db
+          .prepare("SELECT count(*) AS n FROM session WHERE revoked_at = ?")
+          .get(at)?.n,
+      ).toBe(2);
+      // Una sesión posterior funciona.
+      const entry = identity.beginEntry();
+      const signedIn = await identity.signIn({
+        entryCookie: entry.cookie,
+        csrfToken: entry.csrfToken,
+        username: "docente",
+        password: PASSWORD,
+        correlationId: "después",
+      });
+      expect(signedIn.ok && identity.resolveSession(signedIn.cookie)).not.toBe(
+        false,
+      );
+      expect(identity.resolveSession(cookie)).toBeNull();
+    });
+
+    test("lo enviado sin liquidar queda incierto y sigue contando; lo reservado se libera", () => {
+      const { budget } = fixture.outline;
+      const before = budget.status();
+      expect(before.uncertain).toBe(0);
+
+      expect(
+        transaction(db, () => recoverInterruptedReservations(db, Date.now())),
+      ).toEqual({ uncertain: 1, released: 1 });
+
+      expect(stateOf(db, sentId)).toBe("uncertain");
+      expect(stateOf(db, reservedId)).toBe("released");
+      expect(stateOf(db, settledId)).toBe("settled");
+      const after = budget.status();
+      expect(after.uncertain).toBe(SENT_COST);
+      // Solo se recupera lo que no llegó a enviarse.
+      expect(after.available).toBe(before.available + 40);
+      expect(after.settled).toBe(before.settled);
+
+      // Una incierta no se libera ni se reenvía: solo la cierra una
+      // conciliación.
+      expect(budget.release(sentId)).toBe(false);
+      expect(budget.markSent(sentId)).toBe(false);
+      expect(stateOf(db, sentId)).toBe("uncertain");
+      // Repetir la regla no cambia nada.
+      expect(
+        transaction(db, () => recoverInterruptedReservations(db, Date.now())),
+      ).toEqual({ uncertain: 0, released: 0 });
+      expect(budget.status()).toEqual(after);
+    });
   });
 
   test("sin argumentos, explica el uso y no hace nada", () => {

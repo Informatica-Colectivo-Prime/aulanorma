@@ -22,6 +22,8 @@ import { z } from "zod";
 import type { Database } from "@/platform/persistence";
 import type { Budget, ReserveRefusal } from "./budget";
 
+export { recoverInterruptedReservations } from "./recovery";
+
 export { createBudget, MAX_AMOUNT } from "./budget";
 export type {
   Budget,

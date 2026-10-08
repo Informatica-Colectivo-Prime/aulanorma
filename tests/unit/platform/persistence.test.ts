@@ -388,6 +388,7 @@ describe("almacén de ficheros por huella", () => {
       "PLATFORM_MIGRATIONS",
       "checkFileReferences",
       "createBackup",
+      "ensureDirectory",
       "fileReferences",
       "hasBlob",
       "migrate",

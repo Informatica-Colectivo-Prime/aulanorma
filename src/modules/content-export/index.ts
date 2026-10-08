@@ -11,7 +11,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import {
   existsSync,
-  mkdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -28,6 +27,7 @@ import type {
 import type { Audit } from "@/platform/audit";
 import { DETERMINISTIC_PROVIDER } from "@/platform/generation";
 import {
+  ensureDirectory,
   PACKAGE_DIRECTORY,
   syncToDisk,
   transaction,
@@ -543,7 +543,7 @@ export function createContentExport({
       const target = pathOf(id);
       const temporary = `${target}.${randomBytes(6).toString("hex")}.tmp`;
       try {
-        mkdirSync(directory, { recursive: true });
+        ensureDirectory(dataDir, PACKAGE_DIRECTORY);
         // El paquete se publica antes de referenciarlo: sincronizado a
         // disco, renombrado a su nombre definitivo y con el directorio
         // sincronizado. Solo entonces se confirma su fila (research.md, R11).

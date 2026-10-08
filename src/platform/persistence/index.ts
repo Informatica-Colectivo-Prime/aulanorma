@@ -42,6 +42,8 @@ const BLOB_DIRECTORY = "blobs";
 export const PACKAGE_DIRECTORY = "exports";
 const PRIVATE_DIRECTORY = 0o700;
 const PRIVATE_FILE = 0o600;
+// Directorio de trabajo de una restauración, dentro de su destino.
+const RESTORE_PREFIX = ".restore-";
 
 function configure(db: Database): Database {
   db.exec(
@@ -56,6 +58,13 @@ function configure(db: Database): Database {
 export function openDatabase(dataDir: string): Database {
   mkdirSync(dataDir, { recursive: true, mode: PRIVATE_DIRECTORY });
   chmodSync(dataDir, PRIVATE_DIRECTORY);
+  // Una restauración interrumpida deja su directorio de trabajo: sobre él no
+  // se abre nada, ni se crea una base de datos vacía a su lado.
+  if (readdirSync(dataDir).some((name) => name.startsWith(RESTORE_PREFIX))) {
+    throw new Error(
+      "El directorio de datos contiene una restauración sin terminar.",
+    );
+  }
   return configure(new DatabaseSync(`${dataDir}/${DATABASE_FILE}`));
 }
 
@@ -683,19 +692,42 @@ export function syncToDisk(directory: string): void {
   }
 }
 
+// Crea, bajo `root`, los niveles que falten de una ruta relativa, y
+// sincroniza a disco el directorio en el que aparece cada uno: sin eso, un
+// directorio recién creado puede no sobrevivir a una caída, y con él lo que
+// contenga.
+export function ensureDirectory(root: string, relative: string): string {
+  let current = root;
+  for (const segment of relative.split("/")) {
+    const next = `${current}/${segment}`;
+    if (!existsSync(next)) {
+      mkdirSync(next, { mode: PRIVATE_DIRECTORY });
+      syncToDisk(current);
+    }
+    current = next;
+  }
+  return current;
+}
+
 // Publica el contenido y devuelve su huella. El fichero se escribe en un
 // temporal del mismo directorio, se sincroniza a disco, se renombra a su
 // huella y se sincroniza el directorio: quien después confirme una transacción
 // que lo referencia sabe que ya está publicado. Un fichero publicado no se
-// reescribe ni se borra.
+// reescribe ni se borra. Si ya existía, pudo quedar a medio publicar por un
+// proceso interrumpido entre renombrarlo y sincronizar: se sincroniza de
+// nuevo antes de darlo por publicado.
 export function putBlob(dataDir: string, content: Uint8Array): string {
   const sha256 = createHash("sha256").update(content).digest("hex");
   const target = blobPath(dataDir, sha256);
+  const directory = ensureDirectory(
+    dataDir,
+    `${BLOB_DIRECTORY}/${sha256.slice(0, 2)}`,
+  );
   if (existsSync(target)) {
+    syncToDisk(target);
+    syncToDisk(directory);
     return sha256;
   }
-  const directory = target.slice(0, target.lastIndexOf("/"));
-  mkdirSync(directory, { recursive: true, mode: PRIVATE_DIRECTORY });
   const temporary = `${directory}/.tmp-${randomBytes(8).toString("hex")}`;
   const descriptor = openSync(temporary, "wx", PRIVATE_FILE);
   try {
@@ -815,7 +847,10 @@ export interface RestoreResult {
 
 const BLOB_FILE = /^blobs\/([0-9a-f]{2})\/([0-9a-f]{64})$/;
 const PACKAGE_FILE = /^exports\/[0-9a-f]{32}\.zip$/;
-const STORE_DIRECTORIES = [BLOB_DIRECTORY, PACKAGE_DIRECTORY] as const;
+const STORE_DIRECTORIES: readonly string[] = [
+  BLOB_DIRECTORY,
+  PACKAGE_DIRECTORY,
+];
 
 function storedFile(relative: string): boolean {
   const blob = BLOB_FILE.exec(relative);
@@ -1145,12 +1180,20 @@ export function verifyBackup(directory: string): BackupVerification {
 
 // Restaura una copia en un directorio limpio y la comprueba: integridad de
 // SQLite, claves ajenas, y cada referencia con su fichero y su huella. No
-// arranca nada ni toca el directorio de datos del servicio. Las reglas de las
-// operaciones en curso (sesiones y generaciones) las aplica
-// `scripts/ops/verify-restore.mjs` sobre el directorio restaurado.
+// arranca nada ni toca el directorio de datos del servicio.
+//
+// Todo se hace en un directorio de trabajo dentro del destino. `finish` recibe
+// la base de datos restaurada, aún allí, para aplicar las reglas de las
+// operaciones en curso (sesiones y generaciones), y devuelve los problemas
+// que encuentre. Solo si no hay ninguno el contenido pasa al destino, con la
+// base de datos en último lugar. Si algo falla, o si `finish` lanza un error,
+// el directorio de trabajo se borra y el destino queda como estaba: nunca
+// queda un directorio a medias que parezca listo para usar. Si el proceso se
+// interrumpe, el directorio de trabajo que deja impide abrir la base de datos.
 export function restoreBackup(
   backupDirectory: string,
   targetDirectory: string,
+  finish: (db: Database) => readonly string[],
 ): RestoreResult {
   const failed = (
     problems: readonly string[],
@@ -1169,8 +1212,9 @@ export function restoreBackup(
     return failed(verification.problems);
   }
   const { record } = verification;
+  const existed = existsSync(targetDirectory);
   if (
-    existsSync(targetDirectory) &&
+    existed &&
     (!lstatSync(targetDirectory).isDirectory() ||
       readdirSync(targetDirectory).length > 0)
   ) {
@@ -1178,39 +1222,83 @@ export function restoreBackup(
   }
   mkdirSync(targetDirectory, { recursive: true, mode: PRIVATE_DIRECTORY });
   chmodSync(targetDirectory, PRIVATE_DIRECTORY);
-  for (const { path } of record.inventory) {
-    copyPrivate(`${backupDirectory}/${path}`, `${targetDirectory}/${path}`);
-  }
+  const work = `${targetDirectory}/${RESTORE_PREFIX}${randomBytes(8).toString("hex")}`;
+  mkdirSync(work, { mode: PRIVATE_DIRECTORY });
+  const discard = (): void => {
+    rmSync(work, { recursive: true, force: true });
+    if (!existed) {
+      rmSync(targetDirectory, { recursive: true, force: true });
+    }
+  };
 
-  const db = openDatabase(targetDirectory);
+  let result: RestoreResult;
   try {
-    const integrity = integrityOf(db);
-    const foreignKeys =
-      db.prepare("PRAGMA foreign_key_check").all().length === 0
-        ? "ok"
-        : "failed";
-    const references = checkFileReferences(db, targetDirectory);
-    const problems = [
-      ...(integrity === "ok"
-        ? []
-        : ["La verificación de integridad de SQLite ha fallado."]),
-      ...(foreignKeys === "ok" ? [] : ["Hay claves ajenas sin su fila."]),
-      ...references.problems.map(({ path, problem }) =>
-        problem === "missing"
-          ? `Falta ${path}.`
-          : `${path} no coincide con su huella.`,
-      ),
-    ];
-    return {
-      ok: problems.length === 0,
-      problems,
-      record,
-      integrity,
-      foreignKeys,
-      references: references.checked,
-      referenceProblems: references.problems,
-    };
-  } finally {
-    db.close();
+    for (const { path } of record.inventory) {
+      copyPrivate(`${backupDirectory}/${path}`, `${work}/${path}`);
+    }
+    const db = configure(new DatabaseSync(`${work}/${DATABASE_FILE}`));
+    try {
+      const integrity = integrityOf(db);
+      const foreignKeys =
+        db.prepare("PRAGMA foreign_key_check").all().length === 0
+          ? "ok"
+          : "failed";
+      const references = checkFileReferences(db, work);
+      const problems = [
+        ...(integrity === "ok"
+          ? []
+          : ["La verificación de integridad de SQLite ha fallado."]),
+        ...(foreignKeys === "ok" ? [] : ["Hay claves ajenas sin su fila."]),
+        ...references.problems.map(({ path, problem }) =>
+          problem === "missing"
+            ? `Falta ${path}.`
+            : `${path} no coincide con su huella.`,
+        ),
+      ];
+      if (problems.length === 0) {
+        problems.push(...finish(db));
+      }
+      result = {
+        ok: problems.length === 0,
+        problems,
+        record,
+        integrity,
+        foreignKeys,
+        references: references.checked,
+        referenceProblems: references.problems,
+      };
+    } finally {
+      db.close();
+    }
+    if (result.ok) {
+      // Ficheros auxiliares de SQLite: tras cerrar no debe quedar ninguno.
+      const entries = readdirSync(work);
+      const expected = [DATABASE_FILE, ...STORE_DIRECTORIES];
+      if (entries.some((name) => !expected.includes(name))) {
+        result = {
+          ...result,
+          ok: false,
+          problems: ["La base de datos restaurada no se ha cerrado limpia."],
+        };
+      }
+    }
+  } catch (error) {
+    discard();
+    throw error;
   }
+  if (!result.ok) {
+    discard();
+    return result;
+  }
+  // Los ficheros primero y la base de datos al final: hasta entonces el
+  // destino no tiene nada que pueda abrirse.
+  for (const name of [...STORE_DIRECTORIES, DATABASE_FILE]) {
+    if (existsSync(`${work}/${name}`)) {
+      renameSync(`${work}/${name}`, `${targetDirectory}/${name}`);
+    }
+  }
+  syncToDisk(targetDirectory);
+  rmSync(work, { recursive: true, force: true });
+  syncToDisk(targetDirectory);
+  return result;
 }
