@@ -260,7 +260,12 @@ export function documentsView(input: {
           ? html`<p class="muted">
               Todavía no hay ningún documento registrado.
             </p>`
-          : html`<div class="scroll">
+          : html`<div
+              class="scroll"
+              tabindex="0"
+              role="region"
+              aria-label="Documentos registrados, del más reciente al más antiguo"
+            >
               <table>
                 <caption class="muted">
                   Documentos registrados, del más reciente al más antiguo
@@ -877,7 +882,7 @@ export function interpretationView(input: {
         <dd>
           ${
             input.provider === "deterministic"
-              ? "Respuesta grabada del adaptador determinista. No es una generación real y no sirve para aceptar el recorrido."
+              ? "Respuesta grabada de prueba, sin proveedor de generación. No es una generación real y no sirve para aceptar el recorrido."
               : input.provider
           }
           ${

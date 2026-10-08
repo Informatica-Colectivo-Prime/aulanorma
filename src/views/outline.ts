@@ -139,7 +139,7 @@ export function outlineNotice(notice: Notice | undefined): Html | null {
 }
 
 const DETERMINISTIC_ORIGIN =
-  "Respuesta grabada del adaptador determinista. No es una generación real y no sirve para aceptar el recorrido.";
+  "Respuesta grabada de prueba, sin proveedor de generación. No es una generación real y no sirve para aceptar el recorrido.";
 
 // Límite de la cobertura, que se declara allí donde se muestra (FR-058).
 const COVERAGE_LIMIT =
@@ -498,7 +498,12 @@ export function outlineView(input: {
         }
       </p>
       <p class="muted">${COVERAGE_LIMIT}</p>
-      <div class="scroll">
+      <div
+        class="scroll"
+        tabindex="0"
+        role="region"
+        aria-label="Cobertura de cada requisito del inventario"
+      >
         <table>
           <caption class="skip">
             Cobertura de cada requisito del inventario

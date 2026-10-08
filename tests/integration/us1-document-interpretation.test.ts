@@ -328,7 +328,9 @@ describe("escenarios 3, 4 y 9: revisar y corregir la interpretación", () => {
     expect(view.body).toContain("&lt;b&gt;con marcado&lt;/b&gt;");
     expect(view.body).not.toContain("<b>con marcado</b>");
     // Se dice de dónde sale la propuesta.
-    expect(body).toContain("Respuesta grabada del adaptador determinista");
+    expect(body).toContain(
+      "Respuesta grabada de prueba, sin proveedor de generación",
+    );
 
     // La página: su texto extraído y el acceso a esa página del original.
     const page = await client.get(pagePage, {

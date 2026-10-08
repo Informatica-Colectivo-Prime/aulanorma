@@ -116,7 +116,7 @@ export function metricsView(input: MetricsInput): PageReply {
         peticiones web no se
         registra.${
           simulated
-            ? " Todas las llamadas registradas son del adaptador determinista, que responde con una grabación: estas cifras no son las de ningún proveedor."
+            ? " Todas las llamadas registradas se respondieron con grabaciones de prueba: estas cifras no son las de ningún proveedor."
             : ""
         }
       </p>
@@ -137,7 +137,7 @@ export function metricsView(input: MetricsInput): PageReply {
       <p class="hint">
         ${
           simulated
-            ? "Coste simulado: el adaptador determinista no cuesta nada. "
+            ? "Coste simulado: las grabaciones de prueba no cuestan nada. "
             : ""
         }El
         detalle y la conciliación están en

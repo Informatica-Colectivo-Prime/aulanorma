@@ -99,7 +99,7 @@ export function budgetNote(input: {
     <p class="hint">
       ${
         input.provider === "deterministic"
-          ? "Coste simulado: estas cifras son del adaptador determinista, que responde con una grabación y no cuesta nada. No son precios de ningún proveedor."
+          ? "Coste simulado: las respuestas son grabaciones de prueba y no cuestan nada. No son precios de ningún proveedor."
           : "La operación solo se envía si su coste máximo cabe en lo disponible y no supera el máximo por operación."
       }
       Sin una reserva dentro de los límites, no se envía nada.

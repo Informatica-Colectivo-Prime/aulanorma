@@ -421,7 +421,7 @@ describe("historial de cada elemento", () => {
     expect(document.map((row) => row[2])).toEqual([
       "Registro del documento",
       "Generación de la interpretación, pedida",
-      "Llamada de generación (interpretation)",
+      "Llamada de generación: interpretación",
     ]);
     expect(document[0]?.[1]).toBe("docente1");
     expect(document[0]?.[3]).toMatch(/Huella SHA-256: [0-9a-f]{64}/);
@@ -454,7 +454,9 @@ describe("historial de cada elemento", () => {
     );
     const facts = outline.map((row) => row[2]);
     expect(
-      facts.filter((fact) => fact === "Llamada de generación (topic)"),
+      facts.filter(
+        (fact) => fact === "Llamada de generación: tema del temario",
+      ),
     ).toHaveLength(TITLES.length);
     for (const fact of [
       "Índice creado",
@@ -550,6 +552,54 @@ describe("historial de cada elemento", () => {
       expect(reply.headers["cache-control"]).toBe("no-store");
     }
     expect(state()).toBe(before);
+  });
+});
+
+// Estructura que necesita la tecnología de apoyo. Es una comprobación
+// automática del marcado: no sustituye a una evaluación con lector de pantalla
+// ni con personas.
+describe("estructura de las páginas de historial y de métricas", () => {
+  test("idioma, título, encabezado único, regiones, tablas con título y cabeceras, y zonas desplazables accesibles con el teclado", async () => {
+    await enter("docente1", ["teacher"]);
+    await journey();
+    await enter("ambos", ["teacher", "admin"]);
+    const views = [...pages(), ["métricas", () => client.get(metricsPage)]] as [
+      string,
+      () => Promise<Reply>,
+    ][];
+    for (const [name, view] of views) {
+      const { body } = await view();
+      expect(body, name).toContain('<html lang="es">');
+      expect(body, name).toMatch(/<title>[^<]+ · AulaNorma<\/title>/);
+      expect(body.match(/<h1[\s>]/g), name).toHaveLength(1);
+      expect(body, name).toContain('<main id="contenido">');
+      expect(body, name).toContain('href="#contenido"');
+      expect(body, name).toContain('<nav aria-label="Principal">');
+      // Ningún salto de nivel de encabezado.
+      const levels = [...body.matchAll(/<h([1-6])[\s>]/g)].map((match) =>
+        Number(match[1]),
+      );
+      levels.forEach((level, index) => {
+        expect(level - (levels[index - 1] ?? 0), name).toBeLessThanOrEqual(1);
+      });
+      const tables = body.match(/<table>/g) ?? [];
+      expect(body.match(/<caption[\s>]/g) ?? [], name).toHaveLength(
+        tables.length,
+      );
+      expect(
+        body.match(
+          /<div\s+class="scroll"\s+tabindex="0"\s+role="region"\s+aria-label="[^"]+"/g,
+        ) ?? [],
+        name,
+      ).toHaveLength(tables.length);
+      // Toda celda de cabecera declara su ámbito, y no hay cabeceras vacías.
+      expect(body, name).not.toMatch(/<th>/);
+      expect(body, name).not.toMatch(/<th scope="col">\s*<\/th>/);
+      // Nada depende solo del color: las etiquetas de vigencia llevan texto.
+      expect(body, name).not.toMatch(/<span class="tag[^"]*">\s*<\/span>/);
+      expect(body, name).not.toMatch(/tabindex="[1-9]/);
+      expect(body, name).not.toMatch(/<img|<svg|autofocus|<marquee|<blink/);
+    }
   });
 });
 

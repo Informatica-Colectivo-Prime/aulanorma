@@ -341,7 +341,7 @@ const STYLE = `
 *{box-sizing:border-box}
 body{margin:0;font:1rem/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:#fff}
 a{color:var(--accent)}
-:focus-visible{outline:3px solid #f2a900;outline-offset:2px}
+:focus-visible{outline:3px solid #1b1f24;outline-offset:2px;box-shadow:0 0 0 2px #fff}
 .skip{position:absolute;left:-999px;top:0;background:#fff;padding:.5rem 1rem}
 .skip:focus{left:.5rem;top:.5rem;z-index:1}
 header{border-bottom:1px solid var(--line);background:var(--surface)}
@@ -369,7 +369,7 @@ dd{margin:0 0 .5rem}
 .bar,main{max-width:60rem}
 textarea,select{display:block;font:inherit;width:100%;max-width:40rem;padding:.55rem .65rem;border:1px solid #6b7480;border-radius:.3rem;background:#fff;color:var(--ink)}
 textarea{min-height:7rem}
-input[type=checkbox]{display:inline-block;width:auto;margin:0 .5rem 0 0}
+input[type=checkbox]{display:inline-block;flex:none;width:1.5rem;height:1.5rem;margin:0 .5rem 0 0}
 input[type=file]{border:0;padding:.3rem 0}
 label.check{font-weight:400;display:flex;align-items:flex-start;gap:.25rem;max-width:40rem}
 fieldset{border:1px solid var(--line);border-radius:.3rem;margin:1.25rem 0;padding:.25rem 1rem 1rem}

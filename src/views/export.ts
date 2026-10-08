@@ -206,14 +206,14 @@ export function exportView(input: {
       <h2>Qué se comprueba en un paquete generado</h2>
       <ul>
         <li>
-          <strong>Lectura del manifiesto:</strong> se relee el fichero y su
-          manifiesto se lee con un analizador de XML ajeno al generador.
+          <strong>Lectura del paquete:</strong> el fichero generado se vuelve a
+          abrir y su índice interno, el manifiesto, se lee con una herramienta
+          distinta de la que lo escribió.
         </li>
         <li>
-          <strong>Reglas del perfil que exporta AulaNorma:</strong> el
-          manifiesto declara todos sus ficheros y no sobra ninguno, es un único
-          contenido SCORM 1.2 que identifica la versión aprobada, y nada carga
-          recursos de fuera.
+          <strong>Reglas propias de AulaNorma:</strong> el manifiesto declara
+          todos sus ficheros y no sobra ninguno, es un único contenido SCORM 1.2
+          que identifica la versión aprobada, y nada carga recursos de fuera.
         </li>
         <li>
           <strong>Lo que no se comprueba:</strong> no se valida contra los

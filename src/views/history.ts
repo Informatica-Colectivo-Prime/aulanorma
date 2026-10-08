@@ -22,6 +22,7 @@ import { html } from "@/platform/web";
 import type { Html, PageReply, Runtime, SessionContext } from "@/platform/web";
 import { DOWNLOAD_RESULTS, EXPORT_FAILURES } from "./export";
 import { moment, reply, who } from "./shared";
+import { TASK_NAMES } from "./syllabus";
 import type { Names } from "./shared";
 
 // Una ejecución de generación con sus llamadas, tal como se muestra.
@@ -122,7 +123,7 @@ function runEvents(
     ...run.calls.map((call) => ({
       at: call.at,
       actor: null,
-      what: `Llamada de generación (${call.task})`,
+      what: `Llamada de generación: ${(TASK_NAMES[call.task] ?? call.task).toLowerCase()}`,
       detail: `Proveedor: ${providerName(call.provider)}. Modelo: ${call.model}. Versión de las instrucciones: ${call.promptVersion}. Resultado: ${CALL_RESULTS[call.validationResult] ?? call.validationResult}.`,
     })),
   ]);
@@ -141,30 +142,37 @@ function timeline(
   const ordered = events
     .map((event, index) => ({ event, index }))
     .sort((a, b) => a.event.at - b.event.at || a.index - b.index);
-  return html`<table>
-    <caption>
-      ${caption}
-    </caption>
-    <thead>
-      <tr>
-        <th scope="col">Fecha y hora</th>
-        <th scope="col">Cuenta</th>
-        <th scope="col">Hecho</th>
-        <th scope="col">Detalle</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${ordered.map(
-        ({ event }) =>
-          html`<tr>
-            <td>${moment(event.at)}</td>
-            <td>${event.actor === null ? "—" : who(names, event.actor)}</td>
-            <td>${event.what}</td>
-            <td>${event.detail}</td>
-          </tr>`,
-      )}
-    </tbody>
-  </table>`;
+  return html`<div
+    class="scroll"
+    tabindex="0"
+    role="region"
+    aria-label="${caption}"
+  >
+    <table>
+      <caption>
+        ${caption}
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">Fecha y hora</th>
+          <th scope="col">Cuenta</th>
+          <th scope="col">Hecho</th>
+          <th scope="col">Detalle</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${ordered.map(
+          ({ event }) =>
+            html`<tr>
+              <td>${moment(event.at)}</td>
+              <td>${event.actor === null ? "—" : who(names, event.actor)}</td>
+              <td>${event.what}</td>
+              <td>${event.detail}</td>
+            </tr>`,
+        )}
+      </tbody>
+    </table>
+  </div>`;
 }
 
 const SCOPE_NOTE = html`<p class="hint">
