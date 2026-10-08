@@ -138,9 +138,27 @@ const viewDocument = (id: string): Promise<Reply> =>
 const viewInterpretation = (id: string): Promise<Reply> =>
   client.get(interpretationPage, { params: { id } });
 
-async function interpreted(documentId: string, pageTo = "3"): Promise<string> {
-  const reply = await client.post(requestAction, {
+// Pide una interpretación como en el navegador: primero la unidad y las
+// páginas, que devuelven la estimación sin enviar nada, y después la
+// confirmación con las cifras mostradas.
+async function requestInterpretation(
+  fields: Readonly<Record<string, string>>,
+): Promise<Reply> {
+  const estimate = await client.post(requestAction, {
     csrf: await csrf(),
+    ...fields,
+  });
+  if (estimate.status !== 200) {
+    return estimate;
+  }
+  return client.post(
+    requestAction,
+    client.hiddenFields(estimate, "/api/interpretations/request"),
+  );
+}
+
+async function interpreted(documentId: string, pageTo = "3"): Promise<string> {
+  const reply = await requestInterpretation({
     document: documentId,
     unit_code: UNIT,
     page_from: "1",
@@ -836,12 +854,127 @@ describe("escenarios 7 y 8: páginas sin texto extraíble", () => {
   });
 });
 
+describe("estimación antes de pedir la interpretación (FR-021)", () => {
+  const fields = (documentId: string) => ({
+    document: documentId,
+    unit_code: UNIT,
+    page_from: "1",
+    page_to: "3",
+  });
+  const flat = (reply: Reply): string => reply.body.replace(/\s+/g, " ");
+
+  test("indicar la unidad y las páginas muestra la estimación, el máximo reservado y lo disponible, sin enviar ni guardar nada", async () => {
+    await enter("docente1", ["teacher"]);
+    const documentId = await registered("five-pages.pdf");
+    const form = flat(await viewDocument(documentId));
+    expect(form).toContain("Ver la estimación");
+    expect(form).toContain("Todavía no se envía nada");
+
+    const estimate = await client.post(requestAction, {
+      csrf: await csrf(),
+      ...fields(documentId),
+    });
+    expect(estimate.status).toBe(200);
+    const body = flat(estimate);
+    expect(body).toContain("Confirmar la solicitud de interpretación");
+    expect(body).toContain("Todavía no se ha enviado nada");
+    expect(body).toContain(UNIT);
+    expect(body).toContain("Estimación del coste (orientativa)");
+    expect(body).toContain("Coste máximo que se reserva para la operación");
+    expect(body).toContain("Presupuesto disponible");
+    expect(body).toContain("0,00 unidades (moneda sin fijar)");
+    expect(body).toContain("Coste simulado");
+    expect(body).toContain("No son precios de ningún proveedor.");
+    expect(body).toContain("Cambiar la unidad o las páginas");
+    expect(count("interpretation")).toBe(0);
+    expect(count("generation_run")).toBe(0);
+    expect(count("budget_reservation")).toBe(0);
+
+    const confirmed = await client.post(
+      requestAction,
+      client.hiddenFields(estimate, "/api/interpretations/request"),
+    );
+    expect(confirmed.status).toBe(303);
+    expect(confirmed.location).toMatch(/^\/interpretations\/[0-9a-f]{32}$/);
+    // Estimación, reserva y consumo confirmado quedan separados.
+    expect(
+      client.runtime.db
+        .prepare(
+          "SELECT state, reserved_cost, settled_cost FROM budget_reservation",
+        )
+        .all(),
+    ).toEqual([{ state: "settled", reserved_cost: 0, settled_cost: 0 }]);
+    const page = flat(
+      await viewInterpretation(confirmed.location?.split("/").pop() ?? ""),
+    );
+    expect(page).toMatch(
+      /Estimación: 0,00 unidades \(moneda sin fijar\) · Reserva máxima: 0,00 unidades \(moneda sin fijar\) · Consumo confirmado: 0,00 unidades \(moneda sin fijar\) · Coste simulado/,
+    );
+  });
+
+  test("cambiar los parámetros vuelve a mostrar la estimación antes de confirmar", async () => {
+    await enter("docente1", ["teacher"]);
+    const documentId = await registered("five-pages.pdf");
+    const first = await client.post(requestAction, {
+      csrf: await csrf(),
+      ...fields(documentId),
+    });
+    // Los parámetros cambian sobre el formulario de confirmación: sin la
+    // confirmación de esas cifras, el envío vuelve al paso de estimación.
+    const changed = await client.post(requestAction, {
+      csrf: await csrf(),
+      ...fields(documentId),
+      page_to: "2",
+    });
+    expect(changed.status).toBe(200);
+    expect(
+      client.hiddenFields(changed, "/api/interpretations/request").page_to,
+    ).toBe("2");
+    expect(
+      client.hiddenFields(first, "/api/interpretations/request").page_to,
+    ).toBe("3");
+    expect(count("generation_run")).toBe(0);
+  });
+
+  test.each([
+    ["sin las cifras mostradas", {}],
+    [
+      "con una estimación que ya no es la actual",
+      { shown_estimate: "7", shown_max: "0" },
+    ],
+    [
+      "con un máximo que ya no es el actual",
+      { shown_estimate: "0", shown_max: "9" },
+    ],
+  ])(
+    "confirmar %s responde 409 con las cifras actuales y no envía nada",
+    async (_name, shown) => {
+      await enter("docente1", ["teacher"]);
+      const documentId = await registered("five-pages.pdf");
+      const reply = await client.post(requestAction, {
+        csrf: await csrf(),
+        ...fields(documentId),
+        confirmed: "yes",
+        ...shown,
+      });
+      expect(reply.status).toBe(409);
+      expect(flat(reply)).toContain(
+        "La estimación o el coste máximo han cambiado desde que los viste. No se ha enviado nada",
+      );
+      expect(
+        client.hiddenFields(reply, "/api/interpretations/request"),
+      ).toMatchObject({ shown_estimate: "0", shown_max: "0" });
+      expect(count("generation_run")).toBe(0);
+      expect(count("interpretation")).toBe(0);
+    },
+  );
+});
+
 describe("pedir la interpretación", () => {
   test("sin una respuesta para esa entrada no se guarda nada, y se dice", async () => {
     await enter("docente1", ["teacher"]);
     const documentId = await registered("five-pages.pdf");
-    const reply = await client.post(requestAction, {
-      csrf: await csrf(),
+    const reply = await requestInterpretation({
       document: documentId,
       unit_code: "UX9002",
       page_from: "1",

@@ -137,14 +137,24 @@ pruebas automáticas y con un navegador real: ver [us1-check.md](./us1-check.md)
 **Independent Test**: desde una interpretación validada, el docente obtiene un índice, ve la
 cobertura, comprueba el bloqueo al quitar una entrada y lo aprueba.
 
-- [ ] T043 [P] [US2] Crear la migración y el repositorio de `Outline` (`status`: `proposed`, `in_review`, `approved`, `rejected`), `OutlineEntry` (`unsupported` exige no tener vínculos), `EntryRequirement` y `OutlineApproval` en `src/modules/didactic-content/`, con pruebas en `tests/unit/didactic-content/outline-repository.test.ts`
-- [ ] T044 [US2] Implementar el cálculo de cobertura del índice por vínculos explícitos, sin herencia entre padre e hijos en ningún sentido y sin contar entradas sin respaldo; pruebas en `tests/unit/didactic-content/coverage.test.ts`, incluido el caso de una propuesta que declara cobertura total y omite un requisito
-- [ ] T045 [US2] Implementar la propuesta de índice con el prompt `prompts/outline/v1.md` y su esquema Zod; exige interpretación validada y vigente; rechaza referencias a requisitos inexistentes; pruebas en `tests/unit/didactic-content/outline-proposal.test.ts`
-- [ ] T046 [US2] Implementar la edición del índice con control de revisión (reordenar, renombrar, añadir, quitar, cambiar vínculos), la aprobación (exige cobertura completa) y el rechazo con motivo obligatorio, que conserva el contenido y permite volver a revisión; la vigencia se deriva de `outline_revision` y de la validación de la interpretación; pruebas en `tests/unit/didactic-content/outline-approval.test.ts`
-- [ ] T047 [US2] Crear las páginas `src/pages/outline/` (entradas con sus requisitos, cobertura por requisito con su referencia normativa, límite declarado de la cobertura, pendientes al intentar aprobar, vista previa marcada como borrador no entregable)
-- [ ] T048 [US2] Escribir `tests/integration/us2-outline-coverage.test.ts` con los escenarios 1 a 9 de la historia 2, la invalidación al corregir la interpretación (SC-029) y la ausencia de cualquier vía de «aprobar de todos modos» (SC-026)
+- [X] T043 [P] [US2] Crear la migración y el repositorio de `Outline` (`status`: `proposed`, `in_review`, `approved`, `rejected`), `OutlineEntry` (`unsupported` exige no tener vínculos), `EntryRequirement` y `OutlineApproval` en `src/modules/didactic-content/`, con pruebas en `tests/unit/didactic-content/outline-repository.test.ts`. Hecho: las migraciones `0007_outline` están en la lista única de `src/platform/persistence`; añade `removed` a `OutlineEntry`, `outline_change` para el historial y la tabla común `rejection`; un índice por interpretación
+- [X] T044 [US2] Implementar el cálculo de cobertura del índice por vínculos explícitos, sin herencia entre padre e hijos en ningún sentido y sin contar entradas sin respaldo; pruebas en `tests/unit/didactic-content/coverage.test.ts`, incluido el caso de una propuesta que declara cobertura total y omite un requisito. Hecho en `src/modules/didactic-content/coverage.ts`
+- [X] T045 [US2] Implementar la propuesta de índice con el prompt `prompts/outline/v1.md` y su esquema Zod; exige interpretación validada y vigente; rechaza referencias a requisitos inexistentes; pruebas en `tests/unit/didactic-content/outline-proposal.test.ts`. Hecho; añade `budget_exceeded` cuando no hay reserva posible, y `coverageComplete` en el esquema solo para dejar constancia de que se ignora
+- [X] T046 [US2] Implementar la edición del índice con control de revisión (reordenar, renombrar, añadir, quitar, cambiar vínculos), la aprobación (exige cobertura completa) y el rechazo con motivo obligatorio, que conserva el contenido y permite volver a revisión; la vigencia se deriva de `outline_revision` y de la validación de la interpretación; pruebas en `tests/unit/didactic-content/outline-approval.test.ts`. Hecho; reordenar es subir o bajar una posición, quitar marca la entrada sin borrarla, y un índice de un documento con sustituto queda como histórico hasta T058
+- [X] T047 [US2] Crear las páginas `src/pages/outline/` (entradas con sus requisitos, cobertura por requisito con su referencia normativa, límite declarado de la cobertura, pendientes al intentar aprobar, vista previa marcada como borrador no entregable). Hecho en `src/pages/outlines/` y `src/pages/api/outlines/`, en plural como las demás rutas, con las vistas en `src/views/outline.ts`; abre la entrega a la capa `didactic-content`
+- [X] T048 [US2] Escribir `tests/integration/us2-outline-coverage.test.ts` con los escenarios 1 a 9 de la historia 2, la invalidación al corregir la interpretación (SC-029) y la ausencia de cualquier vía de «aprobar de todos modos» (SC-026). Hecho, con 28 casos; incluye el conflicto 409 (SC-033), el rechazo (SC-041) y las denegaciones por perfil (SC-007)
 
-**Checkpoint**: aprobar un índice y ver el bloqueo por cobertura.
+### Presupuesto de generación
+
+Adelantadas desde la fase 6 por indicación del mantenedor: pedir el índice es una operación
+de generación y FR-021 exige mostrar antes su estimación y lo disponible, y no enviarla sin
+una reserva. Sus páginas (T057) siguen en la fase 6.
+
+- [X] T049 [P] [US2] Añadir a `src/platform/generation/` `Budget`, `BudgetChange`, `BudgetReservation` (`state`: `reserved`, `sent`, `settled`, `released`, `uncertain`) y `Reconciliation`, con la reserva atómica contra el máximo por operación y el límite acumulado; pruebas en `tests/unit/platform/budget.test.ts`. Hecho en `src/platform/generation/budget.ts`, con la migración `0006_budget` y la clave `AULANORMA_GENERATION_MAX_OPERATION_COST`; 16 casos
+- [X] T050 [US2] Implementar el ciclo de la reserva: anotar el envío antes de llamar, liquidar con el consumo real, liberar solo si no se envió, pasar a `uncertain` sin consumo confirmado, y al arrancar convertir en `uncertain` lo enviado sin liquidar; pruebas en `tests/unit/platform/budget-lifecycle.test.ts` (dos operaciones simultáneas, tiempo agotado, respuesta sin datos de uso, caída entre envío y liquidación, reducción del límite con operaciones en curso). Hecho; la reserva se integra en `Generation.call`, así que también cubre la petición de interpretación; 19 casos, con proveedores y consumos simulados
+
+**Checkpoint**: aprobar un índice y ver el bloqueo por cobertura. Verificado con pruebas
+automáticas y con un navegador real: ver [us2-check.md](./us2-check.md).
 
 ---
 
@@ -155,11 +165,9 @@ cobertura, comprueba el bloqueo al quitar una entrada y lo aprueba.
 **Independent Test**: con un índice aprobado, el docente genera el temario, edita y aprueba
 los temas, aprueba la versión y comprueba la invalidación al editar el índice.
 
-- [ ] T049 [P] [US3] Añadir a `src/platform/generation/` `Budget`, `BudgetChange`, `BudgetReservation` (`state`: `reserved`, `sent`, `settled`, `released`, `uncertain`) y `Reconciliation`, con la reserva atómica contra el máximo por operación y el límite acumulado; pruebas en `tests/unit/platform/budget.test.ts`
-- [ ] T050 [US3] Implementar el ciclo de la reserva: anotar el envío antes de llamar, liquidar con el consumo real, liberar solo si no se envió, pasar a `uncertain` sin consumo confirmado, y al arrancar convertir en `uncertain` lo enviado sin liquidar; pruebas en `tests/unit/platform/budget-lifecycle.test.ts` (dos operaciones simultáneas, tiempo agotado, respuesta sin datos de uso, caída entre envío y liquidación, reducción del límite con operaciones en curso)
 - [ ] T051 [P] [US3] Crear la migración y el repositorio de `Topic` (`status`: `pending`, `failed`, `draft`, `in_review`, `approved`, `rejected`), `TopicBlock` (`kind`: `requirement`, `development`), `BlockRequirement`, `TopicApproval`, `SyllabusVersion`, `SyllabusVersionTopic` y `ReferenceCheck` en `src/modules/didactic-content/`
 - [ ] T052 [US3] Definir el esquema Zod de los bloques estructurados y el renderizador que escapa todo el texto en `src/modules/didactic-content/render/`, con etiqueta de texto para distinguir norma y desarrollo; pruebas en `tests/unit/didactic-content/render.test.ts` con texto hostil (SC-046)
-- [ ] T053 [US3] Implementar la generación del temario tema a tema con `prompts/topic/v1.md`: estimación y presupuesto disponible mostrados antes de cada solicitud, incluida la reanudación; estimación separada del coste máximo reservado; ninguna operación enviada sin una reserva dentro de los límites; reserva por tema, temas terminados como borradores, pendientes o fallidos identificados, estado `incomplete`, y reanudación explícita que solo procesa pendientes o fallidos; pruebas en `tests/unit/didactic-content/syllabus-generation.test.ts`
+- [ ] T053 [US3] Implementar la generación del temario tema a tema con `prompts/topic/v1.md`: estimación y presupuesto disponible mostrados antes de cada solicitud, incluida la reanudación; estimación separada del coste máximo reservado; ninguna operación enviada sin una reserva dentro de los límites; reserva por tema, temas terminados como borradores, pendientes o fallidos identificados, estado `incomplete`, y reanudación explícita que solo procesa pendientes o fallidos; pruebas en `tests/unit/didactic-content/syllabus-generation.test.ts`; un tema es `failed` si la operación termina con error o la propuesta no supera el esquema y las comprobaciones (FR-019): el resultado inválido no se guarda ni sustituye un borrador válido, no hay reintentos automáticos, cada nuevo intento explícito reserva de nuevo y una operación incierta no se reenvía (SC-005)
 - [ ] T054 [US3] Implementar la edición de temas con control de revisión y conflicto 409 que conserva lo enviado, y la aprobación de cada tema (exige índice aprobado y vigente) y su rechazo con motivo obligatorio, sin borrar ni regenerar; la vigencia de `TopicApproval` se deriva de `topic_revision` y de su `OutlineApproval`; pruebas en `tests/unit/didactic-content/topic-approval.test.ts`
 - [ ] T055 [US3] Implementar la aprobación de la versión: exige índice aprobado y vigente, todos los temas desarrollados y aprobados, y cada requisito del inventario citado por un bloque `requirement` y desarrollado por al menos un bloque `development`; guarda una instantánea inmutable con `content_sha256`; pruebas en `tests/unit/didactic-content/syllabus-version.test.ts`
 - [ ] T056 [US3] Crear las páginas `src/pages/syllabus/` (estimación y lanzamiento, progreso y estado incompleto, reanudar, tema junto a su fuente normativa, edición, conflicto con ambas versiones, aprobación de tema y de versión con pendientes)
@@ -254,22 +262,17 @@ lista `checklists/pilot-readiness.md` revisada.
 
 ### Puntos abiertos de la lista de calidad
 
-Son huecos de la especificación, no tareas de código. Cada uno se cierra con una corrección
-documental antes de empezar la fase indicada.
-
-| Punto  | Qué falta definir                                                              | Antes de |
-| ------ | ------------------------------------------------------------------------------ | -------- |
-| CHK032 | Cuándo un tema es «fallido», cuántos reintentos hay y qué ve el docente        | Fase 6   |
-
-CHK007 (conflicto de edición: FR-063 y SC-033) y CHK047 (criterios SC-044, SC-045 y SC-046, y
-SC-015 para FR-029) se cerraron antes de la fase 4; ver la revisión de
-`checklists/pilot-readiness.md`.
-
-No impide las fases 4 ni 5.
+Ninguno. Eran huecos de la especificación, no tareas de código, y cada uno se cerró con una
+corrección documental antes de la fase que lo necesitaba: CHK007 (conflicto de edición: FR-063
+y SC-033) y CHK047 (criterios SC-044, SC-045 y SC-046, y SC-015 para FR-029), antes de la
+fase 4; y CHK032 (tema fallido, sin reintentos automáticos y nuevo intento explícito: FR-019,
+FR-066, SC-005 y SC-032), antes de la fase 6. Ver las revisiones de
+`checklists/pilot-readiness.md`. Cerrar un punto acredita su redacción, no una prueba.
 
 - **Fase 1** no depende de ninguna otra tarea. **Fase 2** puede hacerse a la vez.
 - **Fase 3**, completada, dependía de las fases 1 y 2.
 - **Fase 4**, completada, dependía de la fase 3.
+- **Fase 5**, completada, dependía de la fase 4; incluye T049 y T050, adelantadas de la fase 6.
 - **Fases 4 → 5 → 6 → 7** van en ese orden: cada historia usa lo aprobado en la anterior.
 - **T058** se apoya en T040 y condiciona la aprobación de T046 y T054 tras un sustituto.
 - **Fase 8**: T070 a T073 dependen de T014 a T016; T072 necesita además T050 y T066.
@@ -284,14 +287,14 @@ bloqueada.
 
 | Estado                                        | Tareas                                                                 |
 | --------------------------------------------- | ---------------------------------------------------------------------- |
-| Completadas                                   | T001–T042                                                              |
-| Ejecutables, en este orden                    | T043–T073, T078, T082–T087                                             |
+| Completadas                                   | T001–T050                                                              |
+| Ejecutables, en este orden                    | T051–T073, T078, T082–T087                                             |
 | Bloqueada por el dominio y el servidor        | T074                                                                   |
 | Bloqueadas por el proveedor de generación     | T075; y por depender de ella, T076 y T077                              |
 | Bloqueadas por el Moodle de pruebas           | T079; y por depender de ella, T080                                     |
 | Bloqueada por las tres anteriores             | T081, que depende de T074, T077 y T079                                 |
 
-De las 87 tareas, 42 están completadas (T001 a T042), 38 son ejecutables y 7 están
+De las 87 tareas, 50 están completadas (T001 a T050), 30 son ejecutables y 7 están
 bloqueadas. T086 no cierra la aceptación mientras quede alguna bloqueada. Ninguna evidencia
 de las tareas bloqueadas se simula: el recorrido con respuestas deterministas se registra
 como ensayo.
@@ -315,7 +318,7 @@ Salen de [feasibility.md](./feasibility.md). No son tareas de código.
 - Fase 2: T010 y T011 a la vez que T007 y T008.
 - Fase 3: T015 y T017 junto a T014 y T016; T020, T021 y T023 junto a T018 y T019.
 - Fase 4: T031, T034 y T035 a la vez.
-- Fase 6: T049 y T051 a la vez; T057 junto a T056.
+- Fase 6: T051 primero; T057 junto a T056.
 - Fase 7: T060 y T061 a la vez.
 - Fase 8: T070 y T071 a la vez.
 
@@ -328,6 +331,7 @@ Salen de [feasibility.md](./feasibility.md). No son tareas de código.
 3. **Cimientos con interfaz** (fase 3): dos o tres PR; al terminar se puede entrar, ver una
    página y salir.
 4. **Historia 1** (fase 4): primer recorrido visible con un PDF.
+5. **Historia 2** (fase 5): índice, cobertura y aprobación, con el presupuesto de generación.
 
 ### Entrega incremental
 

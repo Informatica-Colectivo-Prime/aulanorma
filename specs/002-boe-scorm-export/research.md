@@ -291,8 +291,8 @@ las pruebas y la integración continua. **El proveedor real no está seleccionad
 es candidato. No se instala ningún SDK, no se contrata nada y no se hacen llamadas de pago
 hasta que el mantenedor concrete proveedor, modelo, moneda y presupuesto. El adaptador real
 es una tarea posterior, bloqueada por ese dato. Toda salida se pide con un esquema y se
-valida con Zod antes de guardarse; una salida inválida se rechaza y se registra, con
-reintentos acotados. Los prompts son ficheros versionados del repositorio.
+valida con Zod antes de guardarse; una salida inválida se rechaza y se registra. En el
+piloto no hay reintentos automáticos (FR-019): otro intento es una acción explícita. Los prompts son ficheros versionados del repositorio.
 
 **Lo que acredita cada adaptador**: el determinista acredita los contratos, los bloqueos y
 el presupuesto. No acredita la calidad de la generación ni el coste real. La aceptación del

@@ -392,6 +392,11 @@ describe("otros puntos de entrada", () => {
       "src/pages/api/interpretations/request.ts",
       "src/pages/api/interpretations/resubmit.ts",
       "src/pages/api/interpretations/validate.ts",
+      "src/pages/api/outlines/approve.ts",
+      "src/pages/api/outlines/edit.ts",
+      "src/pages/api/outlines/reject.ts",
+      "src/pages/api/outlines/request.ts",
+      "src/pages/api/outlines/resubmit.ts",
       "src/pages/api/session/sign-in.ts",
       "src/pages/api/session/sign-out.ts",
       "src/pages/documents/[id]/file.ts",
@@ -405,6 +410,10 @@ describe("otros puntos de entrada", () => {
       "src/pages/interpretations/[id]/requirements/new.ts",
       "src/pages/interpretations/[id]/unit.ts",
       "src/pages/login.ts",
+      "src/pages/outlines/[id]/entries/[eid].ts",
+      "src/pages/outlines/[id]/entries/new.ts",
+      "src/pages/outlines/[id]/index.ts",
+      "src/pages/outlines/[id]/preview.ts",
     ];
     const extra = listFiles("src/pages").filter(
       (file) => !declared.includes(file),

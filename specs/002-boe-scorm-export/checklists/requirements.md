@@ -55,6 +55,9 @@
   recuperación mediante copia y rechazo), por decisión del mantenedor.
 - **Añadidos por las aclaraciones**: FR-057 a FR-067 y SC-025 a SC-038. Se sitúan junto a
   los requisitos con los que se relacionan, sin renumerar los existentes.
+- **Completados antes de la fase 6 (2026-10-07)**: FR-019, FR-066, SC-005 y SC-032, con la
+  definición de tema fallido, la ausencia de reintentos automáticos y el nuevo intento
+  explícito, por decisión del mantenedor (CHK032). Sin requisitos ni criterios nuevos.
 - **SCORM 1.2 y Moodle** aparecen en la especificación como formato de entrega y destino
   decididos por el mantenedor, no como detalle de implementación. No se nombran lenguajes,
   bibliotecas, almacenamiento ni proveedores.

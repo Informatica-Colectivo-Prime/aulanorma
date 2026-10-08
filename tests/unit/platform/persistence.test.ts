@@ -210,18 +210,30 @@ describe("PLATFORM_MIGRATIONS", () => {
       "0003_normative_source",
       "0004_structured_interpretation",
       "0005_generation",
+      "0006_budget",
+      "0007_outline",
     ]);
     expect(tables(db)).toEqual([
       "audit_event",
+      "budget",
+      "budget_change",
+      "budget_reservation",
       "correction",
       "document",
       "document_page",
+      "entry_requirement",
       "generation_call",
       "generation_run",
       "interpretation",
       "interpretation_rejection",
       "interpretation_validation",
+      "outline",
+      "outline_approval",
+      "outline_change",
+      "outline_entry",
       "page_resolution",
+      "reconciliation",
+      "rejection",
       "requirement",
       "schema_migration",
       "session",
@@ -244,6 +256,11 @@ describe("PLATFORM_MIGRATIONS", () => {
       "interpretation_validation",
       "interpretation_rejection",
       "generation_call",
+      "budget_change",
+      "reconciliation",
+      "outline_change",
+      "outline_approval",
+      "rejection",
     ]) {
       expect(triggers).toEqual(
         expect.arrayContaining([
@@ -254,11 +271,23 @@ describe("PLATFORM_MIGRATIONS", () => {
       );
     }
     // Editables, pero sin borrado.
-    for (const table of ["interpretation", "requirement", "generation_run"]) {
+    for (const table of [
+      "interpretation",
+      "requirement",
+      "generation_run",
+      "budget",
+      "budget_reservation",
+      "outline",
+      "outline_entry",
+    ]) {
       expect(triggers).toContain(`${table}_no_delete`);
       expect(triggers).not.toContain(`${table}_no_update`);
     }
-    expect(triggers).toHaveLength(27);
+    expect(triggers).toHaveLength(49);
+    // El presupuesto nace con una única fila, a cero y sin moneda fijada.
+    expect(db.prepare("SELECT * FROM budget").all()).toEqual([
+      { id: 1, project_limit: 0, currency: "XXX", revision: 1 },
+    ]);
   });
 
   test("la lista y sus elementos están congelados", () => {

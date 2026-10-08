@@ -179,6 +179,26 @@ cierra todas sus sesiones.
 Necesitas `npm run tools:install`, el servidor en marcha con `npm run dev` y una cuenta con el
 perfil `teacher`.
 
+**Un directorio de datos nuevo para cada ensayo.** Para empezar con datos vacíos sin tocar los
+de otros recorridos, no borres nada: usa un directorio exclusivo. Una variable definida en la
+terminal prevalece sobre `.env.development.local`, así que basta con definirla, **con el mismo
+valor**, en cada terminal del ensayo: la del servidor y la de las cuentas.
+
+```bash
+# En la primera terminal: crea el directorio, anota su ruta y arranca.
+export AULANORMA_DATA_DIR="$(mktemp -d /tmp/aulanorma-ensayo-XXXXXX)"
+echo "$AULANORMA_DATA_DIR"
+npm run dev
+
+# En la segunda terminal: la misma ruta que mostró la primera.
+export AULANORMA_DATA_DIR=/tmp/aulanorma-ensayo-…
+NODE_ENV=development node scripts/admin/users.mjs create docente1 --role teacher
+```
+
+Las órdenes de este apartado y del siguiente usan `$AULANORMA_DATA_DIR`. Si prefieres el
+directorio fijo de `.env.development.local`, sustitúyelo por su valor. Cuando termines, el
+directorio del ensayo se puede conservar o retirar; ningún otro recorrido lo usa.
+
 **Con cualquier PDF.** Entra, abre «Documentos» y «Subir un documento oficial». Elige el
 fichero, rellena su procedencia y envíalo. En unos segundos verás su registro, con su huella
 SHA-256, o el motivo por el que no se admite: cifrado, dañado, con contenido activo, demasiado
@@ -202,22 +222,26 @@ Debe coincidir con la de ese fichero. Después:
 1. Sube el PDF con los datos de procedencia de `pilot-source.md`. La huella que muestra el
    registro debe ser la misma.
 2. Para poder pedir su interpretación, copia la respuesta grabada del piloto al directorio de
-   datos. Con el valor de ejemplo de `AULANORMA_DATA_DIR`:
+   datos del ensayo:
 
    ```bash
-   mkdir -p /tmp/aulanorma-desarrollo/generation-recordings
+   mkdir -p "$AULANORMA_DATA_DIR/generation-recordings"
    cp specs/002-boe-scorm-export/pilot/interpretation-recording.json \
-     /tmp/aulanorma-desarrollo/generation-recordings/
+     "$AULANORMA_DATA_DIR/generation-recordings/"
    ```
 
    No hace falta reiniciar.
 
-3. En el registro del documento, pide la interpretación de la unidad con las páginas de su
-   sección, que están en `pilot-source.md`: de la 27 a la 29.
+3. En el registro del documento, indica la unidad y las páginas de su sección, que están en
+   `pilot-source.md`: de la 27 a la 29. Pulsa «Ver la estimación»: todavía no se envía nada.
+   Verás la estimación del coste, el máximo que se reserva y el presupuesto disponible. Con
+   el adaptador determinista todo es cero y figura como **coste simulado**: no es un precio.
+   Confirma la solicitud, o cambia la unidad o las páginas para ver la estimación de nuevo.
 4. Revisa el inventario contra esas páginas: cada elemento enlaza a la suya. Corrige lo que
    veas mal, añade lo que falte y retira lo que sobre.
-5. Valida, marcando la confirmación de que has revisado el inventario contra la sección
-   original; o rechaza, con un motivo.
+5. **Valida solo si la interpretación es correcta**, marcando la confirmación de que has
+   revisado el inventario contra la sección original. Si no lo es, corrígela o recházala, con
+   un motivo.
 
 La respuesta grabada no es una generación: es una transcripción mecánica de la sección,
 preparada para ensayar el recorrido, y la interfaz lo indica. Solo responde a ese documento,
@@ -228,6 +252,53 @@ y no guarda nada. Qué acredita y qué no está en
 Para ver un conflicto de edición, abre el formulario de un requisito en dos pestañas, guarda
 en una y después en la otra: la segunda no guarda nada, muestra la versión más reciente junto
 a tu cambio y te deja reenviarlo o descartarlo.
+
+### 3 quater. Proponer, revisar y aprobar el índice
+
+Necesitas una interpretación **validada** (apartado anterior). El índice se pide desde la
+página de la interpretación, en «Índice del temario», que muestra antes la estimación del
+coste, el máximo que se reserva y el presupuesto disponible. Con el adaptador determinista
+todo es cero y la moneda no está fijada: no son precios de ningún proveedor.
+
+**Con el documento del piloto**, copia también la propuesta grabada:
+
+```bash
+cp specs/002-boe-scorm-export/pilot/outline-recording.json \
+  "$AULANORMA_DATA_DIR/generation-recordings/"
+```
+
+**Límite del doble de pruebas.** Esa propuesta grabada responde solo al inventario del piloto
+tal como sale de su respuesta grabada. Revisa la interpretación con normalidad y corrige lo
+que haga falta: el producto no lo impide ni debe impedirlo. Si la corriges, el inventario
+deja de coincidir con la grabación y, al pedir el índice, el adaptador determinista no tendrá
+respuesta: el producto dirá que el servicio de generación no ha devuelto ninguna propuesta y
+no guardará nada. Es una limitación del doble, no un defecto de tu corrección ni del
+producto, y con un proveedor real no existiría. No valides una interpretación que no
+consideres correcta para sortearla: el índice del piloto solo podrá ensayarse con esta
+grabación si la interpretación resulta correcta tal como está.
+
+Después:
+
+1. Pulsa «Pedir la propuesta de índice». Verás sus entradas, cada una con los requisitos en
+   los que se apoya y su página, y la cobertura de cada requisito con su referencia
+   normativa.
+2. Quita una entrada: la cobertura pasa a incompleta y aparecen los requisitos sin cubrir.
+   Puedes seguir editando y abrir la «Vista previa», marcada como borrador no entregable,
+   pero al aprobar el producto lo impide y enumera los pendientes.
+3. Añade una entrada y marca los requisitos que cubre. Marcar un elemento no marca los que
+   dependen de él. Sin ninguno marcado, queda «sin respaldo normativo» y no cuenta.
+4. Sube, baja o renombra entradas. Cada cambio crea una versión nueva.
+5. Rechaza el índice con un motivo y devuélvelo a revisión, o apruébalo cuando la cobertura
+   esté completa.
+6. Cambia algo después de aprobar, aunque sea el orden: el índice vuelve a revisión y su
+   aprobación queda en el registro como «sin vigencia». Lo mismo ocurre si corriges la
+   interpretación.
+
+Para ver un conflicto, abre el formulario de una entrada en dos pestañas y guarda en las dos.
+
+La propuesta grabada del piloto es una transcripción mecánica del inventario: una entrada por
+capacidad y otra por contenido. No es una generación ni una propuesta didáctica. Qué acredita
+y qué no está en [`us2-check.md`](specs/002-boe-scorm-export/us2-check.md).
 
 Detén el servidor con `Ctrl+C`.
 

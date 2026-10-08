@@ -1,5 +1,6 @@
 // Vistas de la historia «documento e interpretación» (specs/002-boe-scorm-
-// export: US1; contracts/http-surface.md). Las comparten las páginas y las
+// export: US1; contracts/http-surface.md). Las de la historia del índice
+// están en `./outline` y se exportan desde aquí. Las comparten las páginas y las
 // acciones de `src/pages`: una acción que no puede guardar (un conflicto, un
 // bloqueo o un dato inválido) responde con la misma vista que la página, con
 // lo que el usuario envió.
@@ -25,17 +26,37 @@ import {
   INVENTORY_REVIEW_STATEMENT,
   MAX_SECTION_PAGES,
 } from "@/modules/structured-interpretation";
-import { html, layout, noticeBox } from "@/platform/web";
+import { html, noticeBox } from "@/platform/web";
 import type { Html, Notice, PageReply, SessionContext } from "@/platform/web";
+import {
+  budgetNote,
+  runCostNote,
+  KIND_NAMES,
+  moment,
+  pageLink,
+  pageLinks,
+  pagesLabel,
+  reply,
+  who,
+} from "./shared";
+import type {
+  BudgetFigures,
+  CostFigures,
+  Names,
+  RunCostFigures,
+} from "./shared";
+
+import { outlineNotice } from "./outline";
+
+export * from "./outline";
+export type {
+  BudgetFigures,
+  CostFigures,
+  Names,
+  RunCostFigures,
+} from "./shared";
 
 // --- Textos ---
-
-const KIND_NAMES: Readonly<Record<RequirementKind, string>> = {
-  capability: "Capacidad",
-  criterion: "Criterio de evaluación",
-  content: "Contenido",
-  subcontent: "Subapartado",
-};
 
 const STATUS_NAMES: Readonly<Record<Interpretation["status"], string>> = {
   in_review: "En revisión",
@@ -108,6 +129,8 @@ const REQUEST_REFUSALS: Readonly<Record<string, string>> = {
     "La respuesta del servicio de generación no cumple el formato exigido. Se ha rechazado y registrado, y no se ha guardado nada.",
   rejected_by_domain:
     "La respuesta del servicio de generación cita páginas o textos que no están en el documento. Se ha rechazado y registrado, y no se ha guardado nada.",
+  budget_exceeded:
+    "No hay presupuesto de generación disponible para esta operación, o supera el máximo por operación. No se ha enviado ni guardado nada.",
 };
 
 const CHANGE_PROBLEMS: Readonly<Record<ChangeRejection, string>> = {
@@ -204,45 +227,9 @@ function noticeOf(notice: Notice | undefined, limits?: PdfLimits): Html | null {
     );
   }
   const known = NOTICES[notice.code];
-  return known === undefined ? null : noticeBox(known[0], known[1]);
-}
-
-// Fecha y hora en UTC, sin depender de la configuración regional.
-function moment(at: number): string {
-  return `${new Date(at).toISOString().slice(0, 16).replace("T", " ")} UTC`;
-}
-
-export type Names = ReadonlyMap<string, string>;
-
-function who(names: Names, id: string): string {
-  return names.get(id) ?? "cuenta desconocida";
-}
-
-function pagesLabel(from: number, to: number): string {
-  return from === to
-    ? `página ${String(from)}`
-    : `páginas ${String(from)} a ${String(to)}`;
-}
-
-function pageLink(documentId: string, number: number): Html {
-  return html`<a href="/documents/${documentId}/pages/${number}"
-    >página ${number}</a
-  >`;
-}
-
-function pageLinks(documentId: string, from: number, to: number): Html {
-  return to === from
-    ? pageLink(documentId, from)
-    : html`${pageLink(documentId, from)} a ${pageLink(documentId, to)}`;
-}
-
-function reply(
-  status: number,
-  title: string,
-  session: SessionContext,
-  content: Html,
-): PageReply {
-  return { status, page: layout({ title, session, content }) };
+  return known === undefined
+    ? outlineNotice(notice)
+    : noticeBox(known[0], known[1]);
 }
 
 // --- Documentos ---
@@ -618,8 +605,13 @@ export function documentView(input: {
                   generación el texto de esas páginas, sin ningún dato de
                   usuarios.
                 </p>
-                <button type="submit" data-busy="Obteniendo la interpretación…">
-                  Pedir la interpretación
+                <p class="hint">
+                  Todavía no se envía nada: en el paso siguiente verás la
+                  estimación del coste y el presupuesto disponible, y podrás
+                  confirmar la solicitud o cambiarla.
+                </p>
+                <button type="submit" data-busy="Calculando la estimación…">
+                  Ver la estimación
                 </button>
               </fieldset>
             </form>`
@@ -806,6 +798,10 @@ export function interpretationView(input: {
   // Motivo escrito en un rechazo que no llegó a guardarse.
   readonly reason?: string;
   readonly problem?: string;
+  // Importes de la operación de la que procede.
+  readonly cost?: RunCostFigures;
+  // Apartado del índice de esta interpretación (`outlineSection`).
+  readonly outlineSection?: Html | null;
 }): PageReply {
   const { session, interpretation, document, history, names } = input;
   const { id, revision } = interpretation;
@@ -878,6 +874,11 @@ export function interpretationView(input: {
             input.provider === "deterministic"
               ? "Respuesta grabada del adaptador determinista. No es una generación real y no sirve para aceptar el recorrido."
               : input.provider
+          }
+          ${
+            input.cost === undefined
+              ? null
+              : runCostNote(input.cost, input.provider)
           }
         </dd>
       </dl>
@@ -1039,6 +1040,7 @@ ${input.reason ?? ""}</textarea>
               }`
           : null
       }
+      ${input.outlineSection ?? null}
 
       <h2>Registro</h2>
       ${
@@ -1091,6 +1093,76 @@ ${input.reason ?? ""}</textarea>
               )}
             </ul>`
       }`,
+  );
+}
+
+// Paso de confirmación de una petición de interpretación (FR-021): con la
+// unidad y las páginas ya indicadas, muestra la estimación, el máximo que se
+// reserva y lo disponible. Nada se ha enviado todavía.
+export function interpretationConfirmView(input: {
+  readonly session: SessionContext;
+  readonly document: DocumentRecord;
+  readonly unitCode: string;
+  readonly pageFrom: number;
+  readonly pageTo: number;
+  readonly cost: CostFigures;
+  readonly budget: BudgetFigures;
+  readonly provider: string;
+  // `true` si las cifras han cambiado desde las que el usuario vio.
+  readonly changed?: boolean;
+}): PageReply {
+  const { session, document, cost } = input;
+  return reply(
+    input.changed === true ? 409 : 200,
+    "Confirmar la solicitud de interpretación",
+    session,
+    html`<p class="crumbs">
+        <a href="/documents">Documentos</a> ›
+        <a href="/documents/${document.id}">${document.title}</a>
+      </p>
+      <h1>Confirmar la solicitud de interpretación</h1>
+      ${
+        input.changed === true
+          ? noticeBox(
+              "bad",
+              "La estimación o el coste máximo han cambiado desde que los viste. No se ha enviado nada: revisa las cifras actuales antes de confirmar.",
+            )
+          : null
+      }
+      <p>Todavía no se ha enviado nada al servicio de generación.</p>
+      <dl>
+        <dt>Unidad formativa</dt>
+        <dd>${input.unitCode}</dd>
+        <dt>Sección</dt>
+        <dd>${pageLinks(document.id, input.pageFrom, input.pageTo)}</dd>
+      </dl>
+      ${budgetNote({ budget: input.budget, cost, provider: input.provider })}
+      <form method="post" action="/api/interpretations/request">
+        <input type="hidden" name="csrf" value="${session.csrfToken}" />
+        <input type="hidden" name="document" value="${document.id}" />
+        <input type="hidden" name="unit_code" value="${input.unitCode}" />
+        <input type="hidden" name="page_from" value="${input.pageFrom}" />
+        <input type="hidden" name="page_to" value="${input.pageTo}" />
+        <input type="hidden" name="confirmed" value="yes" />
+        <input
+          type="hidden"
+          name="shown_estimate"
+          value="${cost.estimatedCost}"
+        />
+        <input type="hidden" name="shown_max" value="${cost.maxCost}" />
+        <div class="actions">
+          <button type="submit" data-busy="Obteniendo la interpretación…">
+            Confirmar y pedir la interpretación
+          </button>
+          <a href="/documents/${document.id}"
+            >Cambiar la unidad o las páginas</a
+          >
+        </div>
+      </form>
+      <p class="hint">
+        Si cambias la unidad o las páginas, la estimación se calcula de nuevo
+        antes de confirmar.
+      </p>`,
   );
 }
 

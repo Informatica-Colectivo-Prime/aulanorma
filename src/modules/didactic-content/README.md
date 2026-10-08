@@ -7,8 +7,19 @@ estructurada solo a través de su contrato público.
 
 ## Estado
 
-Vacía en esta funcionalidad. `index.ts` solo contiene `export {};`: no hay lógica de producto ni
-datos de ningún certificado.
+Contiene el **índice del temario** (historia 2 de `specs/002-boe-scorm-export`):
+
+- la propuesta de índice a partir de una interpretación validada y vigente, a través de la
+  interfaz de generación, con su esquema y la comprobación de que cada entrada se apoya en
+  requisitos que existen o va marcada «sin respaldo normativo»;
+- la edición con control de revisión: añadir, renombrar, cambiar vínculos, reordenar y quitar
+  entradas, sin borrar nada;
+- la cobertura (`coverage.ts`), calculada por vínculos explícitos y sin herencia;
+- la aprobación, que exige cobertura completa, y el rechazo, con motivo obligatorio;
+- la vigencia derivada de cada aprobación.
+
+Todavía no contiene los temas, sus aprobaciones ni la versión del temario. No hay datos de
+ningún certificado: el código de la unidad es un dato.
 
 ## Dependencias permitidas
 
@@ -20,8 +31,9 @@ datos de ningún certificado.
 
 El único punto de acceso a esta capa es su `index.ts` (`@/modules/didactic-content`). Importar
 sus rutas internas (`@/modules/didactic-content/<interno>`) está prohibido. Según la matriz de
-dependencias, solo `content-export` puede importarla; ni `platform` ni la entrega HTTP
-(`server.mjs` y `src/pages/api/health.ts`) pueden hacerlo.
+dependencias, pueden importarla `content-export`, las rutas de producto de `src/pages` y las
+vistas de `src/views`; ni `platform`, ni `server.mjs`, ni la comprobación de estado
+(`src/pages/api/health.ts`) pueden hacerlo.
 
 ## Cómo se imponen los límites
 

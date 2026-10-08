@@ -41,6 +41,7 @@ jobs:
       AULANORMA_SESSION_MAX_HOURS: "12"
       AULANORMA_PDF_MAX_MIB: "32"
       AULANORMA_PDF_MAX_PAGES: "600"
+      AULANORMA_GENERATION_MAX_OPERATION_COST: "1000000"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -69,6 +70,7 @@ jobs:
       AULANORMA_SESSION_MAX_HOURS: "12"
       AULANORMA_PDF_MAX_MIB: "32"
       AULANORMA_PDF_MAX_PAGES: "600"
+      AULANORMA_GENERATION_MAX_OPERATION_COST: "1000000"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -96,6 +98,7 @@ jobs:
       AULANORMA_SESSION_MAX_HOURS: "12"
       AULANORMA_PDF_MAX_MIB: "32"
       AULANORMA_PDF_MAX_PAGES: "600"
+      AULANORMA_GENERATION_MAX_OPERATION_COST: "1000000"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

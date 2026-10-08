@@ -79,6 +79,30 @@ páginas 27 a 29 tal como lo extrae el producto, identificados por la huella `in
 Para usarla, se copia en el directorio `generation-recordings` del directorio de datos; ver
 las instrucciones del [README](../../../README.md).
 
+## La propuesta de índice grabada
+
+[`outline-recording.json`](./outline-recording.json) es la respuesta que el adaptador
+determinista da a la petición del índice de esta unidad, identificada por la huella del
+inventario que produce la respuesta anterior sin corregir (71 requisitos).
+
+- **Tampoco es la salida de ningún modelo.** Se preparó con un script desechable que agrupa
+  el inventario de forma mecánica: una entrada por cada capacidad, apoyada en ella y en sus
+  criterios, y una por cada contenido, apoyada en él y en todos sus subapartados. Son 4
+  entradas, que vinculan los 71 requisitos; los títulos son el texto de la capacidad o del
+  contenido, recortado a 200 caracteres. No es una propuesta didáctica.
+- El producto la trata como a cualquier propuesta: comprueba su esquema y que cada requisito
+  referido existe en el inventario, y calcula la cobertura por su cuenta.
+- Si la interpretación se corrige antes de pedir el índice, el inventario cambia, la huella
+  deja de coincidir y el adaptador no responde.
+
+Comprobado desde el navegador el 2026-10-07 con el PDF real: 4 entradas, 71 de 71 requisitos
+cubiertos; al quitar la entrada de la segunda capacidad, 62 de 71 y la aprobación bloqueada
+con sus 9 pendientes. Ver [../us2-check.md](../us2-check.md).
+
+**La interpretación del piloto sigue pendiente de la revisión del mantenedor.** Las
+validaciones y aprobaciones de esos ensayos se hicieron con cuentas y datos desechables, que
+no se conservan: no son la validación ni la aprobación de ninguna persona.
+
 ## Qué acredita y qué no
 
 - **Acredita** que el documento real se admite, se registra con su huella sin modificarlo y
