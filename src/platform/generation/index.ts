@@ -170,8 +170,26 @@ export interface Generation {
     status: Exclude<GenerationRunStatus, "running">,
   ): void;
   getRun(runId: string): GenerationRun | undefined;
+  // Ejecuciones pedidas para un elemento, de la más antigua a la más reciente.
+  listRuns(kind: GenerationRunKind, targetId: string): readonly GenerationRun[];
   runCost(runId: string): RunCost;
   listCalls(runId: string): readonly GenerationCall[];
+  // Recuento de lo registrado, para las métricas mínimas.
+  summary(): GenerationSummary;
+}
+
+export interface GenerationSummary {
+  readonly runs: Readonly<Record<GenerationRunStatus, number>>;
+  readonly calls: number;
+  readonly callsByResult: Readonly<Record<CallValidation, number>>;
+  // Latencia de las llamadas registradas, en milisegundos; `null` sin
+  // llamadas.
+  readonly latencyMs: {
+    readonly mean: number;
+    readonly p95: number;
+    readonly max: number;
+  } | null;
+  readonly providers: readonly string[];
 }
 
 function text(value: unknown): string {
@@ -180,6 +198,19 @@ function text(value: unknown): string {
 
 function integer(value: unknown): number {
   return typeof value === "number" ? value : Number(value);
+}
+
+function runOf(row: Record<string, unknown>): GenerationRun {
+  return {
+    id: text(row.id),
+    kind: RUN_KINDS.find((kind) => kind === row.kind) ?? "interpretation",
+    targetId: text(row.target_id),
+    requestedBy: text(row.requested_by),
+    requestedAt: integer(row.requested_at),
+    status: RUN_STATUSES.find((status) => status === row.status) ?? "failed",
+    estimatedCost: integer(row.estimated_cost),
+    finishedAt: row.finished_at === null ? null : integer(row.finished_at),
+  };
 }
 
 const RUN_STATUSES: readonly GenerationRunStatus[] = [
@@ -357,20 +388,17 @@ export function createGeneration({
       const row = db
         .prepare("SELECT * FROM generation_run WHERE id = ?")
         .get(runId);
-      if (row === undefined) {
-        return undefined;
-      }
-      return {
-        id: text(row.id),
-        kind: RUN_KINDS.find((kind) => kind === row.kind) ?? "interpretation",
-        targetId: text(row.target_id),
-        requestedBy: text(row.requested_by),
-        requestedAt: integer(row.requested_at),
-        status:
-          RUN_STATUSES.find((status) => status === row.status) ?? "failed",
-        estimatedCost: integer(row.estimated_cost),
-        finishedAt: row.finished_at === null ? null : integer(row.finished_at),
-      };
+      return row === undefined ? undefined : runOf(row);
+    },
+
+    listRuns(kind, targetId) {
+      return db
+        .prepare(
+          "SELECT * FROM generation_run WHERE kind = ? AND target_id = ? " +
+            "ORDER BY requested_at, id",
+        )
+        .all(kind, targetId)
+        .map(runOf);
     },
 
     runCost(runId) {
@@ -418,6 +446,62 @@ export function createGeneration({
             VALIDATIONS.find((item) => item === row.validation_result) ??
             "provider_error",
         }));
+    },
+
+    summary() {
+      const countBy = <Key extends string>(
+        keys: readonly Key[],
+        sql: string,
+      ): Record<Key, number> => {
+        const counts = Object.fromEntries(
+          keys.map((key) => [key, 0]),
+        ) as Record<Key, number>;
+        for (const row of db.prepare(sql).all()) {
+          const key = keys.find((item) => item === row.key);
+          if (key !== undefined) {
+            counts[key] = integer(row.total);
+          }
+        }
+        return counts;
+      };
+      const latencies = db
+        .prepare("SELECT latency_ms FROM generation_call ORDER BY latency_ms")
+        .all()
+        .map((row) => integer(row.latency_ms));
+      return {
+        runs: countBy(
+          RUN_STATUSES,
+          "SELECT status AS key, count(*) AS total FROM generation_run " +
+            "GROUP BY status",
+        ),
+        calls: latencies.length,
+        callsByResult: countBy(
+          VALIDATIONS,
+          "SELECT validation_result AS key, count(*) AS total " +
+            "FROM generation_call GROUP BY validation_result",
+        ),
+        latencyMs:
+          latencies.length === 0
+            ? null
+            : {
+                mean: Math.round(
+                  latencies.reduce((sum, value) => sum + value, 0) /
+                    latencies.length,
+                ),
+                // Percentil 95 por rango más cercano.
+                p95:
+                  latencies[Math.ceil(latencies.length * 0.95) - 1] ??
+                  latencies.at(-1) ??
+                  0,
+                max: latencies.at(-1) ?? 0,
+              },
+        providers: db
+          .prepare(
+            "SELECT DISTINCT provider FROM generation_call ORDER BY provider",
+          )
+          .all()
+          .map((row) => text(row.provider)),
+      };
     },
   };
 }

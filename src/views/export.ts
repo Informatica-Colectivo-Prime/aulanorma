@@ -19,7 +19,7 @@ import { moment, reply, who } from "./shared";
 import type { Names } from "./shared";
 import { blockersBox } from "./syllabus";
 
-const FAILURES: Readonly<Record<ExportFailure, string>> = {
+export const EXPORT_FAILURES: Readonly<Record<ExportFailure, string>> = {
   not_found: "La versión indicada no existe.",
   not_current:
     "La versión no tiene una aprobación vigente: su índice, su interpretación o alguno de sus temas han cambiado después de aprobarla.",
@@ -33,7 +33,7 @@ const FAILURES: Readonly<Record<ExportFailure, string>> = {
     "No se pudo guardar el paquete. No ha quedado ningún fichero parcial.",
 };
 
-const DOWNLOAD_RESULTS: Readonly<Record<string, string>> = {
+export const DOWNLOAD_RESULTS: Readonly<Record<string, string>> = {
   granted: "Entregada",
   not_current: "Denegada: versión sin vigencia",
   incomplete: "Denegada: requisitos sin cubrir",
@@ -41,7 +41,7 @@ const DOWNLOAD_RESULTS: Readonly<Record<string, string>> = {
 };
 
 export function exportProblem(reason: ExportFailure): string {
-  return `No se ha exportado nada. ${FAILURES[reason]}`;
+  return `No se ha exportado nada. ${EXPORT_FAILURES[reason]}`;
 }
 
 export const DOWNLOAD_PROBLEMS = {
@@ -79,7 +79,7 @@ function exportRow(
           ? html`<span class="tag good">Generado y comprobado</span>`
           : html`<span class="tag bad">Fallido</span>
               <p class="hint">
-                ${record.failure === null ? "" : FAILURES[record.failure]}
+                ${record.failure === null ? "" : EXPORT_FAILURES[record.failure]}
               </p>`
       }
       ${record.trial ? html`<p class="hint">Paquete de ensayo.</p>` : null}
@@ -206,14 +206,14 @@ export function exportView(input: {
       <h2>Qué se comprueba en un paquete generado</h2>
       <ul>
         <li>
-          <strong>Lectura del manifiesto:</strong> se relee el fichero y su
-          manifiesto se lee con un analizador de XML ajeno al generador.
+          <strong>Lectura del paquete:</strong> el fichero generado se vuelve a
+          abrir y su índice interno, el manifiesto, se lee con una herramienta
+          distinta de la que lo escribió.
         </li>
         <li>
-          <strong>Reglas del perfil que exporta AulaNorma:</strong> el
-          manifiesto declara todos sus ficheros y no sobra ninguno, es un único
-          contenido SCORM 1.2 que identifica la versión aprobada, y nada carga
-          recursos de fuera.
+          <strong>Reglas propias de AulaNorma:</strong> el manifiesto declara
+          todos sus ficheros y no sobra ninguno, es un único contenido SCORM 1.2
+          que identifica la versión aprobada, y nada carga recursos de fuera.
         </li>
         <li>
           <strong>Lo que no se comprueba:</strong> no se valida contra los

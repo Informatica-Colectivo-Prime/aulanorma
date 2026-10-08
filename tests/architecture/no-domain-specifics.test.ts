@@ -1,8 +1,11 @@
-// Sin lógica de dominio específica de un certificado (FR-024).
+// Sin lógica de dominio específica de un certificado (FR-024 de la base;
+// specs/002-boe-scorm-export: SC-045).
 //
-// Busca los códigos de certificado en `src/`, `tests/`, `scripts/` y los
+// Busca los códigos del certificado y de la unidad formativa del piloto en
+// `src/`, `tests/`, `scripts/`, `prompts/`, `security/`, `.github/` y los
 // ficheros operativos de la raíz (todos salvo Markdown), tanto versionados como
-// nuevos no ignorados por Git. El patrón se construye a partir de fragmentos
+// nuevos no ignorados por Git. Los datos del piloto solo están en
+// `specs/002-boe-scorm-export/`, que no es código del producto. El patrón se construye a partir de fragmentos
 // para que este fichero no contenga los códigos.
 import { execFileSync } from "node:child_process";
 import {
@@ -37,7 +40,51 @@ const certificatePattern = new RegExp(
   "i",
 );
 
-const SCANNED_DIRECTORIES = ["src/", "tests/", "scripts/"];
+const SCANNED_DIRECTORIES = [
+  "src/",
+  "tests/",
+  "scripts/",
+  "prompts/",
+  "security/",
+  ".github/",
+];
+
+// Áreas de la plataforma, capas de dominio, entrega y operación añadidas por
+// el producto: de cada una debe examinarse al menos un fichero, para que una
+// zona nueva no quede fuera por un cambio de estructura.
+const PRODUCT_AREAS = [
+  "src/platform/audit/",
+  "src/platform/config/",
+  "src/platform/generation/",
+  "src/platform/health/",
+  "src/platform/http-boundary/",
+  "src/platform/identity/",
+  "src/platform/logging/",
+  "src/platform/markup/",
+  "src/platform/persistence/",
+  "src/platform/version/",
+  "src/platform/web/",
+  "src/modules/normative-source/",
+  "src/modules/structured-interpretation/",
+  "src/modules/didactic-content/",
+  "src/modules/content-export/",
+  "src/modules/content-export/package/assets/",
+  "src/pages/",
+  "src/pages/api/",
+  "src/pages/history/",
+  "src/pages/metrics/",
+  "src/views/",
+  "scripts/admin/",
+  "scripts/ops/",
+  "prompts/interpretation/",
+  "prompts/outline/",
+  "prompts/topic/",
+  "tests/contract/",
+  "tests/integration/",
+  "tests/support/",
+  "tests/fixtures/generation/",
+  "tests/fixtures/scorm/",
+];
 
 function isScanned(file: string): boolean {
   if (SCANNED_DIRECTORIES.some((directory) => file.startsWith(directory))) {
@@ -151,5 +198,59 @@ describe("sin códigos de certificado en código y configuración", () => {
     expect(files).toContain("package.json");
     expect(files).toContain("tests/architecture/no-domain-specifics.test.ts");
     expect(filesWithCodes(repoRoot)).toEqual([]);
+  });
+
+  test("se examinan todas las áreas, capas, páginas, scripts e instrucciones del producto", () => {
+    const files = candidateFiles(repoRoot);
+    for (const area of PRODUCT_AREAS) {
+      expect(
+        files.some((file) => file.startsWith(area)),
+        area,
+      ).toBe(true);
+    }
+    // Ningún área de la plataforma ni capa de dominio queda sin declarar.
+    for (const parent of ["src/platform/", "src/modules/"]) {
+      const found = new Set(
+        files
+          .filter((file) => file.startsWith(parent))
+          .map(
+            (file) =>
+              `${parent}${file.slice(parent.length).split("/")[0] ?? ""}/`,
+          ),
+      );
+      expect(
+        [...found].filter((area) => !PRODUCT_AREAS.includes(area)),
+      ).toEqual([]);
+    }
+  });
+
+  test("las pruebas del recorrido usan una unidad sintética, distinta de la del piloto", () => {
+    const recordings = candidateFiles(repoRoot).filter(
+      (file) =>
+        file.startsWith("tests/fixtures/generation/") && file.endsWith(".json"),
+    );
+    expect(recordings.length).toBeGreaterThan(0);
+    // Códigos de unidad o de certificado que aparecen en las grabaciones y
+    // en las pruebas del recorrido: todos deben ser sintéticos.
+    const sources = [
+      ...recordings,
+      ...candidateFiles(repoRoot).filter(
+        (file) =>
+          file.startsWith("tests/integration/") ||
+          file.startsWith("tests/support/"),
+      ),
+    ];
+    const units = new Set<string>();
+    for (const file of sources) {
+      const content = readFileSync(path.join(repoRoot, file), "utf8");
+      expect(certificatePattern.test(content), file).toBe(false);
+      for (const match of content.matchAll(/\b[A-Z]{2,4}\d{4}\b/g)) {
+        units.add(match[0]);
+      }
+    }
+    expect(units.size).toBeGreaterThan(0);
+    for (const unit of units) {
+      expect(unit).toMatch(/^UX9\d{3}$/);
+    }
   });
 });

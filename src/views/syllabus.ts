@@ -38,7 +38,7 @@ import type { BudgetFigures, Names } from "./shared";
 // --- Textos ---
 
 const DETERMINISTIC_ORIGIN =
-  "Respuestas grabadas del adaptador determinista. No son una generación real: no acreditan la calidad pedagógica del contenido ni sirven para aceptar el recorrido.";
+  "Respuestas grabadas de prueba, sin proveedor de generación. No son una generación real: no acreditan la calidad pedagógica del contenido ni sirven para aceptar el recorrido.";
 
 const FAILURES: Readonly<Record<string, string>> = {
   provider_error:
@@ -470,7 +470,12 @@ export function syllabusView(input: {
       }
 
       <h2>Temas</h2>
-      <div class="scroll">
+      <div
+        class="scroll"
+        tabindex="0"
+        role="region"
+        aria-label="Estado de cada tema del temario"
+      >
         <table>
           <caption class="skip">
             Estado de cada tema del temario
@@ -504,7 +509,12 @@ export function syllabusView(input: {
         desarrollado. Que el desarrollo sea suficiente lo decides tú al revisar
         cada tema.
       </p>
-      <div class="scroll">
+      <div
+        class="scroll"
+        tabindex="0"
+        role="region"
+        aria-label="Cita y desarrollo de cada requisito del inventario"
+      >
         <table>
           <caption class="skip">
             Cita y desarrollo de cada requisito del inventario
@@ -1285,7 +1295,7 @@ export interface UncertainView {
   readonly sentAt: number | null;
 }
 
-const TASK_NAMES: Readonly<Record<string, string>> = {
+export const TASK_NAMES: Readonly<Record<string, string>> = {
   interpretation: "Interpretación",
   outline: "Propuesta de índice",
   topic: "Tema del temario",
@@ -1347,7 +1357,7 @@ export function budgetView(input: {
       <p class="hint">
         ${
           input.provider === "deterministic"
-            ? "Coste simulado: el adaptador determinista responde con grabaciones y no cuesta nada. Estas cifras no son precios de ningún proveedor, y la moneda no está fijada mientras no haya uno seleccionado."
+            ? "Coste simulado: las respuestas son grabaciones de prueba y no cuestan nada. Estas cifras no son precios de ningún proveedor, y la moneda no está fijada mientras no haya uno seleccionado."
             : `Proveedor de generación: ${input.provider}.`
         }
       </p>
@@ -1461,7 +1471,12 @@ export function budgetView(input: {
       ${
         input.changes.length === 0
           ? html`<p class="muted">El límite no se ha modificado nunca.</p>`
-          : html`<div class="scroll">
+          : html`<div
+              class="scroll"
+              tabindex="0"
+              role="region"
+              aria-label="Registro de modificaciones del límite"
+            >
               <table>
                 <caption class="skip">
                   Registro de modificaciones del límite

@@ -849,6 +849,7 @@ describe("lista cerrada de rutas de producto", () => {
   const ACTIONS = [
     "/api/session/sign-in",
     "/api/session/sign-out",
+    "/api/session/extend",
     "/api/account/password",
   ];
 
@@ -869,6 +870,7 @@ describe("lista cerrada de rutas de producto", () => {
       ["/account/password", ["GET"], 0],
       ["/api/session/sign-in", ["POST"], 4096],
       ["/api/session/sign-out", ["POST"], 4096],
+      ["/api/session/extend", ["POST"], 4096],
       ["/api/account/password", ["POST"], 4096],
       ["/documents", ["GET"], 0],
       ["/documents/new", ["GET"], 0],
@@ -892,6 +894,12 @@ describe("lista cerrada de rutas de producto", () => {
       ["/export/packages/:id", ["GET"], 0],
       ["/export/packages/:id/instructions", ["GET"], 0],
       ["/budget", ["GET"], 0],
+      ["/history", ["GET"], 0],
+      ["/history/documents/:id", ["GET"], 0],
+      ["/history/interpretations/:id", ["GET"], 0],
+      ["/history/outlines/:id", ["GET"], 0],
+      ["/history/topics/:id", ["GET"], 0],
+      ["/metrics", ["GET"], 0],
       ["/api/documents/upload", ["POST"], 67_108_864],
       ["/api/documents/resolve-page", ["POST"], 4096],
       ["/api/interpretations/request", ["POST"], 4096],
@@ -944,6 +952,12 @@ describe("lista cerrada de rutas de producto", () => {
     `/export/packages/${ID}`,
     `/export/packages/${ID}/instructions`,
     "/budget",
+    "/history",
+    `/history/documents/${ID}`,
+    `/history/interpretations/${ID}`,
+    `/history/outlines/${ID}`,
+    `/history/topics/${ID}`,
+    "/metrics",
   ])("GET %s se delega una vez", async (url) => {
     const handle = neverCalled();
     const result = await run(handle, { url });
@@ -1003,6 +1017,12 @@ describe("lista cerrada de rutas de producto", () => {
     `/topics/${ID}/blocks/${OTHER}/x`,
     `/topics/${ID.toUpperCase()}`,
     "/budget/",
+    "/history/",
+    "/metrics/",
+    "/api/metrics",
+    "/history/documents",
+    `/history/exports/${ID}`,
+    `/history/topics/${ID}/edit`,
     "/budget/limit",
     "/export",
     "/export/packages",

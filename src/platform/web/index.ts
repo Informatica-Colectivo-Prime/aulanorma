@@ -341,9 +341,14 @@ const STYLE = `
 *{box-sizing:border-box}
 body{margin:0;font:1rem/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:#fff}
 a{color:var(--accent)}
-:focus-visible{outline:3px solid #f2a900;outline-offset:2px}
+:focus-visible{outline:3px solid #1b1f24;outline-offset:2px;box-shadow:0 0 0 2px #fff}
 .skip{position:absolute;left:-999px;top:0;background:#fff;padding:.5rem 1rem}
 .skip:focus{left:.5rem;top:.5rem;z-index:1}
+.session-warning{border:.25rem solid var(--bad);background:#fff;padding:1rem;margin:0}
+.session-warning p{max-width:60rem;margin:0 auto .5rem}
+.session-warning form{max-width:60rem;margin:0 auto}
+.session-warning button{margin-top:.5rem}
+.session-title{font-weight:700;font-size:1.15rem}
 header{border-bottom:1px solid var(--line);background:var(--surface)}
 .bar{max-width:46rem;margin:0 auto;padding:.75rem 1rem;display:flex;flex-wrap:wrap;gap:.5rem 1rem;align-items:center;justify-content:space-between}
 .brand{font-weight:700;font-size:1.125rem;color:var(--ink);text-decoration:none}
@@ -369,7 +374,7 @@ dd{margin:0 0 .5rem}
 .bar,main{max-width:60rem}
 textarea,select{display:block;font:inherit;width:100%;max-width:40rem;padding:.55rem .65rem;border:1px solid #6b7480;border-radius:.3rem;background:#fff;color:var(--ink)}
 textarea{min-height:7rem}
-input[type=checkbox]{display:inline-block;width:auto;margin:0 .5rem 0 0}
+input[type=checkbox]{display:inline-block;flex:none;width:1.5rem;height:1.5rem;margin:0 .5rem 0 0}
 input[type=file]{border:0;padding:.3rem 0}
 label.check{font-weight:400;display:flex;align-items:flex-start;gap:.25rem;max-width:40rem}
 fieldset{border:1px solid var(--line);border-radius:.3rem;margin:1.25rem 0;padding:.25rem 1rem 1rem}
@@ -413,6 +418,16 @@ button.secondary{background:#fff;color:var(--accent)}
 // Estado de carga: al enviar un formulario, su botón se desactiva y cambia su
 // texto por el de `data-busy`. Al volver con el historial se restaura.
 //
+// Aviso de caducidad (`#sesion-aviso`): dos minutos antes de que la sesión
+// caduque por inactividad, o la mitad del periodo si es más corto, muestra el
+// aviso, le lleva el foco y ofrece ampliarla. La ampliación es un envío al
+// servidor, que es quien decide; el script no hace ninguna consulta por su
+// cuenta, así que una pestaña abierta no mantiene la sesión. Las pestañas se
+// avisan entre sí por el almacenamiento local, sin pasar por el servidor: la
+// actividad o la ampliación en una retrasa el aviso en las demás, y la salida
+// en una lo da por terminado en todas. La duración máxima no se puede
+// ampliar: cuando es ella la que vence, el aviso lo dice.
+//
 // Subida de un PDF (`form[data-upload]`): el fichero se envía como cuerpo
 // `application/pdf` y los demás campos, en una cabecera. La respuesta dice a
 // qué página ir; si no hay respuesta válida, el formulario lo explica.
@@ -421,7 +436,20 @@ function busy(button){if(!button||button.disabled){return}button.setAttribute("d
 function idle(button){if(!button){return}button.disabled=false;button.removeAttribute("aria-busy");button.textContent=button.getAttribute("data-label")||button.textContent}
 function encode(text){var bytes=new TextEncoder().encode(text),binary="";bytes.forEach(function(byte){binary+=String.fromCharCode(byte)});return btoa(binary).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=+$/,"")}
 function upload(form){var button=form.querySelector("button[type=submit]"),status=form.querySelector("[data-upload-status]"),input=form.querySelector("input[type=file]"),file=input.files[0],fields={},csrf="";function fail(text){idle(button);status.textContent=text;status.focus()}if(!file){fail("Elige un fichero PDF.");return}if(file.size>Number(form.getAttribute("data-max-bytes"))){fail(form.getAttribute("data-too-large"));return}new FormData(form).forEach(function(value,name){if(typeof value==="string"){if(name==="csrf"){csrf=value}else{fields[name]=value}}});status.textContent="";busy(button);fetch(form.action,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/pdf","X-AulaNorma-Csrf":csrf,"X-AulaNorma-Document":encode(JSON.stringify(fields))},body:file}).then(function(response){return response.json()}).then(function(result){if(typeof result.location!=="string"||result.location.charAt(0)!=="/"){throw new Error}window.location.assign(result.location)}).catch(function(){fail(form.getAttribute("data-failed"))})}
-document.addEventListener("submit",function(event){var form=event.target;if(form.hasAttribute("data-upload")){event.preventDefault();upload(form);return}busy(form.querySelector("button[type=submit]"))});
+function sessionWatch(){var box=document.getElementById("sesion-aviso");if(!box){return function(){}}var KEY="aulanorma-sesion",title=document.getElementById("sesion-titulo"),text=document.getElementById("sesion-texto"),count=document.getElementById("sesion-cuenta"),live=document.getElementById("sesion-estado"),form=document.getElementById("sesion-ampliar"),again=document.getElementById("sesion-entrar"),button=form.querySelector("button"),loaded=Date.now(),serverNow=Number(box.getAttribute("data-now")),idleMs=Number(box.getAttribute("data-idle-ms")),idleAt=loaded+Number(box.getAttribute("data-idle-at"))-serverNow,maxAt=loaded+Number(box.getAttribute("data-max-at"))-serverNow,warn=Math.min(120000,idleMs/2),state="ok",previous=null,said=0;
+function span(ms){var s=Math.max(1,Math.ceil(ms/1000));if(s>=90){return Math.round(s/60)+" minutos"}if(s>=60){return "1 minuto"}return s+(s===1?" segundo":" segundos")}
+function clock(ms){var s=Math.max(0,Math.ceil(ms/1000)),r=s%60;return Math.floor(s/60)+":"+(r<10?"0":"")+r}
+function publish(value){try{localStorage.setItem(KEY,JSON.stringify(value))}catch(error){}}
+function show(kind,left){if(state!==kind){state=kind;said=0;if(kind==="idle"){title.textContent="Tu sesión está a punto de caducar";text.textContent="Por inactividad, tu sesión caducará dentro de "+span(left)+". Si caduca, lo que hayas escrito en esta página y no hayas enviado se perderá. Pulsa «Continuar la sesión» para seguir trabajando.";form.hidden=false}else{title.textContent="Tu sesión está a punto de terminar";text.textContent="Tu sesión termina dentro de "+span(left)+" porque ha alcanzado su duración máxima, y no se puede ampliar. Envía ahora lo que tengas pendiente o cópialo: después tendrás que volver a entrar.";form.hidden=true}again.hidden=true;if(box.hidden){previous=document.activeElement}box.hidden=false;(kind==="idle"?button:box).focus()}count.textContent="Tiempo restante: "+clock(left);var s=Math.ceil(left/1000),mark=s<=10?10:s<=30?30:s<=60?60:0;if(mark&&mark!==said){said=mark;live.textContent=mark===60?"Queda 1 minuto de sesión.":"Quedan "+mark+" segundos de sesión."}}
+function hide(message){if(state==="ok"){return}state="ok";box.hidden=true;live.textContent=message;if(previous&&document.contains(previous)&&previous.focus){previous.focus()}previous=null}
+function end(){if(state==="ended"){return}state="ended";title.textContent="Tu sesión ha terminado";text.textContent="Lo que quedara sin enviar en esta página no se ha guardado. Puedes copiarlo antes de salir de ella. Para seguir trabajando, vuelve a entrar.";count.textContent="";live.textContent="";form.hidden=true;again.hidden=false;box.hidden=false;again.querySelector("a").focus()}
+function tick(){if(state==="ended"){return}var byMax=maxAt<=idleAt,left=(byMax?maxAt:idleAt)-Date.now();if(left<=0){end()}else if(left<=warn){show(byMax?"max":"idle",left)}else{hide("")}}
+function extend(){var started=Date.now();busy(button);fetch(form.getAttribute("action"),{method:"POST",credentials:"same-origin",redirect:"manual",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"csrf="+encodeURIComponent(form.querySelector("input[name=csrf]").value)}).then(function(response){idle(button);if(response.status===204){idleAt=started+idleMs;publish({idleAt:idleAt});hide("Sesión ampliada.")}else if(response.status>=500){retry()}else{publish({ended:true});end()}},function(){idle(button);retry()})}
+function retry(){live.textContent="No se ha podido ampliar la sesión. Comprueba la conexión y vuelve a intentarlo."}
+window.addEventListener("storage",function(event){if(event.key!==KEY||!event.newValue||state==="ended"){return}var value;try{value=JSON.parse(event.newValue)}catch(error){return}if(value&&value.ended){end()}else if(value&&typeof value.idleAt==="number"&&value.idleAt>idleAt){idleAt=Math.min(value.idleAt,Date.now()+idleMs);tick()}});
+publish({idleAt:idleAt});setInterval(tick,1000);tick();return extend}
+var extendSession=sessionWatch();
+document.addEventListener("submit",function(event){var form=event.target;if(form.id==="sesion-ampliar"){event.preventDefault();extendSession();return}if(form.hasAttribute("data-upload")){event.preventDefault();upload(form);return}if(form.getAttribute("action")==="/api/session/sign-out"){try{localStorage.setItem("aulanorma-sesion",JSON.stringify({ended:true}))}catch(error){}}busy(form.querySelector("button[type=submit]"))});
 window.addEventListener("pageshow",function(){document.querySelectorAll("button[aria-busy]").forEach(idle)});
 `;
 
@@ -435,7 +463,8 @@ const CONTENT_SECURITY_POLICY = [
   "default-src 'none'",
   `style-src 'sha256-${sha256Base64(STYLE)}'`,
   `script-src 'sha256-${sha256Base64(SCRIPT)}'`,
-  // Solo la subida de un PDF usa `fetch`, y solo hacia el propio origen.
+  // Solo la subida de un PDF y la ampliación de la sesión usan `fetch`, y
+  // solo hacia el propio origen.
   "connect-src 'self'",
   "form-action 'self'",
   "base-uri 'none'",
@@ -462,6 +491,40 @@ export interface LayoutProps {
   readonly content: Html;
 }
 
+// Aviso de caducidad de la sesión, oculto hasta que el script lo muestra. Los
+// plazos van como instantes del servidor, junto con su hora, para que el
+// navegador los traslade a su propio reloj.
+function sessionWarning(session: SessionContext | null): Html | null {
+  return session === null
+    ? null
+    : html`<section
+          id="sesion-aviso"
+          class="session-warning"
+          role="alertdialog"
+          aria-modal="false"
+          aria-labelledby="sesion-titulo"
+          aria-describedby="sesion-texto"
+          tabindex="-1"
+          data-now="${Date.now()}"
+          data-idle-at="${session.idleExpiresAt}"
+          data-idle-ms="${session.idleMs}"
+          data-max-at="${session.expiresAt}"
+          hidden
+        >
+          <p id="sesion-titulo" class="session-title"></p>
+          <p id="sesion-texto"></p>
+          <p id="sesion-cuenta" aria-hidden="true"></p>
+          <form id="sesion-ampliar" method="post" action="/api/session/extend">
+            <input type="hidden" name="csrf" value="${session.csrfToken}" />
+            <button type="submit" data-busy="Ampliando…">
+              Continuar la sesión
+            </button>
+          </form>
+          <p id="sesion-entrar" hidden><a href="/login">Volver a entrar</a></p>
+        </section>
+        <p id="sesion-estado" class="skip" role="status"></p>`;
+}
+
 // Documento común: enlace para saltar al contenido, cabecera con la
 // navegación y la salida cuando hay sesión, y un único `main`.
 export function layout({ title, session, content }: LayoutProps): Html {
@@ -478,7 +541,13 @@ export function layout({ title, session, content }: LayoutProps): Html {
             }
             ${
               session.user.roles.length > 0
-                ? html`<li><a href="/budget">Presupuesto</a></li>`
+                ? html`<li><a href="/budget">Presupuesto</a></li>
+                    <li><a href="/history">Historial</a></li>`
+                : null
+            }
+            ${
+              session.user.roles.includes("admin")
+                ? html`<li><a href="/metrics">Métricas</a></li>`
                 : null
             }
             <li><a href="/account/password">Contraseña</a></li>
@@ -503,6 +572,7 @@ export function layout({ title, session, content }: LayoutProps): Html {
       </head>
       <body>
         <a class="skip" href="#contenido">Saltar al contenido</a>
+        ${sessionWarning(session)}
         <header>
           <div class="bar">
             <a class="brand" href="${session === null ? "/login" : "/"}"
@@ -772,6 +842,11 @@ export interface ActionReply {
   readonly event?: ProductEvent;
 }
 
+// Acción que no lleva a otra página: responde 204, sin cuerpo.
+export interface DoneReply {
+  readonly done: true;
+}
+
 export interface ActionInput {
   readonly field: (name: string) => string;
   readonly correlationId: string;
@@ -924,7 +999,9 @@ export function entryAction(
 // un perfil.
 export function protectedAction(
   options: AccessOptions,
-  handle: (input: ProtectedActionInput) => Promise<ActionReply | PageReply>,
+  handle: (
+    input: ProtectedActionInput,
+  ) => Promise<ActionReply | PageReply | DoneReply>,
 ): NextApiHandler {
   return action(async (req, res, runtime, correlationId) => {
     const { config, identity, audit } = runtime;
@@ -973,7 +1050,9 @@ export function protectedAction(
       session,
       sessionCookie,
     });
-    if ("page" in reply) {
+    if ("done" in reply) {
+      sendEmpty(res, 204);
+    } else if ("page" in reply) {
       // Un conflicto o un bloqueo: se explica en una página, sin guardar
       // nada y sin redirigir, para conservar lo que el usuario envió.
       sendPage(res, reply.status, reply.page, []);

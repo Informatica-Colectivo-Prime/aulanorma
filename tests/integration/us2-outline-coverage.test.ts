@@ -337,7 +337,7 @@ describe("escenario 1: pedir el índice", () => {
     expect(body).toContain("La propuesta de índice se ha guardado.");
     expect(body).toContain("Propuesto");
     expect(body).toContain(
-      "Respuesta grabada del adaptador determinista. No es una generación real",
+      "Respuesta grabada de prueba, sin proveedor de generación. No es una generación real",
     );
     for (const title of TITLES) {
       expect(body).toContain(title);
