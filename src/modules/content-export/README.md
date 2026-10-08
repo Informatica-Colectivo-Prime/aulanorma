@@ -19,8 +19,9 @@ Implementada en la fase 7 de `specs/002-boe-scorm-export`:
   sus dos recursos, `assets/style.css` y `assets/app.js` (navegación y seguimiento con la API
   de SCORM 1.2).
 - `build.ts`: manifiesto y ZIP, con entradas en orden y fecha fijos.
-- `xml.ts`: lectura del manifiesto con `@xmldom/xmldom`, un analizador mantenido y ajeno al
-  generador. Solo adapta su resultado; no sabe nada de SCORM.
+- `xml.ts`: lectura del manifiesto con libxml2 (`libxml2-wasm`), un analizador estricto,
+  mantenido y ajeno al generador, sin recuperación ni recursos externos. Solo lo configura,
+  adapta su resultado y libera sus recursos; no sabe nada de SCORM.
 - `conformance.ts`: reglas del perfil SCORM 1.2 que exporta AulaNorma, aplicadas al releer
   el ZIP. **No equivale a validar contra los XSD ni acredita conformidad completa con
   SCORM**, y no es un validador general: véase

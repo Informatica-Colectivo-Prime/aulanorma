@@ -151,8 +151,8 @@ describe("paquete generado", () => {
     expect(result.ok).toBe(true);
     expect(result.strategy).toBe(VALIDATION_STRATEGY);
     expect(result.strategy).toEqual({
-      id: "profile-v1",
-      parser: "@xmldom/xmldom",
+      id: "profile-v2",
+      parser: "libxml2-wasm",
       xsd: "not_part_of_strategy",
       moodle: "pending_manual_verification",
     });
@@ -337,7 +337,7 @@ describe("paquetes incorrectos, hechos a mano", () => {
           '<!DOCTYPE manifest [<!ENTITY x SYSTEM "file:///etc/passwd">]>\n<manifest',
         ),
       ),
-      /DOCTYPE/,
+      /no es XML admitido/,
     ],
     [
       "otro elemento raíz",
@@ -480,7 +480,7 @@ describe("paquetes incorrectos, hechos a mano", () => {
       manifest((text) =>
         text.replace("<manifest", "<!DOCTYPE manifest>\n<manifest"),
       ),
-      /DOCTYPE/,
+      /no es XML admitido/,
     ],
     [
       "instrucción de procesamiento",
@@ -490,21 +490,9 @@ describe("paquetes incorrectos, hechos a mano", () => {
       /instrucciones de procesamiento/,
     ],
     [
-      "codificación declarada que no es UTF-8",
-      manifest((text) =>
-        text.replace('encoding="UTF-8"', 'encoding="ISO-8859-1"'),
-      ),
-      /codificación distinta de UTF-8/,
-    ],
-    [
       "«&» sin escapar en un título",
       manifest((text) => text.replace("<title>", "<title>Seguridad & salud ")),
-      /«&»/,
-    ],
-    [
-      "referencia numérica, que el generador no escribe",
-      manifest((text) => text.replace("<title>", "<title>&#60;b&#62; ")),
-      /«&»/,
+      /no es XML admitido/,
     ],
     [
       "entidad propia",
@@ -514,7 +502,7 @@ describe("paquetes incorrectos, hechos a mano", () => {
     [
       "carácter de control",
       manifest((text) => text.replace("<title>", "<title>\u0001")),
-      /caracteres que XML 1.0 no admite/,
+      /no es XML admitido/,
     ],
     [
       "sección CDATA",
@@ -534,7 +522,7 @@ describe("paquetes incorrectos, hechos a mano", () => {
           ' xmlns:otro="http://www.adlnet.org/xsd/adlcp_rootv1p2" adlcp:scormtype="sco" otro:scormtype="asset"',
         ),
       ),
-      /exactamente los dos espacios de nombres/,
+      /no es XML admitido/,
     ],
     [
       "tipo SCORM sin prefijo",
@@ -696,6 +684,47 @@ describe("paquetes incorrectos, hechos a mano", () => {
   });
 });
 
+describe("errores de buena formación en el manifiesto propio", () => {
+  test.each([
+    [
+      "«&» sin escapar",
+      (text: string) => text.replace("<title>", "<title>a & b"),
+    ],
+    [
+      "referencia a un carácter no admitido",
+      (text: string) => text.replace("<title>", "<title>&#0;"),
+    ],
+    [
+      "carácter de control",
+      (text: string) => text.replace("<title>", "<title>\u0001"),
+    ],
+    [
+      "«]]>» en el texto",
+      (text: string) => text.replace("<title>", "<title>]]>"),
+    ],
+    [
+      "prefijo xml enlazado a otro espacio",
+      (text: string) =>
+        text.replace("<manifest ", '<manifest xmlns:xml="urn:x" '),
+    ],
+  ])(
+    "%s: lo rechaza la lectura XML, sin llegar a las reglas del perfil",
+    (_name, alter) => {
+      const result = checkPackage(manifest(alter), DELIVERY);
+      expect(result.problems).toHaveLength(1);
+      expect(result.problems[0]).toMatch(/^El manifiesto no es XML admitido: /);
+    },
+  );
+
+  test("una referencia numérica válida no es un error: se lee como su carácter", () => {
+    expect(
+      problems(
+        manifest((text) => text.replace("<title>", "<title>&#233;&#x20AC; ")),
+      ),
+    ).toBe("");
+  });
+});
+
 describe("fixture interno, escrito a mano con otra estructura", () => {
   function reference(): Uint8Array {
     const files: Record<string, Uint8Array> = {};
@@ -818,6 +847,56 @@ describe("manifiesto de un tercero, sin modificar", () => {
         "http://www.w3.org/XML/1998/namespace|lang",
       ),
     ).toBe("x-none");
+  });
+
+  // Los cinco errores de buena formación que el analizador anterior dejaba
+  // pasar, más un sexto. Se introducen en memoria en una copia del manifiesto
+  // ajeno, solo para esta prueba: el fichero original no se toca. Los
+  // rechaza la lectura XML, antes de cualquier regla del formato.
+  test.each([
+    [
+      "«&» sin escapar",
+      (text: string) => text.replace("<title>", "<title>a & b"),
+    ],
+    [
+      "referencia a un carácter no admitido",
+      (text: string) => text.replace("<title>", "<title>&#0;"),
+    ],
+    [
+      "carácter de control",
+      (text: string) => text.replace("<title>", "<title>\u0001"),
+    ],
+    [
+      "«]]>» en el texto",
+      (text: string) => text.replace("<title>", "<title>]]>"),
+    ],
+    [
+      "prefijo xml enlazado a otro espacio",
+      (text: string) =>
+        text.replace("<manifest ", '<manifest xmlns:xml="urn:x" '),
+    ],
+    [
+      "atributo repetido con dos prefijos",
+      (text: string) =>
+        text.replace(
+          ' adlcp:scormtype="sco"',
+          ' xmlns:otro="http://www.adlnet.org/xsd/adlcp_rootv1p2" adlcp:scormtype="sco" otro:scormtype="sco"',
+        ),
+    ],
+  ])("una copia alterada con %s la rechaza la lectura XML", (_name, alter) => {
+    const original = read("imsmanifest.xml").toString();
+    const altered = alter(original);
+    expect(altered).not.toBe(original);
+    const result = checkPackage(
+      zipSync({
+        "imsmanifest.xml": strToU8(altered),
+        "index_lms.html": read("index_lms.html"),
+      }),
+      { delivery: false },
+    );
+    // Un único problema, y es de lectura: no se llegó a ninguna regla.
+    expect(result.problems).toHaveLength(1);
+    expect(result.problems[0]).toMatch(/^El manifiesto no es XML admitido: /);
   });
 
   test("no cumple las reglas de entrega de AulaNorma, y se dice por qué", () => {

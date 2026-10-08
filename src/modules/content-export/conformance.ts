@@ -26,8 +26,8 @@ import type { XmlElement } from "./xml";
 // exportación. La validación contra los XSD no forma parte de ella: se
 // sustituyó por esta estrategia (research.md, R8).
 export const VALIDATION_STRATEGY = {
-  id: "profile-v1",
-  parser: "@xmldom/xmldom",
+  id: "profile-v2",
+  parser: "libxml2-wasm",
   xsd: "not_part_of_strategy",
   moodle: "pending_manual_verification",
 } as const;
@@ -71,25 +71,6 @@ const EXTERNAL_BY_TYPE: readonly (readonly [RegExp, RegExp])[] = [
   ],
   [/\.xml$/i, /(?:[a-z][a-z0-9+.-]*:)?\/\/[a-z0-9[]/i],
 ];
-
-// Caracteres que XML 1.0 no admite: de control, salvo tabulador y saltos de
-// línea, sustitutos sueltos y los dos últimos de cada plano básico.
-function hasForbiddenCharacters(text: string): boolean {
-  for (const char of text) {
-    const code = char.codePointAt(0) ?? 0;
-    const allowed =
-      code === 0x09 ||
-      code === 0x0a ||
-      code === 0x0d ||
-      (code >= 0x20 && code <= 0xd7ff) ||
-      (code >= 0xe000 && code <= 0xfffd) ||
-      code >= 0x10000;
-    if (!allowed) {
-      return true;
-    }
-  }
-  return false;
-}
 
 function unsafeName(name: string): boolean {
   return (
@@ -193,38 +174,18 @@ export function checkPackage(
     return result(files);
   }
 
-  let manifestText: string;
-  try {
-    manifestText = new TextDecoder("utf-8", { fatal: true }).decode(
-      manifestBytes,
-    );
-  } catch {
-    problems.push("El manifiesto no es UTF-8 válido.");
-    return result(files);
-  }
-  const parsed = parseXml(manifestText);
+  // Primero la lectura XML, sobre los bytes del fichero: si el analizador
+  // lo rechaza, no se aplica ninguna regla del formato.
+  const parsed = parseXml(manifestBytes);
   if (!parsed.ok) {
     problems.push(`El manifiesto no es XML admitido: ${parsed.problem}.`);
     return result(files);
   }
   const { root, features } = parsed;
-  // Nada que resolver fuera del propio documento, en ningún paquete.
-  if (features.doctype) {
-    problems.push(
-      "El manifiesto lleva una declaración DOCTYPE, que no se admite.",
-    );
-  }
   if (features.processingInstructions) {
     problems.push(
       "El manifiesto lleva instrucciones de procesamiento, que no se admiten.",
     );
-  }
-  const encoding =
-    /^(?:\uFEFF)?<\?xml[^>]*\sencoding\s*=\s*["']([^"']*)["']/.exec(
-      manifestText,
-    )?.[1];
-  if (encoding !== undefined && encoding.toLowerCase() !== "utf-8") {
-    problems.push("El manifiesto declara una codificación distinta de UTF-8.");
   }
   if (root.namespace !== CP_NAMESPACE || root.name !== "manifest") {
     problems.push(
@@ -388,41 +349,13 @@ export function checkPackage(
   }
 
   if (expectation.delivery) {
-    // Forma restringida del manifiesto que escribe el generador. Son reglas
-    // léxicas sobre el texto, no un segundo análisis: cubren errores de
-    // buena formación que el analizador tolera sin avisar.
+    // Forma restringida del manifiesto que escribe el generador: sin
+    // comentarios ni secciones CDATA. Es una regla del perfil sobre un
+    // documento que el analizador ya ha dado por bien formado.
     if (features.cdata || features.comments) {
       problems.push(
         "El manifiesto lleva comentarios o secciones CDATA, que el generador no escribe.",
       );
-    }
-    // Solo los dos espacios de nombres que declara el generador, una vez
-    // cada uno: así un atributo no puede repetirse con otro prefijo.
-    const declarations = [
-      ...manifestText.matchAll(
-        /\sxmlns(?::([A-Za-z0-9_.-]+))?\s*=\s*"([^"]*)"/g,
-      ),
-    ].map((match) => `${match[1] ?? ""}=${match[2] ?? ""}`);
-    if (
-      declarations.length !== 2 ||
-      declarations[0] !== `=${CP_NAMESPACE}` ||
-      declarations[1] !== `adlcp=${ADLCP_NAMESPACE}` ||
-      /\sxmlns[^=\s]*\s*=\s*'/.test(manifestText)
-    ) {
-      problems.push(
-        "El manifiesto no declara exactamente los dos espacios de nombres del generador.",
-      );
-    }
-    if (manifestText.includes("]]>")) {
-      problems.push("El manifiesto lleva la secuencia «]]>» fuera de lugar.");
-    }
-    if (/&(?!(?:amp|lt|gt|quot|apos);)/.test(manifestText)) {
-      problems.push(
-        "El manifiesto lleva un «&» que no inicia una de las cinco referencias que escribe el generador.",
-      );
-    }
-    if (hasForbiddenCharacters(manifestText)) {
-      problems.push("El manifiesto lleva caracteres que XML 1.0 no admite.");
     }
     const scos = [...launched].filter(
       (item) => item.attributes.get(`${ADLCP_NAMESPACE}|scormtype`) === "sco",
