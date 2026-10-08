@@ -17,6 +17,7 @@ import type {
   ContentNode,
   RenderedRequirement,
 } from "@/modules/didactic-content";
+import type { Html } from "@/platform/markup";
 
 const HOSTILE =
   `<script>alert("x")</script><img src=x onerror='alert(1)'>` +
@@ -36,6 +37,10 @@ function requirement(
     quote: "C1: Describir el ejemplo.",
     ...overrides,
   };
+}
+
+function text(markup: Html): string {
+  return markup.text;
 }
 
 // Ningún elemento ni atributo activo procedente del texto.
@@ -125,10 +130,12 @@ describe("texto editable", () => {
 
 describe("renderizador", () => {
   test("un bloque de requisito lleva su etiqueta, el texto de la norma, su referencia y su cita", () => {
-    const html = renderBlock({
-      kind: "requirement",
-      requirement: requirement(),
-    });
+    const html = text(
+      renderBlock({
+        kind: "requirement",
+        requirement: requirement(),
+      }),
+    );
     expect(html).toContain(`<p class="kind">${REQUIREMENT_LABEL}</p>`);
     expect(html).not.toContain(DEVELOPMENT_LABEL);
     expect(html).toContain("<strong>C1</strong> Describir el ejemplo.");
@@ -139,12 +146,14 @@ describe("renderizador", () => {
   });
 
   test("con una dirección de página, la referencia enlaza a cada página de origen", () => {
-    const html = renderBlock(
-      {
-        kind: "requirement",
-        requirement: requirement({ pageFrom: 3, pageTo: 4 }),
-      },
-      { pageHref: (page) => `/documents/abc/pages/${String(page)}` },
+    const html = text(
+      renderBlock(
+        {
+          kind: "requirement",
+          requirement: requirement({ pageFrom: 3, pageTo: 4 }),
+        },
+        { pageHref: (page) => `/documents/abc/pages/${String(page)}` },
+      ),
     );
     expect(html).toContain(
       '<a href="/documents/abc/pages/3">página 3</a> a <a href="/documents/abc/pages/4">página 4</a>',
@@ -152,15 +161,17 @@ describe("renderizador", () => {
   });
 
   test("un bloque de desarrollo lleva su etiqueta y dice qué requisitos desarrolla", () => {
-    const html = renderBlock({
-      kind: "development",
-      content: [
-        { type: "heading", text: "Título" },
-        { type: "paragraph", text: "Línea uno\nLínea dos" },
-        { type: "list", items: ["a", "b"] },
-      ],
-      requirements: [requirement(), requirement({ code: "CE1.1" })],
-    });
+    const html = text(
+      renderBlock({
+        kind: "development",
+        content: [
+          { type: "heading", text: "Título" },
+          { type: "paragraph", text: "Línea uno\nLínea dos" },
+          { type: "list", items: ["a", "b"] },
+        ],
+        requirements: [requirement(), requirement({ code: "CE1.1" })],
+      }),
+    );
     expect(html).toContain(`<p class="kind">${DEVELOPMENT_LABEL}</p>`);
     expect(html).not.toContain(REQUIREMENT_LABEL);
     expect(html).toContain("<h3>Título</h3>");
@@ -173,18 +184,20 @@ describe("renderizador", () => {
   });
 
   test("un desarrollo sin requisitos se muestra como sin respaldo normativo", () => {
-    const html = renderBlock({
-      kind: "development",
-      content: [{ type: "paragraph", text: "Texto." }],
-      requirements: [],
-    });
+    const html = text(
+      renderBlock({
+        kind: "development",
+        content: [{ type: "paragraph", text: "Texto." }],
+        requirements: [],
+      }),
+    );
     expect(html).toContain(UNSUPPORTED_LABEL);
     expect(html).not.toContain("Desarrolla:");
   });
 
   test("un requisito citado que ya no está en el inventario se dice, sin inventar su texto", () => {
     expect(
-      renderBlock({ kind: "requirement", requirement: undefined }),
+      renderBlock({ kind: "requirement", requirement: undefined }).text,
     ).toContain("ya no está en el inventario vigente");
   });
 
@@ -197,20 +210,22 @@ describe("renderizador", () => {
       section: HOSTILE,
       quote: HOSTILE,
     });
-    const html = renderBlocks(
-      [
-        { kind: "requirement", requirement: hostile },
-        {
-          kind: "development",
-          content: [
-            { type: "heading", text: HOSTILE },
-            { type: "paragraph", text: HOSTILE },
-            { type: "list", items: [HOSTILE] },
-          ],
-          requirements: [hostile],
-        },
-      ],
-      { pageHref: () => `/x"><script>alert(3)</script>` },
+    const html = text(
+      renderBlocks(
+        [
+          { kind: "requirement", requirement: hostile },
+          {
+            kind: "development",
+            content: [
+              { type: "heading", text: HOSTILE },
+              { type: "paragraph", text: HOSTILE },
+              { type: "list", items: [HOSTILE] },
+            ],
+            requirements: [hostile],
+          },
+        ],
+        { pageHref: () => `/x"><script>alert(3)</script>` },
+      ),
     );
     expectInert(html);
     expect(html).toContain('href="/x&quot;&gt;&lt;script&gt;');
@@ -229,5 +244,79 @@ describe("renderizador", () => {
       "strong",
       "ul",
     ]);
+  });
+
+  // Cada carga se coloca en todos los campos. Si se sustituye su forma
+  // escapada por un marcador, el resultado es idéntico al de un texto
+  // inofensivo: el texto no aporta al HTML nada más que su forma escapada.
+  test.each([
+    ["etiqueta de script", `<script>alert(1)</script>`],
+    ["cierre del contenedor", `</section></p><iframe src="//example.invalid">`],
+    ["atributo con comillas dobles", `" onmouseover="alert(1)" x="`],
+    ["atributo con comillas simples", `' onfocus='alert(1)' autofocus='`],
+    ["entidad ya escapada", `&lt;img src=x onerror=alert(1)&gt; &#60;b&#62;`],
+    ["comentario y CDATA", `<!-- --><![CDATA[<svg onload=alert(1)>]]>`],
+    ["etiqueta sin cerrar", `<svg/onload=alert(1)`],
+    ["enlace con esquema", `<a href="javascript:alert(1)">x</a>`],
+  ])("inyección por %s: solo aporta su forma escapada", (_name, payload) => {
+    const render = (value: string): string => {
+      const item = requirement({
+        code: value,
+        kindName: value,
+        text: value,
+        documentTitle: value,
+        section: value,
+        quote: value,
+      });
+      return renderBlocks(
+        [
+          { kind: "requirement", requirement: item },
+          {
+            kind: "development",
+            content: [
+              { type: "heading", text: value },
+              { type: "paragraph", text: value },
+              { type: "list", items: [value] },
+            ],
+            requirements: [item],
+          },
+        ],
+        { pageHref: (page) => `/documents/abc/pages/${String(page)}` },
+      ).text;
+    };
+    const escaped = payload
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+    expect(escaped).not.toMatch(/[<>"']/);
+    expect(render(payload).replaceAll(escaped, "MARCADOR")).toBe(
+      render("MARCADOR"),
+    );
+  });
+
+  test.each([
+    "javascript:alert(1)",
+    "JaVaScRiPt:alert(1)",
+    " javascript:alert(1)",
+    "java\tscript:alert(1)",
+    "data:text/html,<script>alert(1)</script>",
+    "vbscript:x",
+    "//example.invalid/x",
+    "/\\example.invalid/x",
+    "\\\\example.invalid/x",
+    "https://example.invalid/x",
+    "",
+  ])("una dirección que no es local no produce enlace: %j", (href) => {
+    const html = text(
+      renderBlock(
+        { kind: "requirement", requirement: requirement() },
+        { pageHref: () => href },
+      ),
+    );
+    expect(html).not.toContain("<a");
+    expect(html).not.toContain("href");
+    expect(html).toContain("Capacidades, página 3");
   });
 });

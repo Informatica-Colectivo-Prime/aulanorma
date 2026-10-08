@@ -3,11 +3,15 @@
 //
 // El contenido de un tema no es HTML: es una lista de bloques estructurados,
 // validados por esquema, con encabezados, párrafos y listas de texto plano.
-// El HTML lo produce siempre este renderizador, que escapa todo el texto: no
-// hay nada que sanear con heurísticas, y la revisión y el paquete muestran lo
-// mismo. La distinción entre norma y desarrollo didáctico es un dato del
+// El HTML lo produce siempre este renderizador con la plantilla de
+// `@/platform/markup`, que escapa todo el texto: no hay nada que sanear con
+// heurísticas, y la revisión y el paquete muestran lo mismo. La distinción entre norma y desarrollo didáctico es un dato del
 // bloque y se muestra con una etiqueta de texto, no solo con un estilo.
 import { z } from "zod";
+// Con otro nombre que `html` para que el formateador no reparta el marcado en
+// varias líneas: la salida debe ser exacta, sin espacios añadidos.
+import { html as h, joinHtml, localHref } from "@/platform/markup";
+import type { Html } from "@/platform/markup";
 
 // Caracteres de control, salvo el tabulador y los saltos de línea.
 function hasControlCharacters(value: string): boolean {
@@ -139,8 +143,8 @@ export type RenderBlock =
     };
 
 export interface RenderOptions {
-  // Dirección de una página del documento de origen. Sin ella, la página se
-  // muestra como texto.
+  // Dirección de una página del documento de origen. Sin ella, o si no es
+  // una dirección local, la página se muestra como texto.
   readonly pageHref?: (page: number) => string;
 }
 
@@ -148,101 +152,82 @@ export const REQUIREMENT_LABEL = "Requisito extraído del BOE";
 export const DEVELOPMENT_LABEL = "Desarrollo didáctico generado";
 export const UNSUPPORTED_LABEL = "Sin respaldo normativo";
 
-const ESCAPES: Readonly<Record<string, string>> = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
-};
-
-// Escapa un texto para usarlo como contenido o como valor de un atributo.
-export function escapeText(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => ESCAPES[char] ?? char);
-}
-
 // Texto de varias líneas: cada salto de línea pasa a ser un `<br />`.
-function lines(value: string): string {
-  return value.split("\n").map(escapeText).join("<br />");
+function lines(value: string): Html {
+  return joinHtml(
+    value.split("\n").map((line) => h`${line}`),
+    h`<br />`,
+  );
 }
 
-function pages(requirement: RenderedRequirement, options: RenderOptions) {
-  const one = (page: number): string =>
-    options.pageHref === undefined
-      ? `página ${String(page)}`
-      : `<a href="${escapeText(options.pageHref(page))}">página ${String(page)}</a>`;
+function pages(requirement: RenderedRequirement, options: RenderOptions): Html {
+  const one = (page: number): Html => {
+    const href =
+      options.pageHref === undefined ? null : localHref(options.pageHref(page));
+    return href === null
+      ? h`página ${page}`
+      : h`<a href="${href}">página ${page}</a>`;
+  };
   return requirement.pageTo === requirement.pageFrom
     ? one(requirement.pageFrom)
-    : `${one(requirement.pageFrom)} a ${one(requirement.pageTo)}`;
+    : h`${one(requirement.pageFrom)} a ${one(requirement.pageTo)}`;
 }
 
-function source(requirement: RenderedRequirement, options: RenderOptions) {
-  return (
-    `${escapeText(requirement.documentTitle)}, ` +
-    `${escapeText(requirement.section)}, ${pages(requirement, options)}`
-  );
+function source(
+  requirement: RenderedRequirement,
+  options: RenderOptions,
+): Html {
+  return h`${requirement.documentTitle}, ${requirement.section}, ${pages(requirement, options)}`;
 }
 
-function label(requirement: RenderedRequirement): string {
-  return (
-    `<span class="tag">${escapeText(requirement.kindName)}</span> ` +
-    (requirement.code === ""
-      ? ""
-      : `<strong>${escapeText(requirement.code)}</strong> `)
-  );
+function label(requirement: RenderedRequirement): Html {
+  return h`<span class="tag">${requirement.kindName}</span> ${
+    requirement.code === "" ? null : h`<strong>${requirement.code}</strong> `
+  }`;
 }
 
-function node(item: ContentNode): string {
+function node(item: ContentNode): Html {
   switch (item.type) {
     case "heading":
-      return `<h3>${escapeText(item.text)}</h3>`;
+      return h`<h3>${item.text}</h3>`;
     case "paragraph":
-      return `<p>${lines(item.text)}</p>`;
+      return h`<p>${lines(item.text)}</p>`;
     case "list":
-      return `<ul>${item.items.map((entry) => `<li>${lines(entry)}</li>`).join("")}</ul>`;
+      return h`<ul>${item.items.map((entry) => h`<li>${lines(entry)}</li>`)}</ul>`;
   }
 }
 
-// HTML de un bloque. Todo texto que llega aquí sale escapado.
+// HTML de un bloque. Todo texto que llega aquí pasa por la plantilla, que lo
+// escapa; el resultado solo puede componerse con ella.
 export function renderBlock(
   block: RenderBlock,
   options: RenderOptions = {},
-): string {
+): Html {
   if (block.kind === "requirement") {
     const { requirement } = block;
-    return (
-      `<section class="block norm"><p class="kind">${REQUIREMENT_LABEL}</p>` +
-      (requirement === undefined
-        ? `<p class="muted">El requisito citado ya no está en el inventario vigente.</p>`
-        : `<p>${label(requirement)}${lines(requirement.text)}</p>` +
-          `<p class="hint">${source(requirement, options)}</p>` +
-          (requirement.quote === null
-            ? ""
-            : `<blockquote>${lines(requirement.quote)}</blockquote>`)) +
-      `</section>`
-    );
+    return h`<section class="block norm"><p class="kind">${REQUIREMENT_LABEL}</p>${
+      requirement === undefined
+        ? h`<p class="muted">El requisito citado ya no está en el inventario vigente.</p>`
+        : h`<p>${label(requirement)}${lines(requirement.text)}</p><p class="hint">${source(requirement, options)}</p>${
+            requirement.quote === null
+              ? null
+              : h`<blockquote>${lines(requirement.quote)}</blockquote>`
+          }`
+    }</section>`;
   }
-  return (
-    `<section class="block development"><p class="kind">${DEVELOPMENT_LABEL}</p>` +
-    block.content.map(node).join("") +
-    (block.requirements.length === 0
-      ? `<p class="hint"><span class="tag bad">${UNSUPPORTED_LABEL}</span> ` +
-        `Este desarrollo no se apoya en ningún requisito.</p>`
-      : `<p class="hint">Desarrolla:</p><ul class="hint">` +
-        block.requirements
-          .map(
-            (requirement) =>
-              `<li>${label(requirement)}${source(requirement, options)}</li>`,
-          )
-          .join("") +
-        `</ul>`) +
-    `</section>`
-  );
+  return h`<section class="block development"><p class="kind">${DEVELOPMENT_LABEL}</p>${block.content.map(node)}${
+    block.requirements.length === 0
+      ? h`<p class="hint"><span class="tag bad">${UNSUPPORTED_LABEL}</span> Este desarrollo no se apoya en ningún requisito.</p>`
+      : h`<p class="hint">Desarrolla:</p><ul class="hint">${block.requirements.map(
+          (requirement) =>
+            h`<li>${label(requirement)}${source(requirement, options)}</li>`,
+        )}</ul>`
+  }</section>`;
 }
 
 export function renderBlocks(
   blocks: readonly RenderBlock[],
   options: RenderOptions = {},
-): string {
-  return blocks.map((block) => renderBlock(block, options)).join("");
+): Html {
+  return h`${blocks.map((block) => renderBlock(block, options))}`;
 }

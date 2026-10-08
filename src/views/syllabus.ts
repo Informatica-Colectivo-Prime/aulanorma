@@ -21,7 +21,7 @@ import type {
 } from "@/modules/didactic-content";
 import type { DocumentRecord } from "@/modules/normative-source";
 import type { Requirement } from "@/modules/structured-interpretation";
-import { html, noticeBox, renderedHtml } from "@/platform/web";
+import { html, noticeBox } from "@/platform/web";
 import type { Html, Notice, PageReply, SessionContext } from "@/platform/web";
 import {
   amount,
@@ -655,27 +655,25 @@ function rendered(
     pageHref: (page: number) =>
       `/documents/${document.id}/pages/${String(page)}`,
   };
-  return renderedHtml(
-    block.kind === "requirement"
-      ? renderBlock(
-          {
-            kind: "requirement",
-            requirement: resolve(block.requirementIds[0] ?? ""),
-          },
-          options,
-        )
-      : renderBlock(
-          {
-            kind: "development",
-            content: block.content,
-            // En el orden del inventario.
-            requirements: review.requirements
-              .filter((item) => block.requirementIds.includes(item.id))
-              .flatMap((item) => resolve(item.id) ?? []),
-          },
-          options,
-        ),
-  );
+  return block.kind === "requirement"
+    ? renderBlock(
+        {
+          kind: "requirement",
+          requirement: resolve(block.requirementIds[0] ?? ""),
+        },
+        options,
+      )
+    : renderBlock(
+        {
+          kind: "development",
+          content: block.content,
+          // En el orden del inventario.
+          requirements: review.requirements
+            .filter((item) => block.requirementIds.includes(item.id))
+            .flatMap((item) => resolve(item.id) ?? []),
+        },
+        options,
+      );
 }
 
 // Formulario de una comprobación de referencia heredada.

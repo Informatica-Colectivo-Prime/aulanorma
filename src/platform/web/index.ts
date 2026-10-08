@@ -52,6 +52,8 @@ import type {
 } from "@/platform/identity";
 import { createLogger, logProductEvent } from "@/platform/logging";
 import type { AppLogger, ProductEvent } from "@/platform/logging";
+import { html, inlineResource } from "@/platform/markup";
+import type { Html } from "@/platform/markup";
 import { openDatabase } from "@/platform/persistence";
 import type { Database } from "@/platform/persistence";
 
@@ -440,76 +442,17 @@ const CONTENT_SECURITY_POLICY = [
 
 // --- HTML ---
 
-// Fragmento de HTML ya escapado. Solo lo crea `html`, así que componer
-// fragmentos nunca introduce texto sin escapar.
-declare const markup: unique symbol;
-export interface Html {
-  readonly [markup]: true;
-  readonly text: string;
-}
-
-type HtmlValue = string | number | Html | readonly Html[] | null | undefined;
-
-const ESCAPES: Readonly<Record<string, string>> = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
-};
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => ESCAPES[char] ?? char);
-}
-
-function isHtml(value: HtmlValue): value is Html {
-  return typeof value === "object" && value !== null && "text" in value;
-}
-
-function rawHtml(text: string): Html {
-  return Object.freeze({ text }) as Html;
-}
-
-// Plantilla de HTML: el texto literal se emite tal cual y cada valor
-// interpolado se escapa, salvo que sea otro fragmento creado con `html`.
-export function html(
-  strings: TemplateStringsArray,
-  ...values: readonly HtmlValue[]
-): Html {
-  let text = "";
-  strings.forEach((literal, index) => {
-    text += literal;
-    const value = values[index];
-    if (value === null || value === undefined) {
-      return;
-    }
-    if (typeof value === "string") {
-      text += escapeHtml(value);
-    } else if (typeof value === "number") {
-      text += String(value);
-    } else if (isHtml(value)) {
-      text += value.text;
-    } else {
-      text += value.map((item) => item.text).join("");
-    }
-  });
-  return rawHtml(text);
-}
-
-// HTML ya escapado por un renderizador ajeno a esta plantilla. Solo debe
-// usarse con la salida del renderizador de contenido de la capa
-// `didactic-content`, que escapa todo el texto que recibe: nunca con texto de
-// un usuario, de un documento o de una generación.
-export function renderedHtml(text: string): Html {
-  return rawHtml(text);
-}
+// El marcado se compone con la plantilla de `@/platform/markup`, que escapa
+// cada valor: aquí no hay ninguna forma de tratar una cadena como HTML.
+export { html };
+export type { Html };
 
 // El contenido de estas dos etiquetas debe ser, byte a byte, el texto cuya
 // huella lleva la política de contenido. Por eso se construyen por
 // concatenación y no dentro de la plantilla, cuyo formato puede añadir
 // espacios.
-const STYLE_ELEMENT = rawHtml(`<style>${STYLE}</style>`);
-const SCRIPT_ELEMENT = rawHtml(`<script>${SCRIPT}</script>`);
+const STYLE_ELEMENT = inlineResource("style", STYLE);
+const SCRIPT_ELEMENT = inlineResource("script", SCRIPT);
 
 export interface LayoutProps {
   readonly title: string;

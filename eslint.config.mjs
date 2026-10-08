@@ -34,6 +34,7 @@ const PLATFORM_AREAS = [
   "audit",
   "identity",
   "generation",
+  "markup",
   "web",
 ];
 // Capas de dominio que la entrega puede importar, por su API pública. Se
