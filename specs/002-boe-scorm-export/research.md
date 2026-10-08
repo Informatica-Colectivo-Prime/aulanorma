@@ -387,8 +387,9 @@ por quien escribe el generador solo repite sus suposiciones. La estrategia del p
 cuatro mecanismos:
 
 1. **Lectura del XML con un analizador mantenido y ajeno al generador.** El generador escribe
-   el manifiesto con una plantilla de texto; al releerlo se analiza con `@xmldom/xmldom`, y
-   cualquier diagnóstico del analizador es un rechazo.
+   el manifiesto con una plantilla de texto; al releerlo lo analiza libxml2, con
+   `libxml2-wasm`, sin recuperación ni recursos externos, y cualquier error o aviso del
+   analizador es un rechazo.
 2. **Reglas del perfil SCORM 1.2 que exporta AulaNorma**, separadas del análisis sintáctico:
    estructura del manifiesto y del ZIP, un único SCO, versión aprobada, ninguna dirección
    externa, ningún dato de usuarios y una forma restringida del manifiesto.
@@ -414,10 +415,13 @@ atributos de cada elemento. Lo compensan, sin igualarlo, el analizador ajeno, la
 referencias de terceros y, sobre todo, la prueba en Moodle, que deja de ser solo una
 comprobación de compatibilidad y pasa a ser la que decide la aceptación.
 
-**Sobre el analizador elegido.** `@xmldom/xmldom` se eligió por estar mantenido. Es tolerante:
-hay errores de buena formación que no diagnostica, y están documentados y cubiertos por
-reglas léxicas del perfil. `saxes` los rechaza todos, pero su repositorio está archivado
-desde 2025 y no cumple el requisito de mantenimiento.
+**Sobre el analizador elegido.** `libxml2-wasm` 0.7.2: libxml2 compilado a WebAssembly,
+estricto, mantenido, sin dependencias ni scripts de instalación. Sustituye desde el
+2026-10-08 a `@xmldom/xmldom`, que fue la primera elección de esta estrategia: está mantenido,
+pero es tolerante y aceptaba sin avisar cinco errores de buena formación. Cubrirlos con
+reglas léxicas propias era volver a analizar XML a mano, así que se cambió de analizador.
+`saxes`, también estricto, tiene el repositorio archivado desde 2025. La comprobación del
+candidato está en [package-validation.md](./package-validation.md).
 
 **Decisión anterior, sustituida (2026-10-07)**. Se conserva como historial. Preveía tres
 comprobaciones independientes entre sí:
@@ -453,6 +457,7 @@ generador.
 - **Obtener los esquemas en la preparación del entorno**, sin redistribuirlos: resolvía la
   redistribución, pero seguía necesitando usar el esquema de ADL sin permiso acreditado.
 - **`saxes`**: analizador estricto, con el repositorio archivado.
+- **`@xmldom/xmldom`**: mantenido, pero tolerante con errores de buena formación.
 - **Validador XSD con código nativo**: incompatible con `ignore-scripts=true`.
 - **Banco de pruebas de conformidad de ADL**: pensado para ejecución manual en entornos
   antiguos; no es automatizable aquí.
@@ -491,12 +496,13 @@ al final.
 | -------------- | ---------- | ------------------------------------------ | ------------------------------- |
 | `pdfjs-dist`   | producción | Texto por página y análisis del PDF        | Herramienta del sistema         |
 | `fflate`       | producción | Crear y releer el ZIP del paquete          | Escritor ZIP propio             |
-| `@xmldom/xmldom` | producción | Leer el manifiesto con un analizador ajeno | Lector de XML propio          |
+| `libxml2-wasm` | producción | Leer el manifiesto con un analizador ajeno | Lector de XML propio          |
 | `jsdom`        | desarrollo | Prueba de contrato del seguimiento         | Navegador automatizado          |
 
 `xmllint-wasm` figuraba aquí como dependencia de producción para validar contra los XSD. Se
-retiró el 2026-10-08 sin llegar a instalarse, y la sustituye `@xmldom/xmldom` (MIT, sin
+retiró el 2026-10-08 sin llegar a instalarse, y la sustituye `libxml2-wasm` (MIT, sin
 dependencias propias), con otro cometido: leer el manifiesto, no validarlo contra esquemas.
+Entre medias se usó `@xmldom/xmldom`, retirado por tolerante.
 
 Además, una **herramienta externa**, que no es un paquete de npm: **qpdf** (12.4.2 en la
 viabilidad), para la inspección estructural de los PDF. Se instalaría como las herramientas

@@ -21,7 +21,7 @@ validación del manifiesto contra los XSD de SCORM 1.2, que no se hace. El motiv
 
 | Mecanismo                                   | Dónde                                                      | Cuándo se ejecuta                      |
 | ------------------------------------------- | ---------------------------------------------------------- | -------------------------------------- |
-| 1. Lectura del XML con un analizador ajeno  | `src/modules/content-export/xml.ts`, con `@xmldom/xmldom`  | En cada exportación y en las pruebas   |
+| 1. Lectura del XML con un analizador ajeno  | `src/modules/content-export/xml.ts`, con `libxml2-wasm`    | En cada exportación y en las pruebas   |
 | 2. Reglas del perfil SCORM 1.2 de AulaNorma | `src/modules/content-export/conformance.ts`                | En cada exportación y en las pruebas   |
 | 3. Pruebas negativas y referencias ajenas   | `tests/contract/`, `tests/unit/content-export/`            | En las pruebas                         |
 | 4. Verificación en un Moodle real           | Parte 3 de [quickstart.md](./quickstart.md); T079          | A mano. **Pendiente**                  |
@@ -32,39 +32,68 @@ sustituye (SC-018 a SC-023).
 
 ## 1. Lectura del XML
 
-El manifiesto se relee del ZIP ya generado y se analiza con `@xmldom/xmldom`, una biblioteca
-mantenida y ajena al generador, que escribe el manifiesto con una plantilla de texto. El
-código propio solo adapta el resultado: no interpreta XML.
+El manifiesto se relee del ZIP ya generado y lo analiza libxml2, a través de `libxml2-wasm`:
+un analizador estricto, mantenido y ajeno al generador, que escribe el manifiesto con una
+plantilla de texto. El código propio configura el analizador, adapta su resultado y libera
+sus recursos. No interpreta XML ni añade comprobaciones léxicas.
+
+**Configuración**
+
+- Sin modo de recuperación: un documento mal formado no se repara, se rechaza.
+- Sin sustitución de entidades, sin carga de DTD, sin validación con DTD y sin XInclude.
+- Sin entidades ni recursos externos, sin red y sin catálogo del sistema.
+- Cualquier error del analizador es un rechazo. Cualquier aviso, también.
+- Un documento con DTD no se lee, aunque esté bien formado: sus entidades podrían expandirse
+  al consultar el texto.
+- El documento se libera siempre, también si la lectura falla.
 
 **Qué comprueba**
 
-- Que el documento se puede analizar sin que el analizador emita **ningún** diagnóstico,
-  tampoco los que él considera avisos o errores recuperables.
-- Rechaza, entre otros: elementos sin cerrar o cruzados, varias raíces, texto fuera de la
-  raíz, atributos repetidos, sin comillas o sin valor, entidades no declaradas, comentarios y
-  secciones CDATA mal formados, declaración XML fuera de lugar y prefijos sin declarar.
+- Que el documento es XML 1.0 bien formado y correcto en sus espacios de nombres.
+- En particular, rechaza los errores que el analizador anterior dejaba pasar: un «&» sin
+  escapar, una referencia a un carácter no admitido, caracteres de control, la secuencia
+  `]]>` en el texto, el prefijo `xml` enlazado a otro espacio de nombres y un atributo
+  repetido con dos prefijos del mismo espacio.
 - Resuelve los espacios de nombres: un elemento o un atributo se identifica por su espacio y
   su nombre local, no por su prefijo.
-- Descodifica las cinco referencias predefinidas y las numéricas.
+- Descodifica las referencias predefinidas y las numéricas, y la codificación declarada.
+- Conserva íntegro el texto válido; se prueba con escapes, referencias, otros alfabetos y
+  secciones CDATA.
 - Limita el anidamiento a 64 niveles.
+
+La lectura ocurre **antes** de cualquier regla del formato, igual para un manifiesto propio
+que para uno ajeno: si el analizador rechaza el documento, no se aplica ninguna regla.
 
 **Qué queda fuera**
 
-`@xmldom/xmldom` es tolerante. No diagnostica estos errores de buena formación, y por tanto
-esta lectura tampoco:
+- Un documento con DTD se rechaza entero, aunque XML lo permita. Es una restricción
+  deliberada, no una comprobación de buena formación.
+- Los avisos que libxml2 no emite. Por ejemplo, un espacio de nombres con una dirección
+  relativa se acepta sin aviso.
+- La validez del documento respecto de cualquier esquema o DTD: solo se comprueba que está
+  bien formado.
 
-- un «&» sin escapar en el texto;
-- una referencia a un carácter que XML no admite, como `&#0;`;
-- caracteres de control en el texto;
-- la secuencia `]]>` en el texto;
-- el prefijo `xml` enlazado a otro espacio de nombres;
-- un atributo repetido con dos prefijos del mismo espacio de nombres.
+**El analizador, tal como se comprobó el 2026-10-08**
 
-Están escritos como casos de prueba, para que un cambio de versión que altere este
-comportamiento se note. Para el manifiesto que escribe AulaNorma los cubren las reglas
-léxicas del apartado siguiente. Para un manifiesto ajeno, no se detectan.
+| Dato            | Valor                                                                                         |
+| --------------- | --------------------------------------------------------------------------------------------- |
+| Paquete         | `libxml2-wasm` 0.7.2, publicado el 2026-09-07; 17 versiones desde 2023                        |
+| Mantenimiento   | Repositorio activo, no archivado; último commit, el 2026-10-05                                |
+| Contiene        | libxml2 2.15.1 compilado a WebAssembly, de una bifurcación del autor del paquete con 12 commits propios |
+| Licencias       | MIT el envoltorio; la licencia MIT de libxml2 para la biblioteca, en `LICENSE.libxml2`        |
+| Dependencias    | Ninguna                                                                                       |
+| Instalación     | Sin scripts: funciona con `ignore-scripts=true`. El binario va dentro de un módulo JavaScript |
+| Entorno         | Node.js 24.21.0; también dentro de `npm run dev` y de `npm run build`                         |
+| Vulnerabilidades | `npm audit`: ninguna. Firma y atestación del registro, verificadas                           |
 
-No se resuelve ningún recurso externo: un `DOCTYPE` no hace que se lea ningún fichero.
+Dos límites de esta comprobación: `npm audit` no conoce las vulnerabilidades de la libxml2
+que va **dentro** del paquete, y esa libxml2 es una bifurcación, no la versión publicada por
+su proyecto. En el producto, el analizador solo lee manifiestos que acaba de escribir el
+propio generador.
+
+**Alternativas evaluadas**: `@xmldom/xmldom`, mantenido pero tolerante, fue el analizador de
+la versión anterior de esta estrategia y se retiró por eso. `saxes`, estricto, tiene el
+repositorio archivado.
 
 ## 2. Reglas del perfil
 
@@ -75,8 +104,8 @@ Son reglas del formato, separadas del análisis sintáctico.
 - El fichero es un ZIP legible, con un máximo de 2000 entradas y 64 MiB descomprimidos.
 - Ninguna entrada tiene una ruta absoluta, con `..`, con barra invertida o con letra de
   unidad, y no hay dos que solo se distingan por mayúsculas.
-- `imsmanifest.xml` está en la raíz, es UTF-8 válido y no declara otra codificación.
-- No lleva `DOCTYPE` ni instrucciones de procesamiento.
+- `imsmanifest.xml` está en la raíz.
+- No lleva instrucciones de procesamiento. (Un `DOCTYPE` lo rechaza ya la lectura.)
 - La raíz es `manifest` en el espacio de nombres de empaquetado de contenidos de SCORM 1.2,
   con identificador.
 - Los metadatos declaran `ADL SCORM`, versión `1.2`.
@@ -103,10 +132,8 @@ Son reglas del formato, separadas del análisis sintáctico.
   o servidor, ni `base`, `iframe`, `object`, `embed`, `form` o `meta http-equiv`; en el CSS,
   ningún `url()` ni `@import`; en el JavaScript, ninguna dirección ni interfaz de red.
 - Ningún identificador de una cuenta de usuario en ningún fichero.
-- **Forma restringida del manifiesto**, con reglas léxicas sobre su texto: exactamente los dos
-  espacios de nombres que declara el generador; ningún comentario ni sección CDATA; ningún
-  «&» que no inicie una de las cinco referencias predefinidas; ningún `]]>`; ningún carácter
-  que XML 1.0 no admita.
+- **Forma restringida del manifiesto**: ningún comentario ni sección CDATA, que el generador
+  no escribe.
 - Máximo de 200 temas, comprobado al generar.
 
 ### Qué queda fuera de las reglas
@@ -127,12 +154,14 @@ Son reglas del formato, separadas del análisis sintáctico.
 
 **Qué comprueban**
 
-- **Análisis sintáctico** (`tests/unit/content-export/xml.test.ts`): XML mal formado, espacios
-  de nombres, referencias, construcciones anotadas y las tolerancias conocidas del
-  analizador.
+- **Análisis sintáctico** (`tests/unit/content-export/xml.test.ts`): la configuración del
+  analizador, XML mal formado, espacios de nombres, texto conservado, DTD y recursos
+  externos (con un fichero local que no debe leerse) y liberación de recursos tras fallos.
 - **Paquetes incorrectos hechos a mano** (`tests/contract/scorm-package.contract.test.ts`):
   más de cincuenta, cada uno rechazado por su motivo: estructura, espacios de nombres,
-  referencias, rutas, recursos, forma del manifiesto y direcciones externas.
+  referencias, rutas, recursos, forma del manifiesto y direcciones externas. Los errores de
+  buena formación se introducen tanto en el manifiesto propio como en una copia en memoria
+  del ajeno, y en los dos casos los rechaza la lectura, sin llegar a ninguna regla.
 - **Ida y vuelta**: el título que el generador escribe, con caracteres conflictivos, es el
   que el analizador ajeno lee.
 - **Fixture interno**: un paquete escrito a mano con otra estructura, que supera las reglas

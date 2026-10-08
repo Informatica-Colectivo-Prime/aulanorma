@@ -57,11 +57,11 @@ retomar donde lo dejó y, con todos marcados, finalizar.
 
 ## Decisiones tomadas al implementar
 
-- **El manifiesto se lee con `@xmldom/xmldom`**, un analizador mantenido y ajeno al
-  generador. La primera versión de esta fase usaba un lector escrito a mano, que se retiró:
-  repetía las suposiciones de quien escribe el generador. El analizador es tolerante con
-  algunos errores de buena formación; están listados como pruebas y los que afectan al
-  manifiesto propio los rechazan reglas léxicas del perfil.
+- **El manifiesto lo lee libxml2**, con `libxml2-wasm`: estricto, mantenido y ajeno al
+  generador. Es el tercer lector de esta fase. El primero, escrito a mano, repetía las
+  suposiciones del generador. El segundo, `@xmldom/xmldom`, aceptaba sin avisar cinco errores
+  de buena formación, y cubrirlos con reglas léxicas propias era volver a analizar XML a
+  mano. Esas reglas se han retirado.
 - **El análisis sintáctico y las reglas del formato están en ficheros distintos**: `xml.ts`
   no sabe nada de SCORM y `conformance.ts` no interpreta XML.
 - **El manifiesto no lleva `xsi:schemaLocation`** ni el paquete incluye ningún XSD.
@@ -85,8 +85,8 @@ retomar donde lo dejó y, con todos marcados, finalizar.
 | Fichero                                             | Casos | Qué cubre                                                                                   |
 | --------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------- |
 | `tests/contract/scorm-runtime.contract.test.ts`     | 43    | Inicio, navegación, marcas, salida, reanudación, finalización, ausencia, fallos y retornos   |
-| `tests/contract/scorm-package.contract.test.ts`     | 71    | Generador, 52 paquetes incorrectos, ida y vuelta, fixture interno y manifiesto de un tercero |
-| `tests/unit/content-export/xml.test.ts`             | 41    | XML mal formado, espacios de nombres, referencias y tolerancias conocidas del analizador     |
+| `tests/contract/scorm-package.contract.test.ts`     | 81    | Generador, 50 paquetes incorrectos, ida y vuelta, fixture interno y manifiesto de un tercero |
+| `tests/unit/content-export/xml.test.ts`             | 58    | Configuración, XML mal formado, espacios de nombres, texto, recursos externos y liberación   |
 | `tests/unit/content-export/export-download.test.ts` | 24    | Vigencia y cobertura al exportar y descargar, fallos sin fichero, registros y conservación   |
 | `tests/integration/us4-export-download.test.ts`     | 10    | Escenarios 1 a 8 por las rutas reales, permisos, SC-014, SC-025 y SC-031                     |
 
@@ -143,6 +143,22 @@ El doble de la API del recorrido es una página local escrita para el ensayo. No
 
 La primera captura del historial mostró que la huella desbordaba la tabla y dejaba los
 enlaces de descarga fuera de la página. Se corrigió y se comprobó con otra captura.
+
+## Recorrido repetido tras cambiar de analizador (2026-10-08)
+
+Solo la parte afectada, sobre el temario del ensayo anterior, con Chrome sin interfaz gráfica
+y `npm run dev`. Antes de exportar se editó un bloque con un texto que parece marcado y una
+cuenta desechable aprobó de nuevo el tema y la versión.
+
+| Paso                              | Resultado                                                                                   |
+| --------------------------------- | ------------------------------------------------------------------------------------------- |
+| Exportar                          | «Generado y comprobado», «Paquete de ensayo», huella y tamaño; la tabla cabe en la página    |
+| Descargar                         | `application/zip`, como adjunto; su huella coincide con la mostrada                          |
+| Contenido del paquete             | Sus cuatro ficheros; ningún XSD; manifiesto sin `DOCTYPE`                                    |
+| Abrirlo desde el disco            | Avisa de que el recorrido no se guardará; «Finalizar», no disponible                         |
+| Contenido literal                 | El texto con `<b>`, `&` y `<script>` se lee tal como se escribió; ningún elemento activo     |
+| Marcar un tema sin plataforma     | El aviso no cambia y no se afirma ningún guardado                                            |
+| Peticiones y consola              | Tres peticiones, todas al propio paquete; ningún error                                       |
 
 ## Limitaciones
 

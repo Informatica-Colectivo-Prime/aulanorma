@@ -241,3 +241,21 @@ a quien revisa decidir si la definición sigue siendo suficiente. No se ha añad
 cambiado ningún requisito de la especificación: FR-037 y SC-011 piden validar la estructura
 del formato, sin nombrar los XSD, y la constitución pide validar el paquete contra las
 reglas del formato de exportación.
+
+## Reevaluación de CHK034 tras cambiar de analizador (2026-10-08)
+
+La pregunta es si la conformidad del paquete está **definida** con criterios externos al
+generador. Con lo realmente comprobado:
+
+| Criterio externo                         | Definido                                   | Comprobado                                                          |
+| ---------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------- |
+| Buena formación del manifiesto           | Sí: libxml2, sin recuperación              | Sí: 58 pruebas, incluidos los errores que el analizador anterior dejaba pasar |
+| Forma del manifiesto según SCORM 1.2     | **No**: los XSD se sustituyeron            | No. Las reglas del perfil son propias, no externas                  |
+| Aceptación de un paquete ajeno           | Sí, en research R8 y en T065               | **Parcial**: un manifiesto de un tercero, no un paquete completo    |
+| Funcionamiento en la plataforma de destino | Sí: Moodle real, condición de aceptación | **No**: pendiente de una instancia de pruebas (T079)                |
+
+Valoración: la definición existe y es explícita sobre lo que no cubre, así que la marca se
+mantiene como respuesta a una pregunta sobre la **redacción** de los requisitos. No acredita
+que el paquete sea conforme: de los cuatro criterios, uno está comprobado, uno se sustituyó
+a sabiendas, uno está a medias y el decisivo está pendiente. Si quien revisa entiende que un
+criterio externo sobre la forma del manifiesto es imprescindible, la marca debe retirarse.

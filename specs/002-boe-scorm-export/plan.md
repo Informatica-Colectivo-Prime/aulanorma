@@ -40,7 +40,7 @@ Tres ideas sostienen el diseño:
 `>=24.21.0 <25`), sin cambios respecto a la base.
 
 **Primary Dependencies**: las existentes (Next.js 16.3.6 con Pages Router, React 19.3.0, Zod
-4.6.5, Pino 10.3.1). Nuevas de producción: `pdfjs-dist`, `fflate` y `@xmldom/xmldom` (esta última sustituye desde
+4.6.5, Pino 10.3.1). Nuevas de producción: `pdfjs-dist`, `fflate` y `libxml2-wasm` (esta última sustituye desde
 el 2026-10-08 a `xmllint-wasm`, que no llegó a instalarse). Nueva de
 desarrollo: `jsdom`. Herramienta externa nueva: `qpdf`, para la inspección estructural de los
 PDF, instalada como binario verificado y no como paquete de npm. Ningún SDK de proveedor de generación por ahora. Versiones exactas por
@@ -274,7 +274,7 @@ principio XII.
 | `qpdf` (herramienta externa)            | Estructura interpretada del PDF para aplicar la política          | Las consultas de `pdfjs-dist` y la búsqueda en bytes fallaron      |
 | `pdfjs-dist`                            | Texto por página del PDF                                          | Una herramienta del sistema difiere entre macOS y Linux            |
 | `fflate`                                | Crear y releer el ZIP                                             | Un escritor propio solo fallaría al importar                       |
-| `@xmldom/xmldom`                        | Leer el manifiesto con un analizador mantenido, ajeno al generador | Un lector propio repite las suposiciones del generador; sustituye a `xmllint-wasm` |
+| `libxml2-wasm`                        | Leer el manifiesto con un analizador mantenido, ajeno al generador | Un lector propio repite las suposiciones del generador; sustituye a `xmllint-wasm` |
 | `jsdom` (desarrollo)                    | Probar el seguimiento del paquete contra un doble                 | Un navegador automatizado es desproporcionado                      |
 
 ## Datos externos que bloquean tareas concretas
