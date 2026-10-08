@@ -1030,6 +1030,21 @@ describe("envío devuelto tras una renovación", () => {
     ]);
   });
 
+  test("no se envía por sí sola: ni al cargar, ni con el tiempo, ni al renovarse la sesión en otra pestaña", async () => {
+    const tab = replay();
+    tab.advance(10 * MINUTE);
+    expect(tab.requests).toEqual([]);
+    tab.renewedElsewhere();
+    for (const request of tab.requests) {
+      await request.respond(
+        200,
+        pageOf(session({ csrfToken: "testigo nuevo" })),
+      );
+    }
+    tab.advance(10 * MINUTE);
+    expect(tab.submissions).toEqual([]);
+  });
+
   test("sin sesión vigente no envía nada y lo explica", async () => {
     const tab = replay();
     tab.window.document

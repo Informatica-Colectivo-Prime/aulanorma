@@ -21,6 +21,7 @@ export default protectedAction(
     role: null,
     operation: "session.renew",
     allowPendingPasswordChange: true,
+    secretFields: true,
   },
   async ({ field, runtime, correlationId, sessionCookie }) => {
     const result = await runtime.identity.renewSession({

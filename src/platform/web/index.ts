@@ -727,6 +727,9 @@ export interface AccessOptions {
   // Solo la página y la acción de cambio de contraseña se alcanzan mientras la
   // cuenta tiene pendiente cambiar su contraseña inicial.
   readonly allowPendingPasswordChange: boolean;
+  // Sus campos llevan contraseñas: si la petición llega con la sesión o el
+  // testigo anteriores a una renovación, no se devuelve lo enviado.
+  readonly secretFields?: boolean;
 }
 
 // Comprueba el perfil exigido, con denegación por defecto y auditada. Con
@@ -875,7 +878,25 @@ function renewedPage(): Html {
 // devuelto para repetirlo con la sesión nueva. No lleva testigo: el script lo
 // pide con la sesión vigente antes de enviar. Sin esa sesión, no sirve de
 // nada.
-function replayPage(req: NextApiRequest, body: unknown): Html {
+function replayPage(
+  req: NextApiRequest,
+  body: unknown,
+  options: AccessOptions,
+): Html {
+  if (options.secretFields === true) {
+    // Una contraseña no se escribe en ninguna respuesta: hay que repetirla.
+    return layout({
+      title: "Envío pendiente",
+      session: null,
+      content: html`<h1>Tu envío no se ha guardado</h1>
+        <p>
+          Renovaste la sesión mientras se enviaba este formulario, y llegó con
+          la anterior. No se ha guardado nada. Como llevaba una contraseña, no
+          se devuelve en esta página: vuelve al formulario y repítelo.
+        </p>
+        <p><a href="/">Ir al inicio</a></p>`,
+    });
+  }
   const target = (req.url ?? "").split("?")[0] ?? "";
   const fields =
     typeof body === "object" && body !== null
@@ -1166,7 +1187,7 @@ export function protectedAction(
         // borra la cookie, que ya es la de la sesión nueva: se devuelve lo
         // enviado para repetirlo con ella.
         denied(null, "session_renewed");
-        sendPage(res, 409, replayPage(req, body), []);
+        sendPage(res, 409, replayPage(req, body, options), []);
         return;
       }
       seeOther(res, "/login", [
@@ -1180,7 +1201,7 @@ export function protectedAction(
       if (identity.isPreviousToken(sessionCookie, csrf)) {
         // Un formulario abierto antes de renovar: tampoco se ejecuta.
         denied(found.user.id, "csrf_renewed");
-        sendPage(res, 409, replayPage(req, body), []);
+        sendPage(res, 409, replayPage(req, body, options), []);
         return;
       }
       denied(found.user.id, "csrf");
