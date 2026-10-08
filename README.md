@@ -512,6 +512,9 @@ modos.
   los nueve controles de la integración continua y los comandos locales equivalentes.
 - [Protección de `main`](docs/engineering/branch-protection.md): la protección actual, los nueve
   controles requeridos y el registro de su activación.
+- [Despliegue, copia y restauración](docs/engineering/deployment.md): el procedimiento para
+  poner el piloto en un servidor por HTTPS y para copiar y recuperar sus datos. No se ha
+  ejecutado en ningún servidor.
 - [Entorno de referencia](docs/engineering/reference-environment.md): el equipo macOS arm64 en
   el que se miden los tiempos de aceptación.
 - [Excepciones de seguridad](docs/engineering/security-exceptions.md): el registro de excepciones

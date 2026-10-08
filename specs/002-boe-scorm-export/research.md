@@ -581,6 +581,26 @@ no cuenta como copia.
 *Proporción*: una copia completa periódica basta para el volumen del piloto. No se plantean
 copias incrementales, réplica ni recuperación a un instante.
 
+> **Resultado de la implementación (2026-10-08)**. La copia y su verificación están en
+> `src/platform/persistence` y se ejecutan con `scripts/ops/backup.mjs`; la restauración
+> comprobada, con `scripts/ops/verify-restore.mjs`. Tres precisiones sobre lo decidido arriba:
+>
+> - **Los paquetes exportados no se nombran por su huella**, sino por el identificador de su
+>   exportación (`exports/<id>.zip`), con la huella en su fila. Las tres reglas de escritura
+>   se cumplen igual: el paquete se sincroniza a disco, se renombra y se sincroniza su
+>   directorio antes de confirmar la fila, y nunca se reescribe. La sincronización a disco
+>   del paquete faltaba y se añadió con esta entrega.
+> - **Revocar las sesiones es un paso de la restauración, no del arranque.** Un reinicio
+>   normal conserva las sesiones abiertas; el arranque solo aplica la regla de las
+>   generaciones. Por eso un directorio restaurado se pone en servicio únicamente a través
+>   del script, que revoca las sesiones y aplica esa misma regla.
+> - **La copia lleva un registro con su inventario y sus huellas**, y una restauración
+>   rechaza una copia fallida, alterada, incompleta o con ficheros de más. La huella no es
+>   una firma.
+>
+> Comprobado con pruebas automáticas y con un ensayo local; nada en un servidor
+> ([`deploy-check.md`](./deploy-check.md)).
+
 **Alternativas consideradas**: uso exclusivamente local (descartado por el mantenedor);
 contenedor (aísla más, pero depende de lo que haya en el destino, aún por concretar; el
 procedimiento se escribe de modo que pueda adoptarse); TLS en la propia aplicación (duplica
