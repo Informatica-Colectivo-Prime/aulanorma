@@ -12,7 +12,7 @@ bloqueada. Los datos usados son sintéticos o de ensayo, y las cuentas, de prueb
 | ----- | ---------------------------------------------------------------------------------------------------- |
 | T070  | `scripts/ops/backup.mjs` y la copia verificada en `src/platform/persistence`                         |
 | T071  | `scripts/ops/verify-restore.mjs`, con la revocación de sesiones y la regla de las generaciones       |
-| T072  | `tests/integration/backup-restore.test.ts`, 12 pruebas                                               |
+| T072  | `tests/integration/backup-restore.test.ts` y `tests/integration/publication-order.test.ts`           |
 | T073  | [`docs/engineering/deployment.md`](../../docs/engineering/deployment.md)                             |
 
 Además, una corrección que el diseño exigía y faltaba: el paquete exportado se sincroniza a
@@ -60,8 +60,49 @@ ordenado.
 Es un ensayo: no usa `npm start`, HTTPS, proxy ni una cuenta de sistema, y no había ninguna
 generación en curso, así que ese caso solo lo cubren las pruebas automáticas.
 
+## Revisión de las garantías (2026-10-08)
+
+Antes de integrar se revisaron las garantías de la copia y de la restauración. Se
+encontraron y corrigieron tres defectos:
+
+| Defecto                                                                                                              | Corrección                                                                                                    |
+| -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Al publicar el primer fichero, el directorio recién creado no se sincronizaba en el que lo contiene                   | Cada nivel que se crea se sincroniza en su directorio, para documentos y para paquetes                        |
+| Un fichero que ya existía se daba por publicado sin más, aunque un proceso anterior no hubiera llegado a sincronizar | Se sincroniza de nuevo, con su directorio, antes de darlo por publicado                                       |
+| Una restauración que fallaba tras copiar los ficheros dejaba en el destino una base de datos con apariencia válida   | Se trabaja en un directorio interno y el contenido solo pasa al destino si todo pasa; si no, no queda nada |
+
+El tercero alcanzaba también a los pasos de sesiones y generaciones, que se hacían con el
+directorio ya en su sitio. Ahora forman parte de la restauración y se hacen antes.
+
+Pruebas añadidas:
+
+- **Orden de publicación** (`tests/integration/publication-order.test.ts`, 4): observa las
+  llamadas al sistema de ficheros de un documento y de un paquete, y que ninguna ve todavía
+  la fila. Se comprobó que la prueba falla si se quita una sincronización.
+- **Restauración fallida** (5 casos): falta un fichero o tiene otro contenido en una copia
+  cuyo registro cuadra, base de datos dañada, y reglas de las operaciones en curso que
+  devuelven un problema o fallan a medias. En todos, el destino queda sin crear o vacío. Un
+  directorio de trabajo abandonado impide abrir la base de datos.
+- **Reglas aplicadas directamente** (2): la revocación de todas las sesiones y el paso a
+  incierto de lo enviado sin liquidar, sobre el directorio de datos de la prueba y sin pasar
+  por el script. El script comprueba además cada sesión y cada reserva, fila a fila.
+
+El ensayo local se repitió con el script corregido; su tabla, arriba, recoge ese resultado.
+
+## Entorno `production`
+
+`AULANORMA_ENVIRONMENT` admite ahora `production`, el valor del piloto desplegado. Sus usos
+son dos, y los dos solo anotan el campo `environment` de los registros: el registrador del
+arranque y el de los eventos de producto. Ningún permiso, ruta ni comportamiento depende de
+él. Las exigencias de HTTPS y de cookies seguras dependen del origen público y del modo de
+arranque, y no cambian; con `production`, además, un origen HTTP local se rechaza también en
+modo desarrollo. Lo cubren las pruebas de configuración y cinco pruebas de contrato de la
+sesión con ese entorno.
+
 ## Qué no está comprobado
 
+- **La resistencia a una caída completa de la máquina.** Las pruebas comprueban el orden de
+  las llamadas de sincronización, no lo que queda en el disco tras un corte de corriente.
 - El procedimiento de despliegue: cuenta de sistema, servicio, proxy inverso, TLS, HSTS,
   redirección y acceso desde otro equipo. Los ejemplos de systemd y nginx no se han probado.
 - El arranque con `npm start` sobre un directorio restaurado y con origen HTTPS.

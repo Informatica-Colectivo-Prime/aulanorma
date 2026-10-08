@@ -13,6 +13,7 @@ sí está comprobado, y dónde:
 | Qué                                                                              | Comprobado                                                                 |
 | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | La copia, su verificación y la restauración comprobada                           | Pruebas automáticas (`tests/integration/backup-restore.test.ts`)           |
+| El orden de publicación de un fichero antes de confirmar su referencia           | Pruebas automáticas (`tests/integration/publication-order.test.ts`)        |
 | Copia, restauración y arranque del servicio sobre el directorio restaurado       | Un ensayo local en macOS, con `npm run dev` y datos de ensayo (2026-10-08) |
 | Cuenta de sistema, servicio, proxy inverso, TLS, HSTS y acceso desde otro equipo | **Nada.** Son instrucciones por adaptar al destino                         |
 | Coste de `scrypt` en el destino                                                  | **Nada.** Se mide al desplegar                                             |
@@ -29,8 +30,6 @@ a modificar los servicios que ya existan en ese servidor.
 - Cómo se obtiene y se renueva el certificado TLS.
 - Dónde se guardan las copias fuera del servidor, con qué frecuencia se hacen y cuánto se
   conservan.
-- Valor de `AULANORMA_ENVIRONMENT` para el piloto desplegado: hoy solo admite `development`,
-  `test` y `ci`. Hace falta decidir si se añade un valor propio antes de desplegar.
 
 ## Requisitos del destino
 
@@ -86,8 +85,12 @@ privado. Para el despliegue cambian estas:
 | ------------------------- | ------------------------------------------------------------------------------------ |
 | `AULANORMA_DATA_DIR`      | El directorio de datos, en ruta absoluta                                             |
 | `AULANORMA_PUBLIC_ORIGIN` | `https://<dominio>`, exacto, sin ruta ni barra final                                 |
-| `AULANORMA_ENVIRONMENT`   | Pendiente de decisión: ver «Datos que faltan»                                        |
+| `AULANORMA_ENVIRONMENT`   | `production`                                                                         |
 | `AULANORMA_PDF_MAX_MIB`   | El tamaño máximo de PDF que se acepte, de 1 a 64; el proxy debe admitir al menos eso |
+
+`AULANORMA_ENVIRONMENT=production` solo se anota en los registros: no cambia ningún permiso
+ni comportamiento, y con él la configuración rechaza un origen que no sea HTTPS también con
+`npm run dev`.
 
 `npm start` exige `NODE_ENV=production`, no carga ficheros `.env` locales y **no arranca si el
 origen público no es HTTPS**. Con un origen HTTPS, las cookies de sesión llevan el prefijo
@@ -283,13 +286,22 @@ ni toca su directorio de datos. Comprueba, en este orden:
 2. La verificación de integridad de SQLite y las claves ajenas.
 3. Que cada referencia tiene su fichero y que su huella coincide.
 4. Las migraciones pendientes, que aplica como haría el arranque.
-5. **Revoca todas las sesiones.** Ninguna anterior a la copia sirve después.
+5. **Revoca todas las sesiones** y comprueba, una a una, que las que estaban abiertas han
+   quedado revocadas. Ninguna anterior a la copia sirve después.
 6. **Deja como inciertas las generaciones que constaban como enviadas y sin liquidar**, que
    siguen contando contra el presupuesto, y libera las reservadas que no llegaron a enviarse.
-   Confirma que no queda ninguna en curso.
+   Comprueba cada una, que su importe sigue contando y que no queda ninguna en curso.
 
 Escribe un informe en JSON y termina con código 1 si algo falla. Guarda el informe junto a la
 línea de la copia y borra el directorio de la prueba.
+
+**Una restauración fallida no deja nada en el destino.** Todo se hace en un directorio de
+trabajo dentro del destino, y el contenido solo pasa a su sitio, con la base de datos en
+último lugar, si los seis pasos pasan. Si alguno falla, el directorio de trabajo se borra y
+el destino queda como estaba: vacío o sin crear. Si el proceso se interrumpe a medias, queda
+el directorio de trabajo (`.restore-…`): mientras exista, ni el servicio ni los scripts abren
+la base de datos de ese directorio, y otra restauración lo rechaza por no estar vacío. Bórralo
+entero y repite.
 
 ### Recuperar el servicio
 
@@ -301,7 +313,9 @@ línea de la copia y borra el directorio de la prueba.
    node scripts/ops/verify-restore.mjs <copia> /var/lib/aulanorma
    ```
 
-4. Si el informe no dice `"ok": true`, no arranques el servicio sobre ese directorio.
+4. Si el informe no dice `"ok": true`, el destino ha quedado vacío: el servicio no tiene
+   datos sobre los que arrancar. Investiga la causa o usa otra copia; el directorio apartado
+   en el paso 2 sigue intacto.
 5. Arranca el servicio y repite las comprobaciones 1 y 4 de «Comprobaciones tras desplegar».
 6. Con una cuenta de administración, revisa en la página del presupuesto las operaciones
    inciertas y concílialas con lo que confirme el proveedor.
@@ -323,6 +337,11 @@ commit anterior.
 
 ## Límites aceptados para el piloto
 
+- **La resistencia a una caída completa de la máquina no está probada.** La aplicación
+  sincroniza a disco cada fichero y su directorio antes de confirmar la fila que lo
+  referencia, y las pruebas comprueban ese orden de llamadas. Qué queda de verdad en el disco
+  tras un corte de corriente depende del sistema de ficheros y del equipo de destino, y no se
+  ha ensayado en ninguno.
 - **Un único servidor, una única instancia y un único escritor.** Pasar a varias instancias o
   a un volumen mayor exige otra base de datos y un ADR.
 - **`node:sqlite` es _release candidate_ en Node.js 24.** La versión de Node.js está fijada, y

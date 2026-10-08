@@ -598,6 +598,18 @@ copias incrementales, réplica ni recuperación a un instante.
 >   rechaza una copia fallida, alterada, incompleta o con ficheros de más. La huella no es
 >   una firma.
 >
+> - **Una restauración trabaja en un directorio interno del destino** y solo le pasa el
+>   contenido, con la base de datos al final, si todas las comprobaciones y las reglas de las
+>   operaciones en curso pasan. Si algo falla no queda nada, y un directorio de trabajo
+>   abandonado impide abrir la base de datos.
+> - **Los directorios que se crean al publicar también se sincronizan**, y un fichero que ya
+>   existía se sincroniza de nuevo antes de darlo por publicado.
+> - **`AULANORMA_ENVIRONMENT` admite `production`** para el piloto desplegado. Solo se anota
+>   en los registros y exige un origen HTTPS también en modo desarrollo.
+>
+> La resistencia a una caída completa de la máquina no está probada: las pruebas comprueban
+> el orden de las llamadas, no el estado del disco tras un corte de corriente.
+>
 > Comprobado con pruebas automáticas y con un ensayo local; nada en un servidor
 > ([`deploy-check.md`](./deploy-check.md)).
 
