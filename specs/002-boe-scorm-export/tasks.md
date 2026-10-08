@@ -192,7 +192,7 @@ huella y lo abre sin conexión.
 - [X] T062 [US4] Escribir `tests/contract/scorm-runtime.contract.test.ts` con `jsdom` y un doble de la API que aplica los límites del formato: inicio, `lesson_location`, `suspend_data` con mapa de bits, `exit=suspend`, `completed` solo tras «Finalizar», nunca `score` ni `passed`, ausencia de API con aviso, estado de otra versión descartado (SC-017)
 - [X] T063 [US4] Implementar el generador en `src/modules/content-export/build.ts`: manifiesto desde plantilla con escapado e identificador de versión, ZIP con `fflate` de entradas ordenadas y fechas fijas, máximo de 200 temas, huella SHA-256 del fichero final, sin datos de usuarios
 - [ ] T064 [US4] Implementar la conformidad en `src/modules/content-export/conformance.ts`: validación del manifiesto contra los XSD oficiales con `xmllint-wasm` (XSD en `tests/fixtures/scorm/xsd/` y en el recurso de ejecución, con su procedencia) y las reglas que los esquemas no expresan, releyendo el ZIP. **Parcial**: hechas las reglas propias al releer el ZIP; la validación contra los XSD queda pendiente de su procedencia y de sus condiciones de redistribución ([scorm-schemas.md](./scorm-schemas.md)), y `xmllint-wasm` no se ha instalado
-- [X] T065 [US4] Escribir `tests/contract/scorm-package.contract.test.ts`: manifiestos y paquetes incorrectos hechos a mano que deben rechazarse, un paquete SCORM 1.2 de referencia no generado por AulaNorma que debe aceptarse, equivalencia entre dos exportaciones de la misma versión (SC-014), ausencia de URL externas, credenciales y datos de usuarios (SC-012, SC-015). Los casos que dependen de los XSD se añadirán con T064; el paquete de referencia está escrito a mano para las pruebas, no es de un tercero
+- [ ] T065 [US4] Escribir `tests/contract/scorm-package.contract.test.ts`: manifiestos y paquetes incorrectos hechos a mano que deben rechazarse, un paquete SCORM 1.2 de referencia no generado por AulaNorma que debe aceptarse, equivalencia entre dos exportaciones de la misma versión (SC-014), ausencia de URL externas, credenciales y datos de usuarios (SC-012, SC-015). **Parcial**: los casos que dependen de los XSD se añadirán con T064. La referencia ajena es el manifiesto SCORM 1.2 de `adapt-contrib-spoor`, sin modificar; un paquete completo publicado por un tercero sigue pendiente
 - [X] T066 [US4] Implementar exportar y descargar: exigen versión vigente y cobertura completa en cada petición, registran cada intento, no dejan fichero tras un fallo y deniegan la descarga de paquetes de versiones invalidadas, también con enlaces antiguos; pruebas en `tests/unit/content-export/export-download.test.ts`
 - [X] T067 [US4] Redactar las instrucciones de incorporación manual en `src/modules/content-export/instructions/`, en español claro, declarando que todavía no se ha comprobado ninguna versión de Moodle y que sustituir un paquete ya importado corresponde al usuario
 - [X] T068 [US4] Crear las páginas `src/pages/export/` (vista previa con aviso de que no acredita el seguimiento, exportar, huella, descarga del paquete y de las instrucciones, historial de exportaciones y descargas)
@@ -289,16 +289,17 @@ bloqueada.
 
 | Estado                                        | Tareas                                                                 |
 | --------------------------------------------- | ---------------------------------------------------------------------- |
-| Completadas                                   | T001–T063, T065–T069                                                   |
+| Completadas                                   | T001–T063, T066–T069                                                   |
 | Ejecutables, en este orden                    | T070–T073, T078, T082–T087                                             |
-| Abierta por la procedencia de los esquemas    | T064 (su parte de validación con XSD)                                  |
+| Abiertas por los esquemas y la referencia ajena | T064 (validación con XSD) y T065 (paquete completo de un tercero)    |
 | Bloqueada por el dominio y el servidor        | T074                                                                   |
 | Bloqueadas por el proveedor de generación     | T075; y por depender de ella, T076 y T077                              |
 | Bloqueadas por el Moodle de pruebas           | T079; y por depender de ella, T080                                     |
 | Bloqueada por las tres anteriores             | T081, que depende de T074, T077 y T079                                 |
 
-De las 87 tareas, 68 están completadas, 11 son ejecutables, 1 está abierta a falta de una
-decisión sobre los esquemas (T064) y 7 están bloqueadas. T086 no cierra la aceptación mientras quede alguna bloqueada. Ninguna evidencia
+De las 87 tareas, 67 están completadas, 11 son ejecutables, 2 están abiertas a falta de una
+decisión sobre los esquemas y de un paquete de referencia de un tercero (T064 y T065) y 7
+están bloqueadas. T086 no cierra la aceptación mientras quede alguna bloqueada. Ninguna evidencia
 de las tareas bloqueadas se simula: el recorrido con respuestas deterministas se registra
 como ensayo.
 

@@ -3,14 +3,18 @@
 // contracts/scorm-package.md).
 //
 // Comprueba el generador y las reglas de conformidad que se aplican al
-// releer el ZIP: paquetes incorrectos hechos a mano que deben rechazarse y
-// un paquete de referencia, escrito a mano y con otra estructura, que debe
-// aceptarse.
+// releer el ZIP: paquetes incorrectos hechos a mano que deben rechazarse; un
+// fixture interno, escrito a mano con otra estructura; y el manifiesto
+// SCORM 1.2 de un tercero (Adapt, GPL-3.0), copiado sin modificar, que debe
+// aceptarse. Este último es una plantilla, no un paquete publicado completo:
+// su procedencia y sus límites están en
+// `tests/fixtures/scorm/third-party/adapt-contrib-spoor/PROVENANCE.md`.
 //
 // PENDIENTE: la validación del manifiesto contra los XSD oficiales no se
 // prueba aquí, porque todavía no se ejecuta
 // (specs/002-boe-scorm-export/scorm-schemas.md). Nada de este fichero
 // acredita la conformidad con esos esquemas ni la importación en Moodle.
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,6 +36,12 @@ import { PACKAGE_ASSETS } from "../support/export-fixture.ts";
 
 const REFERENCE = fileURLToPath(
   new URL("../fixtures/scorm/reference/", import.meta.url),
+);
+const THIRD_PARTY = fileURLToPath(
+  new URL(
+    "../fixtures/scorm/third-party/adapt-contrib-spoor/",
+    import.meta.url,
+  ),
 );
 const VERSION = "c".repeat(32);
 const HOSTILE = `<script>alert("x")</script> & </title><item identifier='x'>`;
@@ -483,7 +493,7 @@ describe("paquetes incorrectos, hechos a mano", () => {
   });
 });
 
-describe("paquete de referencia, ajeno al generador", () => {
+describe("fixture interno, escrito a mano con otra estructura", () => {
   function reference(): Uint8Array {
     const files: Record<string, Uint8Array> = {};
     const walk = (directory: string): void => {
@@ -525,6 +535,79 @@ describe("paquete de referencia, ajeno al generador", () => {
     expect(problems(zipSync(files), { delivery: false } as never)).toMatch(
       /declara un fichero que no está/,
     );
+  });
+});
+
+describe("manifiesto de un tercero, sin modificar", () => {
+  const read = (name: string): Buffer =>
+    readFileSync(path.join(THIRD_PARTY, name));
+  const pack = (): Uint8Array =>
+    zipSync({
+      "imsmanifest.xml": read("imsmanifest.xml"),
+      "index_lms.html": read("index_lms.html"),
+    });
+
+  test("los ficheros son copias literales de su origen", () => {
+    const sha256 = (name: string): string =>
+      createHash("sha256").update(read(name)).digest("hex");
+    expect({
+      manifest: sha256("imsmanifest.xml"),
+      launch: sha256("index_lms.html"),
+      license: sha256("LICENSE"),
+    }).toEqual({
+      manifest:
+        "e3619b8d67830f6d50c91e23cb73a0008c8a20b8b2bc487a2ae20513e4029bc0",
+      launch:
+        "10f4aa7b32721dab6342488d625c255b26851f3e7623241cf78e1faa602e6471",
+      license:
+        "e3df1185c1c835be365f40eda566c0be7701eb8ea8ecaece6861297e28d916ca",
+    });
+    // Su procedencia y su licencia los acompañan.
+    expect(read("PROVENANCE.md").toString()).toContain(
+      "2d8737c2982ee4617c862e7c21e44c31bbd4e7dd",
+    );
+    expect(read("LICENSE").toString()).toContain("GNU GENERAL PUBLIC LICENSE");
+  });
+
+  test("supera las reglas del formato, con metadatos LOM, CDATA y xsi:schemaLocation", () => {
+    const result = checkPackage(pack(), { delivery: false });
+    expect(result.problems).toEqual([]);
+    expect(result.files).toEqual(["imsmanifest.xml", "index_lms.html"]);
+    const parsed = parseXml(read("imsmanifest.xml").toString());
+    if (!parsed.ok) {
+      throw new Error(parsed.problem);
+    }
+    // Lo leído coincide con lo que el fichero dice, no con lo que AulaNorma
+    // genera.
+    expect(parsed.root.attributes.get("|identifier")).toBe(
+      "@@config._spoor._advancedSettings._manifestIdentifier",
+    );
+    const lom = parsed.root.children[0]?.children.find(
+      (item) => item.name === "lom",
+    );
+    expect(lom?.namespace).toBe(
+      "http://www.imsglobal.org/xsd/imsmd_rootv1p2p1",
+    );
+    expect(
+      lom?.children[0]?.children[0]?.children[0]?.attributes.get(
+        "http://www.w3.org/XML/1998/namespace|lang",
+      ),
+    ).toBe("x-none");
+  });
+
+  test("no cumple las reglas de entrega de AulaNorma, y se dice por qué", () => {
+    // No lleva la versión de AulaNorma y su página carga recursos propios.
+    const text = problems(pack(), DELIVERY);
+    expect(text).toMatch(/no es el de la versión/);
+    expect(text).toMatch(/no identifica la versión/);
+  });
+
+  test("también se rechaza si le falta su página de inicio", () => {
+    expect(
+      problems(zipSync({ "imsmanifest.xml": read("imsmanifest.xml") }), {
+        delivery: false,
+      } as never),
+    ).toMatch(/declara un fichero que no está/);
   });
 });
 

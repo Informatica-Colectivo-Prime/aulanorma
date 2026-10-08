@@ -476,7 +476,6 @@ describe("fallos de la plataforma", () => {
 
   test.each([
     ["el guardado", { commit: true }],
-    ["el cierre", { finish: true }],
     ["el estado", { set: ["cmi.core.lesson_status"] }],
   ] as const)(
     "si al finalizar falla %s, no consta como finalizada y se puede reintentar",
@@ -502,6 +501,101 @@ describe("fallos de la plataforma", () => {
       expect(session.alert()).toBe("");
     },
   );
+
+  test("si la finalización se guarda pero el cierre falla, lo dice tal cual y cierra al salir", () => {
+    const store = createStore();
+    const session = open({ store });
+    session.mark(1);
+    session.mark(2);
+    session.mark(3);
+    if (session.platform !== undefined) {
+      session.platform.failures = { finish: true };
+    }
+    session.finishButton().click();
+    // «completed» está guardado: no se dice que no conste, ni que la sesión
+    // esté cerrada.
+    expect(store.committed["cmi.core.lesson_status"]).toBe("completed");
+    expect(session.status()).toMatch(
+      /ha guardado la finalización, pero no ha confirmado el cierre/,
+    );
+    expect(session.status()).not.toMatch(/confirmado la finalización/);
+    expect(session.finishButton().disabled).toBe(true);
+    if (session.platform !== undefined) {
+      session.platform.failures = {};
+    }
+    session.leave();
+    expect(names(session.calls).slice(-2)).toEqual(["LMSCommit", "LMSFinish"]);
+    // Sin pedir suspender: la actividad está finalizada.
+    expect(sets(session.calls, "cmi.core.exit")).toEqual([""]);
+  });
+
+  // "false" es una cadena no vacía, y por tanto «verdadera» para JavaScript:
+  // el paquete no puede decidir por la veracidad del valor devuelto.
+  test.each([
+    ['la cadena "false"', "false"],
+    ['la cadena "TRUE"', "TRUE"],
+    ['la cadena "1"', "1"],
+    ["el número 1", 1],
+    ["una cadena cualquiera", "ok"],
+    ["una cadena vacía", ""],
+    ["un objeto", {}],
+    ["null", null],
+    ["nada", undefined],
+    ["el booleano false", false],
+  ])("si LMSCommit devuelve %s, no dice que ha guardado", (_name, value) => {
+    const session = open();
+    if (session.platform !== undefined) {
+      session.platform.failures = { commitReturns: value };
+    }
+    session.mark(1);
+    expect(session.status()).toBe("Recorrido sin guardar.");
+    expect(session.status()).not.toMatch(CLAIMS_SAVED);
+    expect(session.alert()).toMatch(/No se ha podido guardar/);
+  });
+
+  test.each([
+    ['la cadena "true"', "true"],
+    ["el booleano true, que devuelven algunas plataformas", true],
+  ])(
+    "si LMSCommit devuelve %s y no queda error, lo da por guardado",
+    (_name, value) => {
+      const session = open();
+      if (session.platform !== undefined) {
+        session.platform.failures = { commitReturns: value };
+      }
+      session.mark(1);
+      expect(session.status()).toMatch(SAVED);
+      expect(session.alert()).toBe("");
+    },
+  );
+
+  test('si LMSCommit responde "true" pero deja un error pendiente, no dice que ha guardado', () => {
+    const session = open();
+    if (session.platform !== undefined) {
+      session.platform.failures = { errorAfterCommit: "101" };
+    }
+    session.mark(1);
+    expect(session.status()).toBe("Recorrido sin guardar.");
+    expect(session.alert()).toMatch(/No se ha podido guardar/);
+  });
+
+  test("si LMSGetLastError falla, tampoco se afirma un guardado", () => {
+    const session = open();
+    if (session.platform !== undefined) {
+      session.platform.api.LMSGetLastError = () => {
+        throw new Error("sin diagnóstico");
+      };
+    }
+    session.mark(1);
+    expect(session.status()).toBe("Recorrido sin guardar.");
+  });
+
+  test("el script nunca decide por la veracidad del resultado de una llamada", () => {
+    // Ninguna llamada a la API se usa directamente como condición.
+    expect(SCRIPT).not.toMatch(/if \(!?\s*(?:api\.|invoke\()/);
+    expect(SCRIPT).not.toMatch(/(?:&&|\|\|)\s*invoke\(/);
+    expect(SCRIPT.match(/=== "true"/g)).toHaveLength(1);
+  });
 
   test("si no se puede leer el recorrido anterior, no lo sustituye hasta que el alumno actúa", () => {
     const store = createStore();

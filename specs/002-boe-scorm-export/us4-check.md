@@ -1,6 +1,6 @@
 # Comprobación de la historia 4: exportación y descarga
 
-**Tareas**: T060 a T069 (T064, parcial) | **Fecha**: 2026-10-08 | **Datos del piloto**:
+**Tareas**: T060 a T069 (T064 y T065, parciales) | **Fecha**: 2026-10-08 | **Datos del piloto**:
 [pilot/README.md](./pilot/README.md) | **Historia anterior**: [us3-check.md](./us3-check.md) |
 **Esquemas**: [scorm-schemas.md](./scorm-schemas.md)
 
@@ -77,8 +77,8 @@ retomar donde lo dejó y, con todos marcados, finalizar.
 
 | Fichero                                             | Casos | Qué cubre                                                                                   |
 | --------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------- |
-| `tests/contract/scorm-runtime.contract.test.ts`     | 28    | Inicio, navegación, marcas, salida, reanudación, finalización, ausencia y fallos de la API   |
-| `tests/contract/scorm-package.contract.test.ts`     | 50    | Generador, 27 paquetes incorrectos hechos a mano, paquete de referencia y lector de XML      |
+| `tests/contract/scorm-runtime.contract.test.ts`     | 43    | Inicio, navegación, marcas, salida, reanudación, finalización, ausencia, fallos y retornos   |
+| `tests/contract/scorm-package.contract.test.ts`     | 54    | Generador, 27 paquetes incorrectos, fixture interno, manifiesto de un tercero y lector XML   |
 | `tests/unit/content-export/export-download.test.ts` | 24    | Vigencia y cobertura al exportar y descargar, fallos sin fichero, registros y conservación   |
 | `tests/integration/us4-export-download.test.ts`     | 10    | Escenarios 1 a 8 por las rutas reales, permisos, SC-014, SC-025 y SC-031                     |
 
@@ -86,11 +86,25 @@ Además se adaptaron las listas cerradas de rutas, tablas y capas de la entrega,
 de humo. El script del paquete se ejecuta en `jsdom`. Se comprobó con una mutación que las
 pruebas detectan un «guardado» falso: forzando ese mensaje, seis de ellas fallan.
 
-`npm run check:quality` terminó con código 0: 2280 pruebas en 49 ficheros y la prueba de
-humo, con 24 casos. **`npm run check:security` no**: `check:deps` falla por un aviso de
-gravedad alta publicado el 2026-10-07 contra `next` (GHSA-cjq9-62q9-8jv4, corregido en
-16.3.8), ajeno a esta fase. No se ha actualizado la dependencia ni se ha registrado ninguna
-excepción: es una decisión del mantenedor.
+**Retornos de la API.** SCORM 1.2 responde con las cadenas `"true"` y `"false"`, y `"false"`
+es una cadena no vacía. El paquete solo da por buena una escritura o un guardado si el
+resultado es exactamente `"true"` (o el booleano `true`, que devuelven algunas plataformas)
+y además `LMSGetLastError` devuelve `"0"`. Se prueba con `"false"`, `"TRUE"`, `"1"`, `1`,
+una cadena cualquiera, una vacía, un objeto, `null`, nada y `false`; con un error pendiente
+tras un `"true"`; y con una excepción. Con una mutación que decide por la veracidad del
+valor, nueve pruebas fallan. Si la finalización se guarda pero la plataforma no confirma el
+cierre de la sesión, el paquete dice exactamente eso.
+
+**Referencia ajena.** El paquete de `tests/fixtures/scorm/reference/` lo escribí para las
+pruebas: es un fixture interno. Como referencia de un tercero se usa el manifiesto SCORM 1.2
+y la página de inicio de `adapt-contrib-spoor` (GPL-3.0), copiados sin modificar, con su
+commit, sus huellas y su licencia. El lector y las reglas del formato los aceptan tal cual.
+Es la plantilla de ese proyecto, **no un paquete publicado completo**: los paquetes
+construidos que se han encontrado incluyen los XSD, cuyas condiciones no están acreditadas.
+
+`npm run check` y `npm run verify:negative` terminaron con código 0. La primera versión de
+esta fase no superaba `check:deps` por un aviso de gravedad alta contra `next`
+(GHSA-cjq9-62q9-8jv4); se resolvió en `main` con la actualización a 16.3.8, sin excepción.
 
 ## Recorrido en un navegador
 

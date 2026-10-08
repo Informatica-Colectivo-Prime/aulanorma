@@ -27,6 +27,8 @@
       "La plataforma ha confirmado la finalización. No es una calificación ni acredita el aprendizaje.",
     finishFailed:
       "No se ha podido comunicar la finalización a la plataforma. La actividad no consta como finalizada. Puedes intentarlo de nuevo.",
+    finishedNotClosed:
+      "La plataforma ha guardado la finalización, pero no ha confirmado el cierre de la sesión. Se intentará cerrar al salir.",
     alreadyFinished:
       "Esta actividad ya consta como finalizada en la plataforma.",
     finishUnavailable:
@@ -92,13 +94,12 @@
     return found;
   }
 
-  function call(name, first, second) {
+  // Valor que devuelve una llamada, o `undefined` si lanza una excepción.
+  function invoke(name, first, second) {
     try {
-      return String(
-        second === undefined ? api[name](first) : api[name](first, second),
-      );
+      return second === undefined ? api[name](first) : api[name](first, second);
     } catch {
-      return "false";
+      return undefined;
     }
   }
 
@@ -110,18 +111,32 @@
     }
   }
 
+  // SCORM 1.2 responde con las cadenas "true" y "false". "false" es una
+  // cadena no vacía: nunca se mira si el resultado «es verdadero», solo si es
+  // exactamente "true" (o el booleano que devuelven algunas plataformas).
+  // Cualquier otra cosa, o una excepción, es un fallo.
+  function isTrue(result) {
+    return result === "true" || result === true;
+  }
+
+  // Una escritura o un guardado solo cuentan si, además, la plataforma no
+  // deja ningún error pendiente.
+  function accepted(result) {
+    return isTrue(result) && lastError() === "0";
+  }
+
   // Valor leído, o `null` si la lectura ha fallado.
   function read(element) {
-    var value = call("LMSGetValue", element);
-    return lastError() === "0" ? value : null;
+    var value = invoke("LMSGetValue", element);
+    return typeof value === "string" && lastError() === "0" ? value : null;
   }
 
   function write(element, value) {
-    return call("LMSSetValue", element, value) === "true";
+    return accepted(invoke("LMSSetValue", element, value));
   }
 
   function commit() {
-    return call("LMSCommit", "") === "true";
+    return accepted(invoke("LMSCommit", ""));
   }
 
   // --- Avisos ---
@@ -324,14 +339,16 @@
       setAlert(MESSAGES.finishFailed);
       return;
     }
-    if (call("LMSFinish", "") !== "true") {
-      setStatus(MESSAGES.unsavedStatus);
-      setAlert(MESSAGES.finishFailed);
+    // La plataforma ha confirmado que «completed» está guardado.
+    completed = true;
+    setAlert("");
+    if (!isTrue(invoke("LMSFinish", ""))) {
+      // Guardado, pero con la sesión abierta: se cerrará al salir.
+      setStatus(MESSAGES.finishedNotClosed);
+      refresh();
       return;
     }
-    completed = true;
     tracking = "closed";
-    setAlert("");
     setStatus(MESSAGES.finished);
     refresh();
   }
@@ -347,7 +364,7 @@
       write("cmi.core.exit", "suspend");
     }
     commit();
-    call("LMSFinish", "");
+    invoke("LMSFinish", "");
   }
 
   // --- Inicio ---
@@ -380,7 +397,7 @@
     api = findApi();
     if (!api) {
       setStatus(MESSAGES.noApi);
-    } else if (call("LMSInitialize", "") !== "true") {
+    } else if (!isTrue(invoke("LMSInitialize", ""))) {
       api = null;
       setStatus(MESSAGES.initFailed);
     } else {

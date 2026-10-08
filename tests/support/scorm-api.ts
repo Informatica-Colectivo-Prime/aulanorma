@@ -23,6 +23,11 @@ export interface Failures {
   get?: readonly string[];
   // La llamada lanza una excepción en vez de devolver "false".
   throws?: boolean;
+  // Lo que devuelve `LMSCommit` en lugar de "true", aunque guarde: para
+  // plataformas que no responden con las cadenas del formato.
+  commitReturns?: unknown;
+  // Error que queda pendiente tras un `LMSCommit` que responde "true".
+  errorAfterCommit?: string;
 }
 
 export interface ScormApi {
@@ -169,7 +174,15 @@ export function createScormApi(
         return fail("LMSCommit", [argument], "101");
       }
       store.committed = { ...working };
-      error = "0";
+      error = state.failures.errorAfterCommit ?? "0";
+      if ("commitReturns" in state.failures) {
+        calls.push({
+          name: "LMSCommit",
+          args: [argument],
+          result: String(state.failures.commitReturns),
+        });
+        return state.failures.commitReturns as string;
+      }
       return done("LMSCommit", [argument], "true");
     },
     LMSGetLastError() {
