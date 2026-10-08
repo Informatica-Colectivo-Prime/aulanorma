@@ -6,8 +6,8 @@
 // con un documento sintético y el adaptador determinista con una unidad
 // sintética. Necesita `npm run tools:install`. Las aprobaciones las hace una
 // cuenta de prueba y el contenido son respuestas grabadas: es un ensayo del
-// recorrido. No acredita la importación en Moodle ni la validación contra
-// los esquemas oficiales, que no se ejecuta todavía.
+// recorrido. No acredita la importación en Moodle, ni equivale a validar
+// contra los esquemas XSD, ni acredita conformidad completa con SCORM.
 import { createHash, randomUUID } from "node:crypto";
 import {
   copyFileSync,
@@ -485,7 +485,10 @@ describe("escenarios 3, 5 y 6: exportar, descargar y abrir sin conexión", () =>
     const before = flat(await viewExport());
     expect(before).toContain("Entregable");
     expect(before).toContain(version);
-    expect(before).toContain("validación no ejecutada");
+    expect(before).toContain(
+      "no se valida contra los esquemas XSD de SCORM 1.2 ni se acredita la conformidad completa con SCORM",
+    );
+    expect(before).toContain("condición obligatoria para aceptar el paquete");
     expect(before).toContain(
       "todavía no se ha comprobado en ninguna versión de Moodle",
     );

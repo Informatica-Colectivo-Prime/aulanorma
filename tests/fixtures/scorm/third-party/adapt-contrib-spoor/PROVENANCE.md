@@ -34,6 +34,17 @@ producto ni de ningún paquete que AulaNorma exporte.
   construido por un tercero, con procedencia y condiciones verificadas, sigue pendiente: los
   que se han encontrado incluyen los XSD, cuyas condiciones no están acreditadas.
 
+## Uso permitido en este repositorio
+
+- **Solo como fixtures de prueba.** Ningún fichero de `src/` los referencia; no se mezclan
+  con el renderizador ni con la plantilla del paquete; y no entran en ningún ZIP que
+  AulaNorma exporte. Una prueba del contrato del paquete lo comprueba.
+- **Sin transformar.** No se ha quitado, añadido ni cambiado nada. Si alguna vez se
+  necesitara una versión transformada, debe guardarse aparte, identificarse como
+  transformada y conservar este original y su procedencia.
+- **No acreditan que se haya aceptado un paquete completo de un tercero**: son una
+  plantilla. Esa evidencia sigue pendiente (T065).
+
 ## Condiciones que se cumplen
 
 La GPL-3.0 permite copiar y distribuir copias literales conservando los avisos y entregando

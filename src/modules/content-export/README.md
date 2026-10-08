@@ -19,9 +19,12 @@ Implementada en la fase 7 de `specs/002-boe-scorm-export`:
   sus dos recursos, `assets/style.css` y `assets/app.js` (navegación y seguimiento con la API
   de SCORM 1.2).
 - `build.ts`: manifiesto y ZIP, con entradas en orden y fecha fijos.
-- `conformance.ts` y `xml.ts`: comprobación del paquete al releerlo, con las reglas que los
-  esquemas no expresan. **No valida contra los XSD oficiales**: su procedencia no está
-  acreditada ([`scorm-schemas.md`](../../../specs/002-boe-scorm-export/scorm-schemas.md)).
+- `xml.ts`: lectura del manifiesto con `@xmldom/xmldom`, un analizador mantenido y ajeno al
+  generador. Solo adapta su resultado; no sabe nada de SCORM.
+- `conformance.ts`: reglas del perfil SCORM 1.2 que exporta AulaNorma, aplicadas al releer
+  el ZIP. **No equivale a validar contra los XSD ni acredita conformidad completa con
+  SCORM**, y no es un validador general: véase
+  [`package-validation.md`](../../../specs/002-boe-scorm-export/package-validation.md).
 - `instructions/`: instrucciones de incorporación manual. No nombran ninguna versión de
   Moodle, porque no se ha comprobado ninguna.
 - `index.ts`: exportar, descargar, vista previa e historial. La vigencia de la versión y la

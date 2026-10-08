@@ -31,14 +31,14 @@ import { transaction } from "@/platform/persistence";
 import type { Database } from "@/platform/persistence";
 import { buildPackage, manifestIdentifier } from "./build";
 import type { PackageAssets } from "./build";
-import { checkPackage, SCHEMA_VALIDATION } from "./conformance";
+import { checkPackage, VALIDATION_STRATEGY } from "./conformance";
 import { instructionsText } from "./instructions/index";
 import { packageTitle, SNAPSHOT } from "./package/index";
 import type { PackageSource } from "./package/index";
 
 export { buildManifest, buildPackage, escapeXml } from "./build";
 export type { BuiltPackage, PackageAssets } from "./build";
-export { checkPackage, SCHEMA_VALIDATION } from "./conformance";
+export { checkPackage, VALIDATION_STRATEGY } from "./conformance";
 export type { ConformanceExpectation, ConformanceResult } from "./conformance";
 export { instructionsText, NOT_VERIFIED } from "./instructions/index";
 export {
@@ -333,7 +333,7 @@ export function createContentExport({
         ...(succeeded ? {} : { failure: outcome.failure }),
         problems: details.problems,
         trial: details.trial,
-        schema: SCHEMA_VALIDATION.status,
+        strategy: VALIDATION_STRATEGY.id,
       }),
       actor.actorId,
       now(),

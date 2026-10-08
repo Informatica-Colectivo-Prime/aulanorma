@@ -8,6 +8,10 @@
   Adapt, **de un tercero y sin modificar**, con licencia GPL-3.0. Su origen, sus huellas y
   sus límites están en su `PROVENANCE.md`. Es una plantilla, no un paquete publicado
   completo.
-- **No hay esquemas XSD** en este directorio. Su procedencia y sus condiciones de
-  redistribución no están acreditadas: véase
-  [`specs/002-boe-scorm-export/scorm-schemas.md`](../../../specs/002-boe-scorm-export/scorm-schemas.md).
+- **No hay esquemas XSD.** La validación contra ellos se sustituyó:
+  [`package-validation.md`](../../../specs/002-boe-scorm-export/package-validation.md).
+
+Los ficheros de terceros son **solo fixtures**: ningún fichero de `src/` los referencia, no
+se mezclan con el renderizador y no entran en ningún paquete exportado; una prueba lo
+comprueba. Si alguna vez hiciera falta transformar un original, la transformación debe
+identificarse como tal y conservar junto a ella el original y su procedencia.

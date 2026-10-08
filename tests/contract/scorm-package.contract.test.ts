@@ -10,10 +10,11 @@
 // su procedencia y sus límites están en
 // `tests/fixtures/scorm/third-party/adapt-contrib-spoor/PROVENANCE.md`.
 //
-// PENDIENTE: la validación del manifiesto contra los XSD oficiales no se
-// prueba aquí, porque todavía no se ejecuta
-// (specs/002-boe-scorm-export/scorm-schemas.md). Nada de este fichero
-// acredita la conformidad con esos esquemas ni la importación en Moodle.
+// La validación contra los XSD de SCORM 1.2 no forma parte de la estrategia
+// (research.md, R8; package-validation.md). Nada de este fichero equivale a
+// esa validación, ni acredita conformidad completa con SCORM, ni la
+// importación en Moodle. El análisis sintáctico se prueba en
+// `tests/unit/content-export/xml.test.ts`.
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -28,7 +29,7 @@ import {
   MAX_TOPICS,
   packageDocument,
   parseXml,
-  SCHEMA_VALIDATION,
+  VALIDATION_STRATEGY,
   TRIAL_NOTICE,
 } from "@/modules/content-export";
 import type { PackageSource } from "@/modules/content-export";
@@ -144,12 +145,17 @@ describe("paquete generado", () => {
     ]);
   });
 
-  test("supera la comprobación al releerlo, que dice que los esquemas no se han validado", () => {
+  test("supera la comprobación al releerlo, que no incluye los XSD ni sustituye a Moodle", () => {
     const result = checkPackage(built(), DELIVERY);
     expect(result.problems).toEqual([]);
     expect(result.ok).toBe(true);
-    expect(result.schema).toBe(SCHEMA_VALIDATION);
-    expect(result.schema.status).toBe("not_run");
+    expect(result.strategy).toBe(VALIDATION_STRATEGY);
+    expect(result.strategy).toEqual({
+      id: "profile-v1",
+      parser: "@xmldom/xmldom",
+      xsd: "not_part_of_strategy",
+      moodle: "pending_manual_verification",
+    });
   });
 
   test("el manifiesto declara un único SCO de SCORM 1.2 e identifica la versión", () => {
@@ -256,6 +262,23 @@ describe("paquete generado", () => {
     );
   });
 
+  test("el analizador ajeno lee en el manifiesto exactamente el título que se escribió", () => {
+    const awkward = `Seguridad & salud <1> "comillas" 'simples' ñ € 日本語 ]]> &amp;`;
+    const base = source();
+    const snapshot = { ...base.snapshot, unit: { code: "UX", title: awkward } };
+    const parsed = parseXml(buildManifest({ ...base, snapshot }));
+    if (!parsed.ok) {
+      throw new Error(parsed.problem);
+    }
+    const organization = parsed.root.children
+      .find((item) => item.name === "organizations")
+      ?.children.find((item) => item.name === "organization");
+    expect(
+      organization?.children.find((item) => item.name === "title")?.text,
+    ).toBe(`UX ${awkward}`);
+    expect(problems(built({ snapshot }))).toBe("");
+  });
+
   test("un paquete de ensayo lo dice de forma visible", () => {
     expect(packageDocument(source({ trial: true }))).toContain(TRIAL_NOTICE);
     expect(packageDocument(source())).not.toContain("ensayo");
@@ -314,7 +337,7 @@ describe("paquetes incorrectos, hechos a mano", () => {
           '<!DOCTYPE manifest [<!ENTITY x SYSTEM "file:///etc/passwd">]>\n<manifest',
         ),
       ),
-      /no es XML admitido/,
+      /DOCTYPE/,
     ],
     [
       "otro elemento raíz",
@@ -453,6 +476,186 @@ describe("paquetes incorrectos, hechos a mano", () => {
       /único SCO/,
     ],
     [
+      "DOCTYPE sin entidades",
+      manifest((text) =>
+        text.replace("<manifest", "<!DOCTYPE manifest>\n<manifest"),
+      ),
+      /DOCTYPE/,
+    ],
+    [
+      "instrucción de procesamiento",
+      manifest((text) =>
+        text.replace("<metadata>", "<?php echo 1 ?><metadata>"),
+      ),
+      /instrucciones de procesamiento/,
+    ],
+    [
+      "codificación declarada que no es UTF-8",
+      manifest((text) =>
+        text.replace('encoding="UTF-8"', 'encoding="ISO-8859-1"'),
+      ),
+      /codificación distinta de UTF-8/,
+    ],
+    [
+      "«&» sin escapar en un título",
+      manifest((text) => text.replace("<title>", "<title>Seguridad & salud ")),
+      /«&»/,
+    ],
+    [
+      "referencia numérica, que el generador no escribe",
+      manifest((text) => text.replace("<title>", "<title>&#60;b&#62; ")),
+      /«&»/,
+    ],
+    [
+      "entidad propia",
+      manifest((text) => text.replace("<title>", "<title>&propia; ")),
+      /no es XML admitido/,
+    ],
+    [
+      "carácter de control",
+      manifest((text) => text.replace("<title>", "<title>\u0001")),
+      /caracteres que XML 1.0 no admite/,
+    ],
+    [
+      "sección CDATA",
+      manifest((text) => text.replace("<title>", "<title><![CDATA[<b>]]>")),
+      /comentarios o secciones CDATA/,
+    ],
+    [
+      "comentario",
+      manifest((text) => text.replace("<metadata>", "<!-- nota --><metadata>")),
+      /comentarios o secciones CDATA/,
+    ],
+    [
+      "atributo repetido con dos prefijos del mismo espacio de nombres",
+      manifest((text) =>
+        text.replace(
+          ' adlcp:scormtype="sco"',
+          ' xmlns:otro="http://www.adlnet.org/xsd/adlcp_rootv1p2" adlcp:scormtype="sco" otro:scormtype="asset"',
+        ),
+      ),
+      /exactamente los dos espacios de nombres/,
+    ],
+    [
+      "tipo SCORM sin prefijo",
+      manifest((text) =>
+        text.replace(' adlcp:scormtype="sco"', ' scormtype="sco"'),
+      ),
+      /no declara su tipo SCORM/,
+    ],
+    [
+      "tipo SCORM en mayúsculas",
+      manifest((text) => text.replace('scormtype="sco"', 'scormtype="SCO"')),
+      /no declara su tipo SCORM/,
+    ],
+    [
+      "organizaciones en otro espacio de nombres",
+      manifest((text) =>
+        text
+          .replace("<organizations ", '<o:organizations xmlns:o="urn:otro" ')
+          .replace("</organizations>", "</o:organizations>"),
+      ),
+      /ninguna organización/,
+    ],
+    [
+      "sin espacio de nombres por defecto",
+      manifest((text) => text.replace(/\s+xmlns="[^"]*"/, "")),
+      /no es un manifiesto/,
+    ],
+    [
+      "ítem que remite a otro ítem",
+      manifest((text) =>
+        text.replace('identifierref="contenido"', 'identifierref="temario"'),
+      ),
+      /recurso que no existe/,
+    ],
+    [
+      "dependencia de un recurso inexistente",
+      manifest((text) =>
+        text.replace(
+          "</resource>",
+          '<dependency identifierref="nada"/></resource>',
+        ),
+      ),
+      /depende de otro que no existe/,
+    ],
+    [
+      "fichero declarado sin dirección",
+      manifest((text) =>
+        text.replace(
+          '<file href="index.html"/>',
+          '<file href="index.html"/><file/>',
+        ),
+      ),
+      /no tiene dirección/,
+    ],
+    [
+      "xml:base en los recursos",
+      manifest((text) =>
+        text.replace("<resources>", '<resources xml:base="assets/">'),
+      ),
+      /xml:base/,
+    ],
+    [
+      "ruta absoluta",
+      manifest((text) =>
+        text.replace(
+          '<file href="index.html"/>',
+          '<file href="index.html"/><file href="/index.html"/>',
+        ),
+      ),
+      /Dirección no admitida/,
+    ],
+    [
+      "ruta con barra invertida",
+      manifest((text) =>
+        text.replace(
+          '<file href="assets/app.js"/>',
+          '<file href="assets\\app.js"/>',
+        ),
+      ),
+      /Dirección no admitida/,
+    ],
+    [
+      "ruta que sale del paquete con codificación de URL",
+      manifest((text) =>
+        text.replace(
+          '<file href="index.html"/>',
+          '<file href="index.html"/><file href="%2e%2e/fuera.html"/>',
+        ),
+      ),
+      /Dirección no admitida/,
+    ],
+    [
+      "ruta con codificación de URL mal formada",
+      manifest((text) =>
+        text.replace(
+          '<file href="index.html"/>',
+          '<file href="index.html"/><file href="%zz.html"/>',
+        ),
+      ),
+      /Dirección no admitida/,
+    ],
+    [
+      "esquema file:",
+      manifest((text) =>
+        text.replace('href="index.html">', 'href="file:///etc/passwd">'),
+      ),
+      /Dirección no admitida/,
+    ],
+    [
+      "fichero declarado con otras mayúsculas",
+      manifest((text) =>
+        text.replace('<file href="index.html"/>', '<file href="Index.html"/>'),
+      ),
+      /declara un fichero que no está/,
+    ],
+    [
+      "dirección de inicio que no figura entre los ficheros del recurso",
+      manifest((text) => text.replace('<file href="index.html"/>', "")),
+      /no figura entre sus ficheros/,
+    ],
+    [
       "script externo en el documento",
       tampered({
         "index.html": packageDocument(source()).replace(
@@ -539,6 +742,28 @@ describe("fixture interno, escrito a mano con otra estructura", () => {
 });
 
 describe("manifiesto de un tercero, sin modificar", () => {
+  test("los ficheros de terceros son solo fixtures: el producto no los referencia ni los empaqueta", () => {
+    const sources = readdirSync(
+      fileURLToPath(new URL("../../src/", import.meta.url)),
+      { recursive: true, withFileTypes: true },
+    )
+      .filter((entry) => entry.isFile())
+      .map((entry) => path.join(entry.parentPath, entry.name));
+    expect(sources.length).toBeGreaterThan(50);
+    for (const file of sources) {
+      expect(readFileSync(file, "utf8"), file).not.toMatch(
+        /tests\/fixtures|third-party|adapt-contrib|index_lms/,
+      );
+    }
+    // Y un paquete exportado lleva exactamente sus cuatro ficheros.
+    expect(Object.keys(unzipSync(built())).sort()).toEqual([
+      "assets/app.js",
+      "assets/style.css",
+      "imsmanifest.xml",
+      "index.html",
+    ]);
+  });
+
   const read = (name: string): Buffer =>
     readFileSync(path.join(THIRD_PARTY, name));
   const pack = (): Uint8Array =>
@@ -608,34 +833,5 @@ describe("manifiesto de un tercero, sin modificar", () => {
         delivery: false,
       } as never),
     ).toMatch(/declara un fichero que no está/);
-  });
-});
-
-describe("lector de XML", () => {
-  test.each([
-    ["instrucción de procesamiento", "<a><?php echo 1 ?></a>"],
-    ["entidad propia", "<a>&propia;</a>"],
-    ["prefijo sin declarar", "<x:a/>"],
-    ["atributo repetido", '<a b="1" b="2"/>'],
-    ["atributo sin comillas", "<a b=1/>"],
-    ["cierre cruzado", "<a><b></a></b>"],
-    ["dos raíces", "<a/><b/>"],
-    ["texto fuera de la raíz", "<a/>texto"],
-    ["vacío", ""],
-  ])("rechaza: %s", (_name, text) => {
-    expect(parseXml(text).ok).toBe(false);
-  });
-
-  test("resuelve espacios de nombres, referencias y CDATA", () => {
-    const parsed = parseXml(
-      `<?xml version="1.0"?><!-- c --><p:a xmlns:p="urn:p" p:b="1 &amp; 2" c='&#65;&#x42;'><p:d><![CDATA[<x>]]> &lt;y&gt;</p:d></p:a>\n`,
-    );
-    if (!parsed.ok) {
-      throw new Error(parsed.problem);
-    }
-    expect(parsed.root.namespace).toBe("urn:p");
-    expect(parsed.root.attributes.get("urn:p|b")).toBe("1 & 2");
-    expect(parsed.root.attributes.get("|c")).toBe("AB");
-    expect(parsed.root.children[0]?.text).toBe("<x> <y>");
   });
 });

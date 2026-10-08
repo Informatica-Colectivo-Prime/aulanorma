@@ -4,7 +4,6 @@
 import {
   NOT_VERIFIED,
   packageTopics,
-  SCHEMA_VALIDATION,
   TRIAL_NOTICE,
 } from "@/modules/content-export";
 import type {
@@ -204,18 +203,28 @@ export function exportView(input: {
           : null
       }
 
-      <h2>Qué acredita un paquete generado</h2>
+      <h2>Qué se comprueba en un paquete generado</h2>
       <ul>
         <li>
-          <strong>Estructura:</strong> se relee el fichero y se comprueba que su
-          manifiesto declara todos sus ficheros, que no sobra ninguno, que es un
-          único contenido SCORM 1.2 y que no carga nada de fuera.
+          <strong>Lectura del manifiesto:</strong> se relee el fichero y su
+          manifiesto se lee con un analizador de XML ajeno al generador.
         </li>
         <li>
-          <strong>Esquemas oficiales de SCORM 1.2:</strong> validación no
-          ejecutada. ${SCHEMA_VALIDATION.reason}
+          <strong>Reglas del perfil que exporta AulaNorma:</strong> el
+          manifiesto declara todos sus ficheros y no sobra ninguno, es un único
+          contenido SCORM 1.2 que identifica la versión aprobada, y nada carga
+          recursos de fuera.
         </li>
-        <li><strong>Moodle:</strong> ${NOT_VERIFIED}</li>
+        <li>
+          <strong>Lo que no se comprueba:</strong> no se valida contra los
+          esquemas XSD de SCORM 1.2 ni se acredita la conformidad completa con
+          SCORM.
+        </li>
+        <li>
+          <strong>Moodle:</strong> ${NOT_VERIFIED} La importación, el
+          seguimiento, la reanudación y la finalización en un Moodle real son
+          condición obligatoria para aceptar el paquete.
+        </li>
       </ul>
 
       <h2>Exportaciones</h2>

@@ -1,23 +1,35 @@
-// Conformidad de un paquete, releyendo el ZIP ya generado
+// Comprobación de un paquete, releyendo el ZIP ya generado
 // (specs/002-boe-scorm-export: T064; FR-032, FR-033, FR-037; research.md, R8;
-// contracts/scorm-package.md).
+// contracts/scorm-package.md; package-validation.md).
 //
-// Son las reglas que los esquemas de SCORM 1.2 no expresan, escritas a partir
-// del formato y no del generador: sirven también para un paquete ajeno.
+// Aquí están las reglas del formato, separadas del análisis sintáctico, que
+// hace un analizador ajeno en `xml.ts`. Son de dos clases:
 //
-// La validación del manifiesto contra los XSD oficiales NO se ejecuta
-// todavía: la procedencia y las condiciones de redistribución de esos
-// esquemas no están acreditadas (specs/002-boe-scorm-export/scorm-schemas.md).
-// El resultado lo dice expresamente; nada de aquí la sustituye.
+// - Reglas de estructura de un paquete SCORM 1.2, que también debe superar
+//   un paquete ajeno: manifiesto en la raíz, metadatos, organizaciones,
+//   recursos y ficheros coherentes.
+// - Reglas del perfil que exporta AulaNorma (`delivery`): un único SCO, sin
+//   puntuación, con la versión aprobada, sin direcciones externas y con un
+//   manifiesto de forma restringida.
+//
+// No es un validador general de paquetes SCORM, no equivale a validar contra
+// los XSD de SCORM 1.2 y no acredita conformidad con SCORM: lo que comprueba
+// y lo que deja fuera está en package-validation.md. Que una plataforma
+// importe el paquete y guarde el recorrido solo lo acredita la prueba en un
+// Moodle real.
 import { strFromU8, unzipSync } from "fflate";
 import { ADLCP_NAMESPACE, CP_NAMESPACE, MANIFEST_NAME } from "./build";
 import { parseXml } from "./xml";
 import type { XmlElement } from "./xml";
 
-export const SCHEMA_VALIDATION = {
-  status: "not_run",
-  reason:
-    "La procedencia y las condiciones de redistribución de los esquemas oficiales de SCORM 1.2 no están acreditadas.",
+// Mecanismos que componen la comprobación, tal como se registran con cada
+// exportación. La validación contra los XSD no forma parte de ella: se
+// sustituyó por esta estrategia (research.md, R8).
+export const VALIDATION_STRATEGY = {
+  id: "profile-v1",
+  parser: "@xmldom/xmldom",
+  xsd: "not_part_of_strategy",
+  moodle: "pending_manual_verification",
 } as const;
 
 export interface ConformanceExpectation {
@@ -37,7 +49,7 @@ export interface ConformanceResult {
   readonly ok: boolean;
   readonly problems: readonly string[];
   readonly files: readonly string[];
-  readonly schema: typeof SCHEMA_VALIDATION;
+  readonly strategy: typeof VALIDATION_STRATEGY;
 }
 
 const MAX_FILES = 2000;
@@ -59,6 +71,25 @@ const EXTERNAL_BY_TYPE: readonly (readonly [RegExp, RegExp])[] = [
   ],
   [/\.xml$/i, /(?:[a-z][a-z0-9+.-]*:)?\/\/[a-z0-9[]/i],
 ];
+
+// Caracteres que XML 1.0 no admite: de control, salvo tabulador y saltos de
+// línea, sustitutos sueltos y los dos últimos de cada plano básico.
+function hasForbiddenCharacters(text: string): boolean {
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+    const allowed =
+      code === 0x09 ||
+      code === 0x0a ||
+      code === 0x0d ||
+      (code >= 0x20 && code <= 0xd7ff) ||
+      (code >= 0xe000 && code <= 0xfffd) ||
+      code >= 0x10000;
+    if (!allowed) {
+      return true;
+    }
+  }
+  return false;
+}
 
 function unsafeName(name: string): boolean {
   return (
@@ -119,7 +150,7 @@ export function checkPackage(
     ok: problems.length === 0,
     problems,
     files,
-    schema: SCHEMA_VALIDATION,
+    strategy: VALIDATION_STRATEGY,
   });
 
   let entries: Record<string, Uint8Array>;
@@ -176,7 +207,25 @@ export function checkPackage(
     problems.push(`El manifiesto no es XML admitido: ${parsed.problem}.`);
     return result(files);
   }
-  const { root } = parsed;
+  const { root, features } = parsed;
+  // Nada que resolver fuera del propio documento, en ningún paquete.
+  if (features.doctype) {
+    problems.push(
+      "El manifiesto lleva una declaración DOCTYPE, que no se admite.",
+    );
+  }
+  if (features.processingInstructions) {
+    problems.push(
+      "El manifiesto lleva instrucciones de procesamiento, que no se admiten.",
+    );
+  }
+  const encoding =
+    /^(?:\uFEFF)?<\?xml[^>]*\sencoding\s*=\s*["']([^"']*)["']/.exec(
+      manifestText,
+    )?.[1];
+  if (encoding !== undefined && encoding.toLowerCase() !== "utf-8") {
+    problems.push("El manifiesto declara una codificación distinta de UTF-8.");
+  }
   if (root.namespace !== CP_NAMESPACE || root.name !== "manifest") {
     problems.push(
       "El elemento raíz no es un manifiesto de empaquetado de contenidos de SCORM 1.2.",
@@ -266,9 +315,36 @@ export function checkPackage(
     problems.push("Ningún ítem lanza un recurso.");
   }
 
+  // `xml:base` cambia la ruta de los ficheros. Esta comprobación no lo
+  // resuelve: un manifiesto que lo use no se da por bueno.
+  if (
+    everything(root).some((item) =>
+      item.attributes.has("http://www.w3.org/XML/1998/namespace|base"),
+    )
+  ) {
+    problems.push(
+      "El manifiesto usa xml:base, que esta comprobación no resuelve.",
+    );
+  }
+
   // Cada fichero declarado existe, y no sobra ninguno.
   const declared = new Set<string>();
   for (const resource of resources) {
+    for (const dependency of children(resource, "dependency")) {
+      const reference = dependency.attributes.get("|identifierref") ?? "";
+      if (!byId.has(reference)) {
+        problems.push(
+          `Un recurso depende de otro que no existe: ${JSON.stringify(reference)}.`,
+        );
+      }
+    }
+    if (
+      children(resource, "file").some(
+        (file) => file.attributes.get("|href") === undefined,
+      )
+    ) {
+      problems.push("Un fichero declarado en un recurso no tiene dirección.");
+    }
     const hrefs = [
       resource.attributes.get("|href"),
       ...children(resource, "file").map((file) => file.attributes.get("|href")),
@@ -312,6 +388,42 @@ export function checkPackage(
   }
 
   if (expectation.delivery) {
+    // Forma restringida del manifiesto que escribe el generador. Son reglas
+    // léxicas sobre el texto, no un segundo análisis: cubren errores de
+    // buena formación que el analizador tolera sin avisar.
+    if (features.cdata || features.comments) {
+      problems.push(
+        "El manifiesto lleva comentarios o secciones CDATA, que el generador no escribe.",
+      );
+    }
+    // Solo los dos espacios de nombres que declara el generador, una vez
+    // cada uno: así un atributo no puede repetirse con otro prefijo.
+    const declarations = [
+      ...manifestText.matchAll(
+        /\sxmlns(?::([A-Za-z0-9_.-]+))?\s*=\s*"([^"]*)"/g,
+      ),
+    ].map((match) => `${match[1] ?? ""}=${match[2] ?? ""}`);
+    if (
+      declarations.length !== 2 ||
+      declarations[0] !== `=${CP_NAMESPACE}` ||
+      declarations[1] !== `adlcp=${ADLCP_NAMESPACE}` ||
+      /\sxmlns[^=\s]*\s*=\s*'/.test(manifestText)
+    ) {
+      problems.push(
+        "El manifiesto no declara exactamente los dos espacios de nombres del generador.",
+      );
+    }
+    if (manifestText.includes("]]>")) {
+      problems.push("El manifiesto lleva la secuencia «]]>» fuera de lugar.");
+    }
+    if (/&(?!(?:amp|lt|gt|quot|apos);)/.test(manifestText)) {
+      problems.push(
+        "El manifiesto lleva un «&» que no inicia una de las cinco referencias que escribe el generador.",
+      );
+    }
+    if (hasForbiddenCharacters(manifestText)) {
+      problems.push("El manifiesto lleva caracteres que XML 1.0 no admite.");
+    }
     const scos = [...launched].filter(
       (item) => item.attributes.get(`${ADLCP_NAMESPACE}|scormtype`) === "sco",
     );
