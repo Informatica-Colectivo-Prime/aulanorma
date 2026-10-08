@@ -170,6 +170,8 @@ export interface Generation {
     status: Exclude<GenerationRunStatus, "running">,
   ): void;
   getRun(runId: string): GenerationRun | undefined;
+  // Ejecuciones pedidas para un elemento, de la más antigua a la más reciente.
+  listRuns(kind: GenerationRunKind, targetId: string): readonly GenerationRun[];
   runCost(runId: string): RunCost;
   listCalls(runId: string): readonly GenerationCall[];
 }
@@ -180,6 +182,19 @@ function text(value: unknown): string {
 
 function integer(value: unknown): number {
   return typeof value === "number" ? value : Number(value);
+}
+
+function runOf(row: Record<string, unknown>): GenerationRun {
+  return {
+    id: text(row.id),
+    kind: RUN_KINDS.find((kind) => kind === row.kind) ?? "interpretation",
+    targetId: text(row.target_id),
+    requestedBy: text(row.requested_by),
+    requestedAt: integer(row.requested_at),
+    status: RUN_STATUSES.find((status) => status === row.status) ?? "failed",
+    estimatedCost: integer(row.estimated_cost),
+    finishedAt: row.finished_at === null ? null : integer(row.finished_at),
+  };
 }
 
 const RUN_STATUSES: readonly GenerationRunStatus[] = [
@@ -357,20 +372,17 @@ export function createGeneration({
       const row = db
         .prepare("SELECT * FROM generation_run WHERE id = ?")
         .get(runId);
-      if (row === undefined) {
-        return undefined;
-      }
-      return {
-        id: text(row.id),
-        kind: RUN_KINDS.find((kind) => kind === row.kind) ?? "interpretation",
-        targetId: text(row.target_id),
-        requestedBy: text(row.requested_by),
-        requestedAt: integer(row.requested_at),
-        status:
-          RUN_STATUSES.find((status) => status === row.status) ?? "failed",
-        estimatedCost: integer(row.estimated_cost),
-        finishedAt: row.finished_at === null ? null : integer(row.finished_at),
-      };
+      return row === undefined ? undefined : runOf(row);
+    },
+
+    listRuns(kind, targetId) {
+      return db
+        .prepare(
+          "SELECT * FROM generation_run WHERE kind = ? AND target_id = ? " +
+            "ORDER BY requested_at, id",
+        )
+        .all(kind, targetId)
+        .map(runOf);
     },
 
     runCost(runId) {

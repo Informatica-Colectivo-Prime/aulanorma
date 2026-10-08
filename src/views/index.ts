@@ -50,6 +50,7 @@ import { outlineNotice } from "./outline";
 
 export * from "./outline";
 export * from "./export";
+export * from "./history";
 export * from "./syllabus";
 export { KIND_NAMES } from "./shared";
 export type {

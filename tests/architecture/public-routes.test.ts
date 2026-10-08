@@ -156,6 +156,12 @@ const SURFACE: readonly SurfaceRoute[] = [
     "export/packages/[id]/instructions.ts",
   ),
   page("/budget", "budget/index.ts"),
+  // Historial, de solo lectura.
+  page("/history", "history/index.ts"),
+  page("/history/documents/:id", "history/documents/[id].ts"),
+  page("/history/interpretations/:id", "history/interpretations/[id].ts"),
+  page("/history/outlines/:id", "history/outlines/[id].ts"),
+  page("/history/topics/:id", "history/topics/[id].ts"),
   action("/api/documents/upload", UPLOAD, "protectedUpload"),
   action("/api/documents/resolve-page"),
   action("/api/interpretations/request"),

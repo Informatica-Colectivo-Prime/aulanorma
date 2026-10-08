@@ -478,7 +478,8 @@ export function layout({ title, session, content }: LayoutProps): Html {
             }
             ${
               session.user.roles.length > 0
-                ? html`<li><a href="/budget">Presupuesto</a></li>`
+                ? html`<li><a href="/budget">Presupuesto</a></li>
+                    <li><a href="/history">Historial</a></li>`
                 : null
             }
             <li><a href="/account/password">Contraseña</a></li>

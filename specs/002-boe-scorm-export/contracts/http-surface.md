@@ -92,6 +92,11 @@ operación, quién puede ejecutarla y sus condiciones.
 | `/budget`               | `GET`                    | Consultar presupuesto                     |
 | `/api/budget/limit`     | `POST`                   | Modificar límite de coste                 |
 | `/api/budget/reconcile` | `POST`                   | Conciliar una operación incierta          |
+| `/history`              | `GET`                    | Consultar historial: índice de elementos  |
+| `/history/documents/:id` | `GET`                   | Historial de un documento                 |
+| `/history/interpretations/:id` | `GET`             | Historial de una interpretación           |
+| `/history/outlines/:id` | `GET`                    | Historial de un índice, su temario y sus exportaciones |
+| `/history/topics/:id`   | `GET`                    | Historial de un tema                      |
 
 Las demás operaciones de la tabla siguiente todavía no existen. Los destinos son exactos: no
 admiten parámetros de consulta ni barra final. `:id` es un identificador opaco de 32 cifras
