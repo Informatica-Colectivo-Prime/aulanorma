@@ -398,20 +398,45 @@ describe("aviso antes de la caducidad por inactividad", () => {
     expect(tab.requests).toEqual([]);
   });
 
-  test("si el servidor ya no reconoce la sesión, lo dice en vez de ocultar el aviso", async () => {
+  test("si el servidor rechaza la ampliación, comprueba si la sesión sigue viva y, si no, lo dice en vez de ocultar el aviso", async () => {
     // 0 es una redirección no seguida: la que lleva a la entrada.
-    for (const status of [0, 303, 401, 403]) {
+    for (const status of [0, 303, 401, 403, 409]) {
       const tab = open();
       tab.advance(IDLE - MINUTE);
       press(tab);
       await tab.requests[0]?.respond(status);
+      // Una sola comprobación, a una página propia.
+      expect(tab.requests.map((request) => request.url)).toEqual([
+        "/api/session/extend",
+        "/account/password",
+      ]);
+      expect(tab.text, String(status)).toContain("a punto de caducar");
+      await tab.requests[1]?.respond(0);
+
       expect(tab.text, String(status)).toContain("Tu sesión ha terminado");
       expect(tab.focused, String(status)).toBe("a:Volver a entrar");
       expect(tab.published(), String(status)).toEqual({ ended: true });
       // Ya no ofrece ampliar ni vuelve a intentarlo.
       tab.advance(5 * MINUTE);
-      expect(tab.requests, String(status)).toHaveLength(1);
+      expect(tab.requests, String(status)).toHaveLength(2);
     }
+  });
+
+  test("si la ampliación se rechaza porque otra pestaña renovó la sesión, toma el testigo vigente y sigue", async () => {
+    const tab = open();
+    tab.advance(IDLE - MINUTE);
+    press(tab);
+    await tab.requests[0]?.respond(409, "<html></html>");
+    await tab.requests[1]?.respond(
+      200,
+      pageOf(session({ csrfToken: "testigo nuevo" })),
+    );
+    expect(tab.box.hidden).toBe(true);
+    expect(new Set(tab.tokens())).toEqual(new Set(["testigo nuevo"]));
+    expect(tab.live).toBe(
+      "La sesión ya se había renovado en otra pestaña. Puedes seguir trabajando.",
+    );
+    expect(tab.published()).toEqual({ idleAt: CLIENT_NOW + IDLE });
   });
 
   test("un error interno del servidor no da la sesión por terminada: se anuncia y se puede reintentar", async () => {
@@ -755,17 +780,34 @@ describe("duración máxima: renovar la autenticación en la propia página", ()
     expect(tab.renewButton.disabled).toBe(false);
   });
 
-  test("si el servidor dice que la sesión ya no está vigente, la da por terminada en todas las pestañas", async () => {
-    for (const status of [0, 303, 401, 403]) {
+  test("si el servidor rechaza la renovación, comprueba si la sesión sigue viva y, si no, la da por terminada en todas las pestañas", async () => {
+    for (const status of [0, 303, 401, 403, 409]) {
       const tab = atLimit();
       submitRenewal(tab, "la contraseña");
       await tab.requests[0]?.respond(status);
+      expect(tab.requests[1]?.url, String(status)).toBe("/account/password");
+      await tab.requests[1]?.respond(0);
       expect(tab.text, String(status)).toContain("Tu sesión ha terminado");
       expect(tab.element("sesion-renovar").hidden, String(status)).toBe(true);
       expect(tab.password.value, String(status)).toBe("");
       expect(tab.focused, String(status)).toBe("a:Volver a entrar");
       expect(tab.published(), String(status)).toEqual({ ended: true });
     }
+  });
+
+  test("si la sesión sigue viva pero no se renovó, el aviso continúa y se puede volver a intentar", async () => {
+    const tab = atLimit();
+    submitRenewal(tab, "la contraseña");
+    await tab.requests[0]?.respond(403);
+    // La misma sesión: a la hora de esta respuesta le quedan cuatro minutos.
+    await tab.requests[1]?.respond(
+      200,
+      pageOf(session({ expiresAt: SERVER_NOW + 4 * MINUTE })),
+    );
+    expect(tab.text).toContain("ha alcanzado su duración máxima");
+    expect(tab.element("sesion-renovar").hidden).toBe(false);
+    expect(tab.live).not.toContain("renovado");
+    expect(tab.published()).toEqual({ idleAt: CLIENT_NOW + IDLE });
   });
 
   test("si nadie renueva, termina a su hora, aunque se haya ampliado la inactividad", async () => {
@@ -909,27 +951,37 @@ describe("renovación con varias pestañas", () => {
     );
   });
 
-  test("dos pestañas renuevan a la vez: la que llega tarde recibe un 409, toma el testigo vigente y sigue, sin crear nada", async () => {
-    const tab = open(session({ expiresAt: SERVER_NOW + 10 * MINUTE }));
-    tab.advance(6 * MINUTE);
-    tab.password.value = "la contraseña";
-    tab.renewButton.click();
-    await tab.requests[0]?.respond(409, "<html></html>");
+  // La que llega después de sustituirse la sesión recibe un 409 de la
+  // guarda; la que estaba comprobando su contraseña en ese momento, un 401.
+  test.each([409, 401])(
+    "dos pestañas renuevan a la vez: la que pierde recibe un %i, toma el testigo vigente y sigue, sin dar nada por terminado",
+    async (status) => {
+      const tab = open(session({ expiresAt: SERVER_NOW + 10 * MINUTE }));
+      (tab.element("texto") as HTMLTextAreaElement).value = "pendiente";
+      tab.advance(6 * MINUTE);
+      tab.password.value = "la contraseña";
+      tab.renewButton.click();
+      await tab.requests[0]?.respond(status, "<html></html>");
 
-    expect(tab.requests.map((request) => request.url)).toEqual([
-      "/api/session/renew",
-      "/account/password",
-    ]);
-    await tab.requests[1]?.respond(200, freshPage());
-    expect(new Set(tab.tokens())).toEqual(new Set(["testigo nuevo"]));
-    expect(tab.box.hidden).toBe(true);
-    expect(tab.live).toBe(
-      "La sesión ya se había renovado en otra pestaña. Puedes seguir trabajando.",
-    );
-    expect(tab.password.value).toBe("");
-    // No anuncia una renovación propia a las demás.
-    expect(tab.storage()["aulanorma-renovada"]).toBeUndefined();
-  });
+      expect(tab.requests.map((request) => request.url)).toEqual([
+        "/api/session/renew",
+        "/account/password",
+      ]);
+      await tab.requests[1]?.respond(200, freshPage());
+      expect(new Set(tab.tokens())).toEqual(new Set(["testigo nuevo"]));
+      expect(tab.box.hidden).toBe(true);
+      expect(tab.live).toBe(
+        "La sesión ya se había renovado en otra pestaña. Puedes seguir trabajando.",
+      );
+      expect(tab.password.value).toBe("");
+      expect((tab.element("texto") as HTMLTextAreaElement).value).toBe(
+        "pendiente",
+      );
+      // No anuncia una renovación propia ni un final de sesión a las demás.
+      expect(tab.storage()["aulanorma-renovada"]).toBeUndefined();
+      expect(tab.published()).toEqual({ idleAt: CLIENT_NOW + IDLE });
+    },
+  );
 
   test("una renovación en otra pestaña no reabre una sesión que aquí ya terminó", async () => {
     const tab = open();
