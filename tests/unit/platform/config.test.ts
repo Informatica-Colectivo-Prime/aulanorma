@@ -102,7 +102,7 @@ const LOG_LEVELS = [
   "trace",
   "silent",
 ] as const;
-const ENVIRONMENTS = ["development", "test", "ci"] as const;
+const ENVIRONMENTS = ["development", "test", "ci", "production"] as const;
 const MODES: readonly Mode[] = ["development", "production"];
 
 const DATA_DIR = "AULANORMA_DATA_DIR";
@@ -563,6 +563,78 @@ describe("validateConfig(source)", () => {
     },
   );
 
+  // El entorno `production`, el del piloto desplegado, no admite el origen
+  // HTTP local ni siquiera en modo desarrollo, y no relaja nada: con él, el
+  // origen HTTP se rechaza en todos los modos y el HTTPS se acepta en todos.
+  describe("entorno production", () => {
+    test.each(["http://127.0.0.1:3000", "http://localhost:3000"])(
+      "rechaza el origen HTTP local %s también con NODE_ENV=development",
+      (origin) => {
+        expectFailure(
+          config.validateConfig({
+            ...VALID_SOURCE,
+            [ENVIRONMENT]: "production",
+            [PUBLIC_ORIGIN]: origin,
+            NODE_ENV: "development",
+          }),
+          [{ key: PUBLIC_ORIGIN, problem: "invalid_value" }],
+        );
+      },
+    );
+
+    test.each(["development", "production", "test", "", undefined])(
+      "rechaza el origen HTTP local con NODE_ENV %s",
+      (nodeEnv) => {
+        expectFailure(
+          config.validateConfig({
+            ...VALID_SOURCE,
+            [ENVIRONMENT]: "production",
+            [PUBLIC_ORIGIN]: "http://127.0.0.1:3000",
+            NODE_ENV: nodeEnv,
+          }),
+          [{ key: PUBLIC_ORIGIN, problem: "invalid_value" }],
+        );
+      },
+    );
+
+    test.each(["development", "production", "test", undefined])(
+      "acepta el origen HTTPS con NODE_ENV %s, sin cambiar nada más",
+      (nodeEnv) => {
+        expectSuccess(
+          config.validateConfig({
+            ...VALID_SOURCE,
+            [ENVIRONMENT]: "production",
+            NODE_ENV: nodeEnv,
+          }),
+          { ...VALID_CONFIG, environment: "production" },
+        );
+      },
+    );
+
+    test.each(["development", "test", "ci"] as const)(
+      "el entorno %s sigue admitiendo el origen HTTP local solo en modo desarrollo",
+      (environment) => {
+        const source = {
+          ...VALID_SOURCE,
+          [ENVIRONMENT]: environment,
+          [PUBLIC_ORIGIN]: "http://127.0.0.1:3000",
+        };
+        expectSuccess(
+          config.validateConfig({ ...source, NODE_ENV: "development" }),
+          {
+            ...VALID_CONFIG,
+            environment,
+            publicOrigin: "http://127.0.0.1:3000",
+          },
+        );
+        expectFailure(
+          config.validateConfig({ ...source, NODE_ENV: "production" }),
+          [{ key: PUBLIC_ORIGIN, problem: "invalid_value" }],
+        );
+      },
+    );
+  });
+
   test.each(["development", "production", "test", undefined])(
     "el origen HTTPS se acepta con NODE_ENV %s",
     (nodeEnv) => {
@@ -683,7 +755,9 @@ describe("validateConfig(source)", () => {
     { key: LOG_LEVEL, value: "info " },
     { key: LOG_LEVEL, value: "verbose" },
     { key: ENVIRONMENT, value: SENTINEL },
-    { key: ENVIRONMENT, value: "production" },
+    { key: ENVIRONMENT, value: "staging" },
+    { key: ENVIRONMENT, value: "Production" },
+    { key: ENVIRONMENT, value: "production " },
     { key: ENVIRONMENT, value: "CI" },
   ])(
     "rechaza con invalid_value un valor fuera de la lista en $key",

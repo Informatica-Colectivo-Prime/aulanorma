@@ -96,7 +96,7 @@ const LEVELS: readonly Level[] = [
   "silent",
 ];
 const MODES: readonly Mode[] = ["development", "production"];
-const ENVIRONMENTS = ["development", "test", "ci"] as const;
+const ENVIRONMENTS = ["development", "test", "ci", "production"] as const;
 const EXPORTS = [
   "createLogger",
   "logConfigInvalid",

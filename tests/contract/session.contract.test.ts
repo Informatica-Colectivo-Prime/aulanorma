@@ -999,3 +999,92 @@ describe("secretos", () => {
     }
   });
 });
+
+// El entorno `production` solo es una anotación de los registros: con él, el
+// acceso se decide exactamente igual que con cualquier otro.
+describe("entorno production", () => {
+  beforeEach(() => {
+    client.dispose();
+    client = createWebClient({ environment: "production" });
+  });
+
+  test("la configuración lo recoge y el origen sigue siendo HTTPS", () => {
+    expect(client.runtime.config.environment).toBe("production");
+    expect(client.runtime.config.publicOrigin).toBe(ORIGIN);
+  });
+
+  test("las cookies llevan __Host-, Secure, HttpOnly y SameSite=Strict", async () => {
+    const login = await client.get(loginPage);
+    expect(login.setCookies).toHaveLength(1);
+    expect(login.setCookies[0]).toMatch(
+      new RegExp(
+        `^${ENTRY}=[\\w-]{43}; Path=/; HttpOnly; SameSite=Strict; Secure$`,
+      ),
+    );
+    await createUser("docente1", ["teacher"]);
+    const reply = await signIn("docente1");
+    const session = reply.setCookies.find((cookie) =>
+      cookie.startsWith(`${SESSION}=`),
+    );
+    expect(session).toMatch(/; Path=\/; HttpOnly; SameSite=Strict; Secure$/);
+  });
+
+  test("sin sesión, una página protegida lleva a la entrada sin devolver nada", async () => {
+    const reply = await client.get(homePage);
+    expect(reply.status).toBe(303);
+    expect(reply.location).toBe("/login");
+    expect(reply.body).toBe("");
+  });
+
+  test("una acción sin Origin, de otro origen o sin testigo se rechaza", async () => {
+    await enter("docente1", ["teacher"]);
+    const csrf = client.csrfOf(await client.get(homePage));
+    expectClosed(
+      await client.post(signOutAction, { csrf }, { origin: null }),
+      403,
+    );
+    expectClosed(
+      await client.post(
+        signOutAction,
+        { csrf },
+        { origin: "http://127.0.0.1:3000" },
+      ),
+      403,
+    );
+    expectClosed(await client.post(signOutAction, { csrf: "otro" }), 403);
+    expect((await client.get(homePage)).status).toBe(200);
+  });
+
+  test.each([
+    { name: "docente", roles: ["teacher"] },
+    { name: "cuenta sin perfiles", roles: [] },
+  ])(
+    "$name: una página de administración responde 403 y se audita",
+    async ({ roles }) => {
+      await enter("cuenta1", roles);
+      const reply = await client.get({
+        getServerSideProps: protectedPage(
+          {
+            role: "admin",
+            operation: "prueba.admin.ver",
+            allowPendingPasswordChange: false,
+          },
+          ({ session }) => ({
+            status: 200,
+            page: layout({
+              title: "Solo administración",
+              session,
+              content: html`<h1>Reservado</h1>`,
+            }),
+          }),
+        ),
+      });
+      expect(reply.status).toBe(403);
+      expect(reply.body).not.toContain("Reservado");
+      expect(client.runtime.audit.list().at(-1)).toMatchObject({
+        action: "access.denied",
+        result: "denied",
+      });
+    },
+  );
+});
