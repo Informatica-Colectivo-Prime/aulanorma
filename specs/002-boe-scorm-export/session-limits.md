@@ -121,8 +121,17 @@ una petición con la sesión anterior; o con la cookie nueva y un testigo anteri
   sesión no vigente: tras una renovación habría cerrado la sesión recién creada.
 - **Lo enviado no se pierde**: la respuesta es una página con todo lo enviado, escapado, en
   un formulario sin testigo. «Enviar de nuevo» lo completa con el de la sesión vigente y lo
-  envía. A quien solo tenga la cookie anterior no le da nada: sin la sesión nueva no hay
-  testigo que poner.
+  envía.
+- **Nada se repite solo.** Esa página no se envía al cargarse, ni con el tiempo, ni cuando
+  otra pestaña renueva: solo al pulsar «Enviar de nuevo».
+- **Las contraseñas no se devuelven.** El cambio de contraseña y la propia renovación, si
+  llegan así, reciben una página sin formulario ni campos: hay que volver y escribirlas de
+  nuevo. Antes de la revisión final del PR #37 se devolvían como cualquier otro campo.
+- **La relación entre la sesión anterior y la nueva no da acceso.** El servidor solo la usa
+  para responder 409 en lugar de llevar a la entrada. Quien presente únicamente la cookie
+  anterior no recibe la cookie nueva, ni un testigo, ni datos de la sesión, con ningún
+  testigo que envíe. Las pestañas se recuperan porque el navegador ya tiene la cookie
+  vigente, y con ella piden una página propia.
 - Una subida de PDF en ese caso responde con un error y el fichero sigue elegido para
   repetirla.
 
@@ -199,12 +208,18 @@ Dos pestañas con texto sin enviar, cuenta desechable.
 | Pasado el final de la sesión anterior                                    | Las dos siguen vivas; la segunda amplía con su testigo nuevo (204)              |
 | Envío con la cookie y el testigo anteriores                              | 409, sin `Set-Cookie`; devuelve lo enviado en un formulario sin testigo         |
 | Página con la cookie anterior                                            | 409, sin `Set-Cookie`                                                           |
-| En el navegador, formulario con el testigo anterior                      | 409 «Tu envío no se ha guardado todavía»; Intro sobre «Enviar de nuevo» pide el testigo y el servidor procesa el envío |
+| En el navegador, formulario con el testigo anterior (1)                  | 409 «Tu envío no se ha guardado todavía»; Intro sobre «Enviar de nuevo» pide el testigo y el servidor procesa el envío |
 | Tres contraseñas equivocadas y después la correcta                       | 422, 422, 422 y 429 «Demasiados intentos seguidos»                              |
 | Pasado el bloqueo, la correcta                                           | Renueva, y el texto sigue ahí                                                   |
 | Renovar en las dos pestañas a la vez                                     | Una recibe 200 y la otra 401; la segunda comprueba, toma el testigo vigente y sigue; mismo testigo en las dos, cada una con su texto; una sola sesión activa |
 | Auditoría del ensayo                                                     | 3 renovaciones correctas, 4 contraseñas incorrectas, 1 bloqueo, 1 rechazo por sesión terminada y 2 peticiones devueltas |
 | Migración                                                                | `0010_session_renewal` se aplicó al arrancar sobre una base de datos anterior   |
+
+(1) Este paso y el del envío con la cookie anterior se hicieron con el formulario de cambio
+de contraseña, antes de la revisión final. Desde ella ese formulario ya no se devuelve,
+porque lleva contraseñas, y **el ensayo en navegador no se ha repetido** con otro
+formulario: el reenvío queda cubierto solo por las pruebas automáticas, con el script real
+en un DOM simulado y por la ruta en el servidor.
 
 La consola de la pestaña que perdió la renovación simultánea anota la respuesta 401 como
 recurso fallido. No hubo ningún error de script.

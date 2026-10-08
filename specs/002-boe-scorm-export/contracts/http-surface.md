@@ -215,8 +215,12 @@ sesión, que ya es la de la sesión nueva.
 
 - **Acción con la cookie de la sesión sustituida**, o **con la cookie nueva y el testigo de
   la sesión sustituida**: 409 con una página que devuelve lo enviado en un formulario sin
-  testigo. El script lo completa con el de la sesión vigente antes de enviarlo de nuevo. Se
-  registra como petición denegada.
+  testigo. El script lo completa con el de la sesión vigente cuando el usuario pulsa «Enviar
+  de nuevo», nunca por sí solo. Se registra como petición denegada. Las acciones cuyos campos
+  son contraseñas (`/api/account/password` y `/api/session/renew`) responden 409 con una
+  página sin formulario ni campos: no devuelven lo enviado.
+- **Solo la cookie de la sesión sustituida** no da nada de la sesión nueva: ni `Set-Cookie`,
+  ni testigo, ni datos, sea cual sea el testigo enviado.
 - **Página con la cookie de la sesión sustituida**: 409 con una página que pide volver a
   cargarla.
 - Un testigo que no es ni el de la sesión ni el de la que esta sustituyó sigue siendo un 403

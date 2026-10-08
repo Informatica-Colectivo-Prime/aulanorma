@@ -681,6 +681,10 @@ las instrucciones, se recorre con un alumno de prueba, se abandona, se reanuda y
   revocada ni retrasar la duración máxima. Ninguna consulta automática ni la mera presencia
   de una pestaña abierta DEBEN mantener viva una sesión. Una acción rechazada por su origen
   o por su testigo NO DEBE contar como actividad.
+  *Procedencia*: el aviso y la ampliación se integraron con el PR #36, por decisión del
+  mantenedor, antes de que existiera este requisito, que se escribió después para dejar
+  constancia de ese comportamiento; no fue un requisito previo a su implementación. Solo su
+  última frase, sobre las acciones rechazadas, llegó con la renovación (PR #37).
 - **FR-072**: Al acercarse la duración máxima, la página DEBE ofrecer renovar la
   autenticación sin salir de ella. La renovación DEBE exigir origen propio, una sesión
   todavía vigente, su testigo y la contraseña actual, con el mismo control de intentos que
@@ -695,7 +699,9 @@ las instrucciones, se recorre con un alumno de prueba, se abandona, se reanuda y
   sin que el navegador guarde contraseñas, identificadores de sesión ni testigos fuera de la
   memoria de la página. Una petición que llegue con la sesión o el testigo anteriores a la
   renovación NO DEBE ejecutarse ni hacer perder la sesión nueva, y lo enviado DEBE poder
-  repetirse con ella. La caducidad del formulario de entrada NO DEBE obligar a repetir lo
+  repetirse con ella, por decisión expresa de quien lo envió y nunca por sí solo; si llevaba
+  una contraseña, NO DEBE devolverse en la respuesta y se repite escribiéndola de nuevo. La
+  caducidad del formulario de entrada NO DEBE obligar a repetir lo
   escrito. Lo que de esto dependa de la ejecución de scripts en el navegador DEBE estar
   documentado.
 - **FR-027**: La capacidad de aprobar y la de exportar DEBEN poder concederse solo a docentes
