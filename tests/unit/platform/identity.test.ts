@@ -794,3 +794,167 @@ describe("safeEqual(left, right)", () => {
     expect(safeEqual("", "a")).toBe(false);
   });
 });
+
+// Plazos de la sesión y ampliación expresa (T082; WCAG 2.2.1). La ampliación
+// la pide el usuario desde el aviso de caducidad; el servidor decide.
+describe("plazos y ampliación de la sesión", () => {
+  test("la sesión informa de cuándo caduca por inactividad y de cuándo termina", async () => {
+    await createUser("docente1");
+    const start = clock;
+    const { cookie, session } = await sessionOf("docente1");
+    expect(session.idleMs).toBe(IDLE);
+    expect(session.idleExpiresAt).toBe(start + IDLE);
+    expect(session.expiresAt).toBe(start + MAX);
+
+    // Una petición posterior retrasa la inactividad, no la duración máxima.
+    advance(10 * MINUTE);
+    const later = identity.resolveSession(cookie);
+    expect(later?.idleExpiresAt).toBe(start + 10 * MINUTE + IDLE);
+    expect(later?.expiresAt).toBe(start + MAX);
+  });
+
+  test("ampliar retrasa la caducidad por inactividad desde ese instante, y se registra", async () => {
+    await createUser("docente1");
+    const start = clock;
+    const { cookie } = await sessionOf("docente1");
+    advance(IDLE - 1000);
+
+    expect(identity.extendSession(cookie, "ampliación")).toEqual({
+      idleExpiresAt: clock + IDLE,
+      expiresAt: start + MAX,
+    });
+
+    // Sin la ampliación habría caducado un segundo después.
+    advance(IDLE - 1000);
+    expect(identity.resolveSession(cookie)).not.toBeNull();
+    expect(
+      audit
+        .list()
+        .filter((event) => event.action === "session.extended")
+        .map(({ actorId, result, correlationId }) => ({
+          actor: actorId !== null,
+          result,
+          correlationId,
+        })),
+    ).toEqual([{ actor: true, result: "ok", correlationId: "ampliación" }]);
+  });
+
+  test("ampliar justo después de otra petición también cuenta: no depende de la precisión con que se anota la actividad", async () => {
+    await createUser("docente1");
+    const { cookie } = await sessionOf("docente1");
+    advance(IDLE - 5000);
+    expect(identity.resolveSession(cookie)).not.toBeNull();
+    advance(4000);
+    expect(identity.extendSession(cookie, "c")?.idleExpiresAt).toBe(
+      clock + IDLE,
+    );
+    advance(IDLE - 1);
+    expect(identity.resolveSession(cookie)).not.toBeNull();
+  });
+
+  test("se puede ampliar más de diez veces seguidas, cada una sin ninguna otra actividad", async () => {
+    await createUser("docente1");
+    const { cookie } = await sessionOf("docente1");
+    // Veintitrés ampliaciones caben en doce horas con media hora de
+    // inactividad.
+    for (let round = 1; round <= 23; round += 1) {
+      advance(IDLE - 1000);
+      expect(identity.extendSession(cookie, "c"), String(round)).not.toBeNull();
+    }
+    expect(identity.resolveSession(cookie)).not.toBeNull();
+    expect(
+      audit.list().filter((event) => event.action === "session.extended"),
+    ).toHaveLength(23);
+  });
+
+  test("sin peticiones ni ampliación, la sesión caduca: nada la mantiene sola", async () => {
+    await createUser("docente1");
+    const { cookie } = await sessionOf("docente1");
+    advance(IDLE);
+    expect(identity.resolveSession(cookie)).toBeNull();
+    // Ya caducada, no se puede ampliar ni revive.
+    expect(identity.extendSession(cookie, "c")).toBeNull();
+    expect(identity.resolveSession(cookie)).toBeNull();
+    expect(
+      audit.list().filter((event) => event.action === "session.extended"),
+    ).toEqual([]);
+  });
+
+  test("ampliar no retrasa la duración máxima", async () => {
+    await createUser("docente1");
+    const start = clock;
+    const { cookie } = await sessionOf("docente1");
+    while (clock + IDLE - 1000 < start + MAX) {
+      advance(IDLE - 1000);
+      expect(identity.extendSession(cookie, "c")?.expiresAt).toBe(start + MAX);
+    }
+    clock = start + MAX - 1;
+    expect(identity.extendSession(cookie, "c")?.expiresAt).toBe(start + MAX);
+    clock = start + MAX;
+    expect(identity.extendSession(cookie, "c")).toBeNull();
+    expect(identity.resolveSession(cookie)).toBeNull();
+  });
+
+  test("una sesión revocada, cerrada o de una cuenta desactivada no se amplía", async () => {
+    await createUser("docente1");
+    const revoked = await sessionOf("docente1");
+    identity.revokeSessions("docente1", "c");
+    expect(identity.extendSession(revoked.cookie, "c")).toBeNull();
+
+    const closed = await sessionOf("docente1");
+    identity.signOut(closed.cookie, "c");
+    expect(identity.extendSession(closed.cookie, "c")).toBeNull();
+
+    const disabled = await sessionOf("docente1");
+    identity.setDisabled("docente1", true, "c");
+    expect(identity.extendSession(disabled.cookie, "c")).toBeNull();
+    identity.setDisabled("docente1", false, "c");
+    expect(identity.extendSession(disabled.cookie, "c")).toBeNull();
+
+    expect(identity.extendSession(undefined, "c")).toBeNull();
+    expect(identity.extendSession("", "c")).toBeNull();
+    expect(identity.extendSession("no-es-una-sesión", "c")).toBeNull();
+    // La sesión de entrada, sin cuenta, tampoco.
+    expect(
+      identity.extendSession(identity.beginEntry().cookie, "c"),
+    ).toBeNull();
+    expect(
+      audit.list().filter((event) => event.action === "session.extended"),
+    ).toEqual([]);
+  });
+
+  test("con un periodo de inactividad de un minuto, la actividad se anota a tiempo", async () => {
+    const short = createIdentity({
+      db,
+      audit: (event) => {
+        audit.record(event);
+      },
+      now: () => clock,
+      sessionIdleMs: MINUTE,
+      sessionMaxMs: MAX,
+      passwordParams: FAST,
+    });
+    await createUser("docente1");
+    const entry = short.beginEntry();
+    const signedIn = await short.signIn({
+      entryCookie: entry.cookie,
+      csrfToken: entry.csrfToken,
+      username: "docente1",
+      password: PASSWORD,
+      correlationId: "entrada",
+    });
+    if (!signedIn.ok) {
+      expect.fail("no se pudo entrar");
+    }
+    // Una petición cada 40 segundos durante cinco minutos mantiene la sesión.
+    for (let step = 0; step < 8; step += 1) {
+      advance(40_000);
+      expect(
+        short.resolveSession(signedIn.cookie),
+        String(step),
+      ).not.toBeNull();
+    }
+    advance(MINUTE);
+    expect(short.resolveSession(signedIn.cookie)).toBeNull();
+  });
+});

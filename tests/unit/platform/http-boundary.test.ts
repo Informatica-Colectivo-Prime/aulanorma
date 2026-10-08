@@ -849,6 +849,7 @@ describe("lista cerrada de rutas de producto", () => {
   const ACTIONS = [
     "/api/session/sign-in",
     "/api/session/sign-out",
+    "/api/session/extend",
     "/api/account/password",
   ];
 
@@ -869,6 +870,7 @@ describe("lista cerrada de rutas de producto", () => {
       ["/account/password", ["GET"], 0],
       ["/api/session/sign-in", ["POST"], 4096],
       ["/api/session/sign-out", ["POST"], 4096],
+      ["/api/session/extend", ["POST"], 4096],
       ["/api/account/password", ["POST"], 4096],
       ["/documents", ["GET"], 0],
       ["/documents/new", ["GET"], 0],

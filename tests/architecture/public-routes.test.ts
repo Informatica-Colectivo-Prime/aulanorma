@@ -115,6 +115,13 @@ const SURFACE: readonly SurfaceRoute[] = [
     maxBody: FORM,
   },
   {
+    target: "/api/session/extend",
+    file: "src/pages/api/session/extend.ts",
+    methods: ["POST"],
+    guard: "protectedAction",
+    maxBody: FORM,
+  },
+  {
     target: "/api/account/password",
     file: "src/pages/api/account/password.ts",
     methods: ["POST"],

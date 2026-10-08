@@ -1292,6 +1292,7 @@ async function checkProductSurface(secure) {
   for (const target of [
     "/api/session/sign-in",
     "/api/session/sign-out",
+    "/api/session/extend",
     "/api/account/password",
     "/api/documents/upload",
     "/api/documents/resolve-page",
@@ -1380,6 +1381,7 @@ async function checkProductSurface(secure) {
 
   for (const target of [
     "/api/session/sign-out",
+    "/api/session/extend",
     "/api/account/password",
     "/api/documents/resolve-page",
     "/api/interpretations/request",

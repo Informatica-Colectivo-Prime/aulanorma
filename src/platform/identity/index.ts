@@ -37,6 +37,9 @@ const SALT_LENGTH = 16;
 const USERNAME = /^[a-z0-9][a-z0-9._-]{2,31}$/;
 
 const ENTRY_LIFETIME_MS = 15 * 60_000;
+// La última actividad se anota como mucho una vez por minuto, o por décima
+// parte del periodo de inactividad si este es menor: así una sesión con
+// actividad nunca caduca antes de tiempo por no haberla anotado.
 const LAST_SEEN_PRECISION_MS = 60_000;
 // Los fallos de una cuenta se acumulan mientras no pasen 30 minutos sin
 // ninguno; así el bloqueo máximo, de 15 minutos, se mantiene ante quien
@@ -80,6 +83,19 @@ export interface UserSummary {
 export interface SessionContext {
   readonly csrfToken: string;
   readonly user: UserSummary;
+  // Instante en que la sesión caduca por inactividad si no hay otra
+  // petición ni una ampliación, y periodo de inactividad completo.
+  readonly idleExpiresAt: number;
+  readonly idleMs: number;
+  // Instante en que la sesión termina por su duración máxima. Ninguna
+  // actividad ni ampliación lo retrasa.
+  readonly expiresAt: number;
+}
+
+// Plazos de una sesión tras ampliarla.
+export interface SessionDeadlines {
+  readonly idleExpiresAt: number;
+  readonly expiresAt: number;
 }
 
 export interface EntryContext {
@@ -154,6 +170,13 @@ export interface Identity {
     readonly correlationId: string;
   }): Promise<SignInResult>;
   resolveSession(cookie: string | undefined): SessionContext | null;
+  // Amplía la sesión a petición expresa de su usuario: anota la actividad
+  // ahora y devuelve los plazos nuevos. `null` si la sesión ya no está viva.
+  // No retrasa la duración máxima ni revive una sesión caducada o revocada.
+  extendSession(
+    cookie: string | undefined,
+    correlationId: string,
+  ): SessionDeadlines | null;
   signOut(cookie: string | undefined, correlationId: string): void;
   changePassword(input: {
     readonly session: SessionContext;
@@ -325,6 +348,11 @@ export function revokeEverySession(db: DatabaseSync, at: number): number {
 export function createIdentity(options: IdentityOptions): Identity {
   const { db, audit, now, sessionIdleMs, sessionMaxMs, passwordParams } =
     options;
+
+  const lastSeenPrecisionMs = Math.min(
+    LAST_SEEN_PRECISION_MS,
+    Math.floor(sessionIdleMs / 10),
+  );
 
   // Huella de relleno: con una cuenta inexistente o desactivada se deriva
   // igualmente, para que el tiempo de respuesta no revele qué cuentas existen.
@@ -669,13 +697,53 @@ export function createIdentity(options: IdentityOptions): Identity {
         return null;
       }
       const at = now();
-      if (at - integer(row.last_seen_at) >= LAST_SEEN_PRECISION_MS) {
+      let lastSeenAt = integer(row.last_seen_at);
+      if (at - lastSeenAt >= lastSeenPrecisionMs) {
         db.prepare("UPDATE session SET last_seen_at = ? WHERE id_hash = ?").run(
           at,
           text(row.id_hash),
         );
+        lastSeenAt = at;
       }
-      return { csrfToken: text(row.csrf_token), user: summary(user) };
+      return {
+        csrfToken: text(row.csrf_token),
+        user: summary(user),
+        idleExpiresAt: lastSeenAt + sessionIdleMs,
+        idleMs: sessionIdleMs,
+        expiresAt: integer(row.expires_at),
+      };
+    },
+
+    extendSession(cookie, correlationId) {
+      const row = liveSession(cookie);
+      const userId = row?.user_id;
+      if (row === undefined || typeof userId !== "string") {
+        return null;
+      }
+      const user = db
+        .prepare("SELECT disabled FROM user_account WHERE id = ?")
+        .get(userId);
+      if (user === undefined || integer(user.disabled) === 1) {
+        return null;
+      }
+      const at = now();
+      db.prepare("UPDATE session SET last_seen_at = ? WHERE id_hash = ?").run(
+        at,
+        text(row.id_hash),
+      );
+      audit({
+        actorId: userId,
+        action: "session.extended",
+        targetKind: null,
+        targetId: null,
+        result: "ok",
+        correlationId,
+        details: {},
+      });
+      return {
+        idleExpiresAt: at + sessionIdleMs,
+        expiresAt: integer(row.expires_at),
+      };
     },
 
     signOut(cookie, correlationId) {

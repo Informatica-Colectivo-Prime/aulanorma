@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import * as passwordPage from "@/pages/account/password";
 import * as passwordAction from "@/pages/api/account/password";
 import * as signInAction from "@/pages/api/session/sign-in";
+import * as extendAction from "@/pages/api/session/extend";
 import * as signOutAction from "@/pages/api/session/sign-out";
 import * as homePage from "@/pages/index";
 import * as loginPage from "@/pages/login";
@@ -1087,4 +1088,281 @@ describe("entorno production", () => {
       });
     },
   );
+});
+
+// Aviso de caducidad y ampliación de la sesión (T082; WCAG 2.2.1). El aviso
+// va en cada página con sesión; la ampliación es una acción protegida. El
+// reloj se adelanta para comprobar la caducidad real en el servidor.
+describe("aviso de caducidad y ampliación de la sesión", () => {
+  const IDLE = 30 * 60_000;
+  const MAX = 12 * 3_600_000;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-03-02T08:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const advance = (ms: number): void => {
+    vi.setSystemTime(Date.now() + ms);
+  };
+
+  function warning(reply: Reply): Record<string, string> {
+    const tag = /<section\s[^>]*id="sesion-aviso"[^>]*>/s.exec(reply.body)?.[0];
+    return Object.fromEntries(
+      [...(tag ?? "").matchAll(/([a-z-]+)="([^"]*)"/g)].map((match) => [
+        match[1] ?? "",
+        match[2] ?? "",
+      ]),
+    );
+  }
+
+  test("cada página con sesión lleva el aviso, oculto, con sus plazos y una acción explícita para continuar", async () => {
+    await enter("docente1", ["teacher"]);
+    const start = Date.now();
+    const reply = await client.get(homePage);
+    const attributes = warning(reply);
+    expect(attributes).toMatchObject({
+      id: "sesion-aviso",
+      role: "alertdialog",
+      "aria-modal": "false",
+      "aria-labelledby": "sesion-titulo",
+      "aria-describedby": "sesion-texto",
+      tabindex: "-1",
+      "data-now": String(start),
+      "data-idle-at": String(start + IDLE),
+      "data-idle-ms": String(IDLE),
+    });
+    // La duración máxima cuenta desde la entrada, no desde esta página.
+    expect(Number(attributes["data-max-at"])).toBeLessThanOrEqual(start + MAX);
+    expect(Number(attributes["data-max-at"])).toBeGreaterThan(
+      start + MAX - 60_000,
+    );
+    expect(reply.body).toMatch(
+      /<section\s[^>]*id="sesion-aviso"[^>]*\shidden/s,
+    );
+    const body = reply.body.replace(/\s+/g, " ");
+    expect(body).toContain(
+      '<form id="sesion-ampliar" method="post" action="/api/session/extend">',
+    );
+    expect(body).toMatch(
+      /<button type="submit" data-busy="Ampliando…">\s*Continuar la sesión\s*<\/button>/,
+    );
+    expect(body).toContain('<p id="sesion-estado" class="skip" role="status">');
+    expect(body).toContain('<a href="/login">Volver a entrar</a>');
+    // El aviso va antes de la cabecera, para que el foco lo encuentre primero.
+    expect(body.indexOf('id="sesion-aviso"')).toBeLessThan(
+      body.indexOf("<header"),
+    );
+    // El script sigue autorizado solo por su huella.
+    const script = /<script>(.*?)<\/script>/s.exec(reply.body)?.[1] ?? "";
+    expect(reply.headers["content-security-policy"]).toContain(
+      `script-src 'sha256-${createHash("sha256").update(script).digest("base64")}'`,
+    );
+    expect(script).toContain("/api/session/sign-out");
+    // Sin temporizadores que consulten al servidor: la única petición del
+    // aviso es la del envío del formulario.
+    expect(script.match(/fetch\(/g)).toHaveLength(2);
+    expect(script).not.toMatch(
+      /XMLHttpRequest|sendBeacon|EventSource|WebSocket/,
+    );
+  });
+
+  test("sin sesión no hay aviso ni formulario de ampliación", async () => {
+    const reply = await client.get(loginPage);
+    expect(reply.body).not.toContain('id="sesion-aviso"');
+    expect(reply.body).not.toContain('action="/api/session/extend"');
+  });
+
+  test("ampliar responde 204 sin cuerpo, retrasa la caducidad y se registra", async () => {
+    await enter("docente1", ["teacher"]);
+    advance(IDLE - 60_000);
+    const token = client.csrfOf(await client.get(homePage));
+    // Casi todo el periodo, sin más actividad que la ampliación.
+    advance(IDLE - 1000);
+    const reply = await client.post(extendAction, { csrf: token });
+    expectClosed(reply, 204);
+    expect(reply.setCookies).toEqual([]);
+    expect(auditActions().at(-1)).toBe("session.extended:ok");
+
+    advance(IDLE - 1000);
+    const after = await client.get(homePage);
+    expect(after.status).toBe(200);
+    expect(warning(after)["data-idle-at"]).toBe(String(Date.now() + IDLE));
+  });
+
+  test("permite más de diez ampliaciones seguidas sin ninguna otra petición", async () => {
+    await enter("docente1", ["teacher"]);
+    const token = client.csrfOf(await client.get(homePage));
+    for (let round = 1; round <= 12; round += 1) {
+      advance(IDLE - 1000);
+      expect(
+        (await client.post(extendAction, { csrf: token })).status,
+        String(round),
+      ).toBe(204);
+    }
+    expect((await client.get(homePage)).status).toBe(200);
+  });
+
+  test("sin ampliar ni hacer nada, la sesión caduca de verdad: la página lleva a la entrada y la ampliación ya no sirve", async () => {
+    await enter("docente1", ["teacher"]);
+    const token = client.csrfOf(await client.get(homePage));
+    advance(IDLE);
+    const late = await client.post(extendAction, { csrf: token });
+    expect(late.status).toBe(303);
+    expect(late.location).toBe("/login");
+    expect(late.body).toBe("");
+    expect((await client.get(homePage)).location).toBe("/login");
+    expect(auditActions()).not.toContain("session.extended:ok");
+  });
+
+  test("la duración máxima no se amplía: llegado ese momento la sesión termina aunque se haya ampliado", async () => {
+    await enter("docente1", ["teacher"]);
+    const first = await client.get(homePage);
+    const token = client.csrfOf(first);
+    const maxAt = Number(warning(first)["data-max-at"]);
+    while (Date.now() + IDLE - 1000 < maxAt) {
+      advance(IDLE - 1000);
+      expect((await client.post(extendAction, { csrf: token })).status).toBe(
+        204,
+      );
+    }
+    // La página sigue anunciando el mismo final.
+    expect(warning(await client.get(homePage))["data-max-at"]).toBe(
+      String(maxAt),
+    );
+    vi.setSystemTime(maxAt);
+    expect((await client.post(extendAction, { csrf: token })).location).toBe(
+      "/login",
+    );
+    expect((await client.get(homePage)).location).toBe("/login");
+  });
+
+  test.each([
+    { name: "sin Origin", options: { origin: null } },
+    { name: "desde otro origen", options: { origin: "https://otro.example" } },
+    {
+      name: "desde otro sitio según el navegador",
+      options: { secFetchSite: "cross-site" },
+    },
+  ])(
+    "$name se rechaza antes de mirar la sesión: ni amplía ni cuenta como actividad",
+    async ({ options }) => {
+      await enter("docente1", ["teacher"]);
+      const token = client.csrfOf(await client.get(homePage));
+      advance(IDLE - 120_000);
+      expectClosed(
+        await client.post(extendAction, { csrf: token }, options),
+        403,
+      );
+      expect(auditActions()).not.toContain("session.extended:ok");
+      // La caducidad sigue donde estaba.
+      advance(120_000);
+      expect((await client.get(homePage)).location).toBe("/login");
+    },
+  );
+
+  test.each([
+    { name: "sin testigo", fields: {} },
+    { name: "con otro testigo", fields: { csrf: "otro" } },
+  ])(
+    "$name se rechaza y no se registra ninguna ampliación",
+    async ({ fields }) => {
+      await enter("docente1", ["teacher"]);
+      await client.get(homePage);
+      expectClosed(await client.post(extendAction, fields), 403);
+      expect(auditActions().at(-1)).toBe("request.denied:denied:csrf");
+      expect(auditActions()).not.toContain("session.extended:ok");
+    },
+  );
+
+  test("solo admite POST, y sin sesión lleva a la entrada", async () => {
+    await enter("docente1", ["teacher"]);
+    const token = client.csrfOf(await client.get(homePage));
+    const get = await client.post(
+      extendAction,
+      { csrf: token },
+      { method: "GET" },
+    );
+    expect(get.status).toBe(405);
+    expect(get.headers.allow).toBe("POST");
+    client.cookies.clear();
+    const anonymous = await client.post(extendAction, { csrf: token });
+    expect(anonymous.status).toBe(303);
+    expect(anonymous.location).toBe("/login");
+  });
+
+  test("una sesión revocada, cerrada o de una cuenta desactivada no se amplía", async () => {
+    await enter("docente1", ["teacher"]);
+    const token = client.csrfOf(await client.get(homePage));
+    const cookies = new Map(client.cookies);
+
+    client.runtime.identity.revokeSessions("docente1", "revocación");
+    expect((await client.post(extendAction, { csrf: token })).location).toBe(
+      "/login",
+    );
+
+    // Cerrada desde otra pestaña: la cookie anterior ya no sirve.
+    await signIn("docente1", NEW_PASSWORD);
+    const again = await client.get(homePage);
+    const other = new Map(client.cookies);
+    await client.post(signOutAction, { csrf: client.csrfOf(again) });
+    const stale = await client.post(
+      extendAction,
+      { csrf: client.csrfOf(again) },
+      { cookies: Object.fromEntries(other) },
+    );
+    expect(stale.location).toBe("/login");
+
+    await signIn("docente1", NEW_PASSWORD);
+    const live = client.csrfOf(await client.get(homePage));
+    client.runtime.identity.setDisabled("docente1", true, "baja");
+    expect((await client.post(extendAction, { csrf: live })).location).toBe(
+      "/login",
+    );
+    expect(cookies.size).toBeGreaterThan(0);
+    expect(auditActions()).not.toContain("session.extended:ok");
+  });
+
+  test("con la contraseña inicial pendiente también se puede ampliar, y no da acceso a nada más", async () => {
+    await createUser("docente1", ["teacher"]);
+    expect((await signIn("docente1")).location).toBe("/account/password");
+    const form = await client.get(passwordPage);
+    expect(warning(form).id).toBe("sesion-aviso");
+    expect(
+      (await client.post(extendAction, { csrf: client.csrfOf(form) })).status,
+    ).toBe(204);
+    expect((await client.get(homePage)).location).toBe("/account/password");
+  });
+
+  test("dos sesiones de la misma cuenta son independientes: ampliar una no amplía la otra", async () => {
+    await enter("docente1", ["teacher"]);
+    const first = {
+      cookies: Object.fromEntries(client.cookies),
+      token: client.csrfOf(await client.get(homePage)),
+    };
+    client.cookies.clear();
+    await signIn("docente1", NEW_PASSWORD);
+    const second = client.csrfOf(await client.get(homePage));
+
+    advance(IDLE - 1000);
+    expect((await client.post(extendAction, { csrf: second })).status).toBe(
+      204,
+    );
+    advance(2000);
+    // La segunda sigue viva; la primera, que nadie amplió, ha caducado.
+    expect((await client.get(homePage)).status).toBe(200);
+    expect(
+      (
+        await client.post(
+          extendAction,
+          { csrf: first.token },
+          { cookies: first.cookies },
+        )
+      ).location,
+    ).toBe("/login");
+  });
 });
