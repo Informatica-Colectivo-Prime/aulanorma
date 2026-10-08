@@ -92,6 +92,22 @@ export interface SessionContext {
   readonly expiresAt: number;
 }
 
+// Resultado de renovar la autenticación sin salir de la página: una sesión
+// nueva que sustituye a la anterior, o el motivo por el que no se renueva.
+export type RenewResult =
+  | ({
+      readonly ok: true;
+      readonly cookie: string;
+      readonly csrfToken: string;
+      readonly idleMs: number;
+    } & SessionDeadlines)
+  | {
+      readonly ok: false;
+      // `session_ended`: la sesión dejó de estar vigente, también si ocurrió
+      // mientras se comprobaba la contraseña.
+      readonly reason: "session_ended" | "throttled" | "invalid_credentials";
+    };
+
 // Plazos de una sesión tras ampliarla.
 export interface SessionDeadlines {
   readonly idleExpiresAt: number;
@@ -169,7 +185,28 @@ export interface Identity {
     readonly password: string;
     readonly correlationId: string;
   }): Promise<SignInResult>;
-  resolveSession(cookie: string | undefined): SessionContext | null;
+  // Con `touch: false` no anota actividad: sirve para comprobar una petición
+  // antes de decidir si cuenta.
+  resolveSession(
+    cookie: string | undefined,
+    options?: { readonly touch: boolean },
+  ): SessionContext | null;
+  // `true` si la sesión de esa cookie fue sustituida por una renovación. No
+  // la revive: solo permite distinguirla de una sesión terminada.
+  wasRenewed(cookie: string | undefined): boolean;
+  // `true` si el testigo es el de la sesión a la que sustituyó la sesión
+  // vigente de esa cookie: un formulario abierto antes de renovar.
+  isPreviousToken(cookie: string | undefined, csrfToken: string): boolean;
+  // Renueva la autenticación de una sesión vigente con la contraseña actual:
+  // crea una sesión nueva, con otro identificador, otro testigo y su propia
+  // duración máxima, y revoca la anterior en la misma transacción. Usa el
+  // mismo control de intentos que la entrada. Quien llama ya ha comprobado el
+  // origen y el testigo.
+  renewSession(input: {
+    readonly cookie: string | undefined;
+    readonly password: string;
+    readonly correlationId: string;
+  }): Promise<RenewResult>;
   // Amplía la sesión a petición expresa de su usuario: anota la actividad
   // ahora y devuelve los plazos nuevos. `null` si la sesión ya no está viva.
   // No retrasa la duración máxima ni revive una sesión caducada o revocada.
@@ -681,7 +718,7 @@ export function createIdentity(options: IdentityOptions): Identity {
 
     // Los perfiles y el estado de la cuenta se leen en cada petición, no de la
     // sesión: un cambio se aplica desde la petición siguiente.
-    resolveSession(cookie) {
+    resolveSession(cookie, options = { touch: true }) {
       const row = liveSession(cookie);
       if (row === undefined) {
         return null;
@@ -698,7 +735,7 @@ export function createIdentity(options: IdentityOptions): Identity {
       }
       const at = now();
       let lastSeenAt = integer(row.last_seen_at);
-      if (at - lastSeenAt >= lastSeenPrecisionMs) {
+      if (options.touch && at - lastSeenAt >= lastSeenPrecisionMs) {
         db.prepare("UPDATE session SET last_seen_at = ? WHERE id_hash = ?").run(
           at,
           text(row.id_hash),
@@ -711,6 +748,131 @@ export function createIdentity(options: IdentityOptions): Identity {
         idleExpiresAt: lastSeenAt + sessionIdleMs,
         idleMs: sessionIdleMs,
         expiresAt: integer(row.expires_at),
+      };
+    },
+
+    wasRenewed(cookie) {
+      if (cookie === undefined || cookie === "") {
+        return false;
+      }
+      const row = db
+        .prepare("SELECT replaced_by FROM session WHERE id_hash = ?")
+        .get(hashOf(cookie));
+      return typeof row?.replaced_by === "string";
+    },
+
+    isPreviousToken(cookie, csrfToken) {
+      const row = liveSession(cookie);
+      if (row === undefined || csrfToken === "") {
+        return false;
+      }
+      const previous = db
+        .prepare("SELECT csrf_token FROM session WHERE replaced_by = ?")
+        .get(text(row.id_hash));
+      return (
+        previous !== undefined &&
+        safeEqual(text(previous.csrf_token), csrfToken)
+      );
+    },
+
+    async renewSession({ cookie, password, correlationId }) {
+      const refuse = (
+        result: "denied" | "failed",
+        reason: "session_ended" | "throttled" | "invalid_credentials",
+        userId: string | null,
+      ): RenewResult => {
+        audit({
+          actorId: userId,
+          action: "session.renew",
+          targetKind: userId === null ? null : "user_account",
+          targetId: userId,
+          result,
+          correlationId,
+          details: { reason },
+        });
+        return { ok: false, reason };
+      };
+
+      const row = liveSession(cookie);
+      const userId = row?.user_id;
+      if (row === undefined || typeof userId !== "string") {
+        return refuse("denied", "session_ended", null);
+      }
+      const user = db
+        .prepare("SELECT * FROM user_account WHERE id = ?")
+        .get(userId);
+      if (user === undefined || integer(user.disabled) === 1) {
+        return refuse("denied", "session_ended", null);
+      }
+      // El mismo control de intentos que la entrada, con el mismo sujeto: los
+      // fallos de una y otra se suman.
+      const subject = `account:${text(user.username)}`;
+      if (lockedUntil(subject) > now() || lockedUntil(GLOBAL_SUBJECT) > now()) {
+        return refuse("denied", "throttled", userId);
+      }
+      const stored: StoredPassword = {
+        hash: text(user.password_hash),
+        params: text(user.password_params),
+      };
+      if (!(await verifyPassword(password, stored))) {
+        registerFailure(subject, ACCOUNT_WINDOW_MS, true, accountLock);
+        registerFailure(GLOBAL_SUBJECT, GLOBAL_WINDOW_MS, false, (failures) =>
+          failures >= GLOBAL_FAILURES ? GLOBAL_LOCK_MS : 0,
+        );
+        return refuse("failed", "invalid_credentials", userId);
+      }
+
+      // La comprobación de la contraseña tarda: mientras tanto la sesión ha
+      // podido caducar o revocarse, y la cuenta, desactivarse o cambiar de
+      // contraseña. Todo se vuelve a leer dentro de la transacción que crea
+      // la sesión nueva y revoca la anterior: o las dos cosas, o ninguna.
+      db.exec("BEGIN IMMEDIATE");
+      let issued: IssuedEntry;
+      let at: number;
+      try {
+        const current = liveSession(cookie);
+        const account = db
+          .prepare("SELECT * FROM user_account WHERE id = ?")
+          .get(userId);
+        if (
+          current?.user_id !== userId ||
+          account === undefined ||
+          integer(account.disabled) === 1 ||
+          text(account.password_hash) !== stored.hash ||
+          text(account.password_params) !== stored.params
+        ) {
+          db.exec("ROLLBACK");
+          return refuse("denied", "session_ended", userId);
+        }
+        issued = issueSession(userId, sessionMaxMs);
+        at = now();
+        db.prepare(
+          "UPDATE session SET revoked_at = ?, replaced_by = ? WHERE id_hash = ?",
+        ).run(at, hashOf(issued.cookie), text(current.id_hash));
+        db.prepare("DELETE FROM sign_in_throttle WHERE subject = ?").run(
+          subject,
+        );
+        audit({
+          actorId: userId,
+          action: "session.renew",
+          targetKind: "user_account",
+          targetId: userId,
+          result: "ok",
+          correlationId,
+          details: {},
+        });
+        db.exec("COMMIT");
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+      return {
+        ok: true,
+        cookie: issued.cookie,
+        csrfToken: issued.csrfToken,
+        idleExpiresAt: at + sessionIdleMs,
+        idleMs: sessionIdleMs,
+        expiresAt: at + sessionMaxMs,
       };
     },
 

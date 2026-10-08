@@ -349,6 +349,8 @@ a{color:var(--accent)}
 .session-warning form{max-width:60rem;margin:0 auto}
 .session-warning button{margin-top:.5rem}
 .session-title{font-weight:700;font-size:1.15rem}
+.session-warning label{margin-top:.5rem}
+.session-error{color:var(--bad);font-weight:600}
 header{border-bottom:1px solid var(--line);background:var(--surface)}
 .bar{max-width:46rem;margin:0 auto;padding:.75rem 1rem;display:flex;flex-wrap:wrap;gap:.5rem 1rem;align-items:center;justify-content:space-between}
 .brand{font-weight:700;font-size:1.125rem;color:var(--ink);text-decoration:none}
@@ -425,31 +427,61 @@ button.secondary{background:#fff;color:var(--accent)}
 // cuenta, así que una pestaña abierta no mantiene la sesión. Las pestañas se
 // avisan entre sí por el almacenamiento local, sin pasar por el servidor: la
 // actividad o la ampliación en una retrasa el aviso en las demás, y la salida
-// en una lo da por terminado en todas. La duración máxima no se puede
-// ampliar: cuando es ella la que vence, el aviso lo dice.
+// en una lo da por terminado en todas.
+//
+// Duración máxima: cinco minutos antes de alcanzarla, el aviso pide la
+// contraseña y, si el servidor la acepta, sustituye la sesión por otra nueva
+// sin salir de la página (`#sesion-renovar`). El testigo nuevo se pone en
+// todos los formularios de la página, con lo escrito intacto. A las demás
+// pestañas solo se les comunica, por el almacenamiento local, el instante de
+// la renovación: cada una pide entonces una página propia y toma de ella su
+// testigo. En el almacenamiento local nunca hay contraseñas, cookies ni
+// testigos. Un formulario que se envía con un testigo anterior a la
+// renovación espera a tener el nuevo. Si el servidor rechaza una ampliación
+// o una renovación, antes de dar la sesión por terminada se comprueba si
+// sigue viva: otra pestaña ha podido renovarla a la vez.
+//
+// Formulario de entrada: si lleva abierto más de cinco minutos, al enviarlo
+// pide antes un testigo vigente, de modo que su caducidad no obliga a
+// repetir nada.
 //
 // Subida de un PDF (`form[data-upload]`): el fichero se envía como cuerpo
 // `application/pdf` y los demás campos, en una cabecera. La respuesta dice a
 // qué página ir; si no hay respuesta válida, el formulario lo explica.
 const SCRIPT = `
+var SESSION_KEY="aulanorma-sesion",RENEWED_KEY="aulanorma-renovada",tokensAt=Date.now();
 function busy(button){if(!button||button.disabled){return}button.setAttribute("data-label",button.textContent);button.textContent=button.getAttribute("data-busy")||button.textContent;button.setAttribute("aria-busy","true");setTimeout(function(){button.disabled=true},0)}
 function idle(button){if(!button){return}button.disabled=false;button.removeAttribute("aria-busy");button.textContent=button.getAttribute("data-label")||button.textContent}
 function encode(text){var bytes=new TextEncoder().encode(text),binary="";bytes.forEach(function(byte){binary+=String.fromCharCode(byte)});return btoa(binary).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=+$/,"")}
+function stored(key){try{return JSON.parse(localStorage.getItem(key))}catch(error){return null}}
+function publish(key,value){try{localStorage.setItem(key,JSON.stringify(value))}catch(error){}}
+function setTokens(value){document.querySelectorAll('input[name="csrf"]').forEach(function(input){input.value=value})}
+function fetchTokens(url){return fetch(url,{credentials:"same-origin",redirect:"manual"}).then(function(response){if(response.status!==200){return null}return response.text().then(function(body){var page=new DOMParser().parseFromString(body,"text/html"),input=page.querySelector('input[name="csrf"]');if(!input||!input.value){return null}setTokens(input.value);tokensAt=Date.now();return page})}).catch(function(){return null})}
+function tokensStale(){var renewed=stored(RENEWED_KEY);return typeof renewed==="number"&&renewed>tokensAt}
 function upload(form){var button=form.querySelector("button[type=submit]"),status=form.querySelector("[data-upload-status]"),input=form.querySelector("input[type=file]"),file=input.files[0],fields={},csrf="";function fail(text){idle(button);status.textContent=text;status.focus()}if(!file){fail("Elige un fichero PDF.");return}if(file.size>Number(form.getAttribute("data-max-bytes"))){fail(form.getAttribute("data-too-large"));return}new FormData(form).forEach(function(value,name){if(typeof value==="string"){if(name==="csrf"){csrf=value}else{fields[name]=value}}});status.textContent="";busy(button);fetch(form.action,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/pdf","X-AulaNorma-Csrf":csrf,"X-AulaNorma-Document":encode(JSON.stringify(fields))},body:file}).then(function(response){return response.json()}).then(function(result){if(typeof result.location!=="string"||result.location.charAt(0)!=="/"){throw new Error}window.location.assign(result.location)}).catch(function(){fail(form.getAttribute("data-failed"))})}
-function sessionWatch(){var box=document.getElementById("sesion-aviso");if(!box){return function(){}}var KEY="aulanorma-sesion",title=document.getElementById("sesion-titulo"),text=document.getElementById("sesion-texto"),count=document.getElementById("sesion-cuenta"),live=document.getElementById("sesion-estado"),form=document.getElementById("sesion-ampliar"),again=document.getElementById("sesion-entrar"),button=form.querySelector("button"),loaded=Date.now(),serverNow=Number(box.getAttribute("data-now")),idleMs=Number(box.getAttribute("data-idle-ms")),idleAt=loaded+Number(box.getAttribute("data-idle-at"))-serverNow,maxAt=loaded+Number(box.getAttribute("data-max-at"))-serverNow,warn=Math.min(120000,idleMs/2),state="ok",previous=null,said=0;
+function sessionWatch(){var box=document.getElementById("sesion-aviso");if(!box){return{extend:function(){},renew:function(){},end:function(){},resync:function(){return fetchTokens("/account/password").then(function(page){return !!page})}}}
+var title=document.getElementById("sesion-titulo"),text=document.getElementById("sesion-texto"),count=document.getElementById("sesion-cuenta"),live=document.getElementById("sesion-estado"),form=document.getElementById("sesion-ampliar"),renewal=document.getElementById("sesion-renovar"),field=document.getElementById("sesion-contrasena"),problem=document.getElementById("sesion-error"),again=document.getElementById("sesion-entrar"),button=form.querySelector("button"),renewButton=renewal.querySelector("button"),idleMs=0,idleAt=0,maxAt=0,state="ok",previous=null,said=0;
+function read(source,at){var serverNow=Number(source.getAttribute("data-now"));idleMs=Number(source.getAttribute("data-idle-ms"));idleAt=at+Number(source.getAttribute("data-idle-at"))-serverNow;maxAt=at+Number(source.getAttribute("data-max-at"))-serverNow}
 function span(ms){var s=Math.max(1,Math.ceil(ms/1000));if(s>=90){return Math.round(s/60)+" minutos"}if(s>=60){return "1 minuto"}return s+(s===1?" segundo":" segundos")}
 function clock(ms){var s=Math.max(0,Math.ceil(ms/1000)),r=s%60;return Math.floor(s/60)+":"+(r<10?"0":"")+r}
-function publish(value){try{localStorage.setItem(KEY,JSON.stringify(value))}catch(error){}}
-function show(kind,left){if(state!==kind){state=kind;said=0;if(kind==="idle"){title.textContent="Tu sesión está a punto de caducar";text.textContent="Por inactividad, tu sesión caducará dentro de "+span(left)+". Si caduca, lo que hayas escrito en esta página y no hayas enviado se perderá. Pulsa «Continuar la sesión» para seguir trabajando.";form.hidden=false}else{title.textContent="Tu sesión está a punto de terminar";text.textContent="Tu sesión termina dentro de "+span(left)+" porque ha alcanzado su duración máxima, y no se puede ampliar. Envía ahora lo que tengas pendiente o cópialo: después tendrás que volver a entrar.";form.hidden=true}again.hidden=true;if(box.hidden){previous=document.activeElement}box.hidden=false;(kind==="idle"?button:box).focus()}count.textContent="Tiempo restante: "+clock(left);var s=Math.ceil(left/1000),mark=s<=10?10:s<=30?30:s<=60?60:0;if(mark&&mark!==said){said=mark;live.textContent=mark===60?"Queda 1 minuto de sesión.":"Quedan "+mark+" segundos de sesión."}}
-function hide(message){if(state==="ok"){return}state="ok";box.hidden=true;live.textContent=message;if(previous&&document.contains(previous)&&previous.focus){previous.focus()}previous=null}
-function end(){if(state==="ended"){return}state="ended";title.textContent="Tu sesión ha terminado";text.textContent="Lo que quedara sin enviar en esta página no se ha guardado. Puedes copiarlo antes de salir de ella. Para seguir trabajando, vuelve a entrar.";count.textContent="";live.textContent="";form.hidden=true;again.hidden=false;box.hidden=false;again.querySelector("a").focus()}
-function tick(){if(state==="ended"){return}var byMax=maxAt<=idleAt,left=(byMax?maxAt:idleAt)-Date.now();if(left<=0){end()}else if(left<=warn){show(byMax?"max":"idle",left)}else{hide("")}}
-function extend(){var started=Date.now();busy(button);fetch(form.getAttribute("action"),{method:"POST",credentials:"same-origin",redirect:"manual",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"csrf="+encodeURIComponent(form.querySelector("input[name=csrf]").value)}).then(function(response){idle(button);if(response.status===204){idleAt=started+idleMs;publish({idleAt:idleAt});hide("Sesión ampliada.")}else if(response.status>=500){retry()}else{publish({ended:true});end()}},function(){idle(button);retry()})}
+function show(kind,left){if(state!==kind){state=kind;said=0;problem.textContent="";if(kind==="idle"){title.textContent="Tu sesión está a punto de caducar";text.textContent="Por inactividad, tu sesión caducará dentro de "+span(left)+". Si caduca, lo que hayas escrito en esta página y no hayas enviado se perderá. Pulsa «Continuar la sesión» para seguir trabajando.";form.hidden=false;renewal.hidden=true}else{title.textContent="Tu sesión está a punto de terminar";text.textContent="Tu sesión termina dentro de "+span(left)+" porque ha alcanzado su duración máxima. Para seguir trabajando sin perder lo que tienes en esta página, escribe tu contraseña y pulsa «Renovar la sesión».";form.hidden=true;renewal.hidden=false}again.hidden=true;if(box.hidden){previous=document.activeElement}box.hidden=false;(kind==="idle"?button:box).focus()}count.textContent="Tiempo restante: "+clock(left);var s=Math.ceil(left/1000),mark=s<=10?10:s<=30?30:s<=60?60:0;if(mark&&mark!==said){said=mark;live.textContent=mark===60?"Queda 1 minuto de sesión.":"Quedan "+mark+" segundos de sesión."}}
+function hide(message){if(state==="ok"){return}state="ok";box.hidden=true;field.value="";problem.textContent="";live.textContent=message;if(previous&&document.contains(previous)&&previous.focus){previous.focus()}previous=null}
+function end(){if(state==="ended"){return}state="ended";title.textContent="Tu sesión ha terminado";text.textContent="Lo que quedara sin enviar en esta página no se ha guardado. Puedes copiarlo antes de salir de ella. Para seguir trabajando, vuelve a entrar.";count.textContent="";live.textContent="";problem.textContent="";field.value="";form.hidden=true;renewal.hidden=true;again.hidden=false;box.hidden=false;again.querySelector("a").focus()}
+function finish(){publish(SESSION_KEY,{ended:true});end()}
+function tick(){if(state==="ended"){return}var now=Date.now(),toMax=maxAt-now,toIdle=idleAt-now;if(toMax<=0||toIdle<=0){end()}else if(toMax<=Math.min(300000,idleMs/2)){show("max",Math.min(toMax,toIdle))}else if(toIdle<=Math.min(120000,idleMs/2)){show("idle",toIdle)}else{hide("")}}
+function post(target,body){return fetch(target.getAttribute("action"),{method:"POST",credentials:"same-origin",redirect:"manual",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:body})}
+function token(target){return "csrf="+encodeURIComponent(target.querySelector('input[name="csrf"]').value)}
 function retry(){live.textContent="No se ha podido ampliar la sesión. Comprueba la conexión y vuelve a intentarlo."}
-window.addEventListener("storage",function(event){if(event.key!==KEY||!event.newValue||state==="ended"){return}var value;try{value=JSON.parse(event.newValue)}catch(error){return}if(value&&value.ended){end()}else if(value&&typeof value.idleAt==="number"&&value.idleAt>idleAt){idleAt=Math.min(value.idleAt,Date.now()+idleMs);tick()}});
-publish({idleAt:idleAt});setInterval(tick,1000);tick();return extend}
-var extendSession=sessionWatch();
-document.addEventListener("submit",function(event){var form=event.target;if(form.id==="sesion-ampliar"){event.preventDefault();extendSession();return}if(form.hasAttribute("data-upload")){event.preventDefault();upload(form);return}if(form.getAttribute("action")==="/api/session/sign-out"){try{localStorage.setItem("aulanorma-sesion",JSON.stringify({ended:true}))}catch(error){}}busy(form.querySelector("button[type=submit]"))});
+function extend(){var started=Date.now();busy(button);post(form,token(form)).then(function(response){idle(button);if(response.status===204){idleAt=started+idleMs;publish(SESSION_KEY,{idleAt:idleAt});hide("Sesión ampliada.")}else if(response.status>=500){retry()}else{recover()}},function(){idle(button);retry()})}
+function refuse(message){problem.textContent=message;field.value="";field.focus()}
+function resync(){return fetchTokens("/account/password").then(function(page){var source=page&&page.getElementById("sesion-aviso");if(!source){return false}read(source,Date.now());return true})}
+function renewed(message){hide(message);tick()}
+function recover(){return resync().then(function(ok){if(!ok){finish();return}renewed("");if(state==="ok"){live.textContent="La sesión ya se había renovado en otra pestaña. Puedes seguir trabajando."}})}
+function renew(){var body=token(renewal)+"&password="+encodeURIComponent(field.value);problem.textContent="";busy(renewButton);post(renewal,body).then(function(response){if(response.status===200){return response.json().then(function(data){var at=Date.now();idle(renewButton);setTokens(data.csrf);tokensAt=at;idleMs=data.idleMs;idleAt=at+data.idleAt-data.now;maxAt=at+data.maxAt-data.now;publish(RENEWED_KEY,at);publish(SESSION_KEY,{idleAt:idleAt});renewed("Sesión renovada. Puedes seguir trabajando.")})}idle(renewButton);if(response.status===422){refuse("La contraseña no es correcta. Vuelve a escribirla.")}else if(response.status===429){refuse("Demasiados intentos seguidos. Espera unos minutos antes de volver a intentarlo.")}else if(response.status>=500){refuse("No se ha podido renovar la sesión por un error interno. No se ha perdido nada: vuelve a intentarlo.")}else{return recover()}}).catch(function(){idle(renewButton);refuse("No se ha podido renovar la sesión. Comprueba la conexión y vuelve a intentarlo.")})}
+window.addEventListener("storage",function(event){if(state==="ended"||!event.newValue){return}if(event.key===RENEWED_KEY){resync().then(function(ok){if(ok){renewed(state==="ok"?"":"La sesión se ha renovado en otra pestaña. Puedes seguir trabajando.")}});return}if(event.key!==SESSION_KEY){return}var value;try{value=JSON.parse(event.newValue)}catch(error){return}if(value&&value.ended){end()}else if(value&&typeof value.idleAt==="number"&&value.idleAt>idleAt){idleAt=Math.min(value.idleAt,Date.now()+idleMs);tick()}});
+read(box,tokensAt);publish(SESSION_KEY,{idleAt:idleAt});setInterval(tick,1000);tick();return{extend:extend,renew:renew,end:end,resync:resync}}
+var session=sessionWatch();
+document.addEventListener("submit",function(event){var form=event.target,action=form.getAttribute("action"),submitter=event.submitter||undefined;if(form.id==="sesion-ampliar"){event.preventDefault();session.extend();return}if(form.id==="sesion-renovar"){event.preventDefault();session.renew();return}if(action==="/api/session/sign-in"){if(Date.now()-tokensAt>300000){event.preventDefault();fetchTokens("/login").then(function(){tokensAt=Date.now();form.requestSubmit(submitter)});return}}else if(form.hasAttribute("data-fresh")){form.removeAttribute("data-fresh")}else if(form.hasAttribute("data-replay")||tokensStale()){event.preventDefault();session.resync().then(function(ok){var note=form.querySelector("[data-replay-status]");if(ok){form.setAttribute("data-fresh","");form.requestSubmit(submitter)}else if(note){note.textContent="No se ha podido continuar con la sesión nueva. Vuelve a entrar y repite el envío."}else{session.end()}});return}if(form.hasAttribute("data-upload")){event.preventDefault();upload(form);return}if(action==="/api/session/sign-out"){publish(SESSION_KEY,{ended:true})}busy(form.querySelector("button[type=submit]"))});
 window.addEventListener("pageshow",function(){document.querySelectorAll("button[aria-busy]").forEach(idle)});
 `;
 
@@ -518,6 +550,37 @@ function sessionWarning(session: SessionContext | null): Html | null {
             <input type="hidden" name="csrf" value="${session.csrfToken}" />
             <button type="submit" data-busy="Ampliando…">
               Continuar la sesión
+            </button>
+          </form>
+          <form
+            id="sesion-renovar"
+            method="post"
+            action="/api/session/renew"
+            hidden
+          >
+            <input type="hidden" name="csrf" value="${session.csrfToken}" />
+            <input
+              class="skip"
+              type="text"
+              name="username"
+              autocomplete="username"
+              value="${session.user.username}"
+              tabindex="-1"
+              aria-hidden="true"
+              readonly
+            />
+            <label for="sesion-contrasena">Contraseña</label>
+            <input
+              id="sesion-contrasena"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              aria-describedby="sesion-error"
+              required
+            />
+            <p id="sesion-error" class="session-error" role="alert"></p>
+            <button type="submit" data-busy="Renovando…">
+              Renovar la sesión
             </button>
           </form>
           <p id="sesion-entrar" hidden><a href="/login">Volver a entrar</a></p>
@@ -664,6 +727,9 @@ export interface AccessOptions {
   // Solo la página y la acción de cambio de contraseña se alcanzan mientras la
   // cuenta tiene pendiente cambiar su contraseña inicial.
   readonly allowPendingPasswordChange: boolean;
+  // Sus campos llevan contraseñas: si la petición llega con la sesión o el
+  // testigo anteriores a una renovación, no se devuelve lo enviado.
+  readonly secretFields?: boolean;
 }
 
 // Comprueba el perfil exigido, con denegación por defecto y auditada. Con
@@ -794,6 +860,82 @@ function forbiddenPage(session: SessionContext): Html {
   });
 }
 
+// La sesión con la que llegó una página se sustituyó al renovarla.
+function renewedPage(): Html {
+  return layout({
+    title: "Sesión renovada",
+    session: null,
+    content: html`<h1>Tu sesión se ha renovado</h1>
+      <p>
+        Esta página se pidió justo mientras renovabas la sesión en otra pestaña.
+        No se ha perdido nada: vuelve a cargarla.
+      </p>
+      <p><a href="/">Ir al inicio</a></p>`,
+  });
+}
+
+// Lo que se envió con una sesión o un testigo anteriores a una renovación,
+// devuelto para repetirlo con la sesión nueva. No lleva testigo: el script lo
+// pide con la sesión vigente antes de enviar. Sin esa sesión, no sirve de
+// nada.
+function replayPage(
+  req: NextApiRequest,
+  body: unknown,
+  options: AccessOptions,
+): Html {
+  if (options.secretFields === true) {
+    // Una contraseña no se escribe en ninguna respuesta: hay que repetirla.
+    return layout({
+      title: "Envío pendiente",
+      session: null,
+      content: html`<h1>Tu envío no se ha guardado</h1>
+        <p>
+          Renovaste la sesión mientras se enviaba este formulario, y llegó con
+          la anterior. No se ha guardado nada. Como llevaba una contraseña, no
+          se devuelve en esta página: vuelve al formulario y repítelo.
+        </p>
+        <p><a href="/">Ir al inicio</a></p>`,
+    });
+  }
+  const target = (req.url ?? "").split("?")[0] ?? "";
+  const fields =
+    typeof body === "object" && body !== null
+      ? Object.entries(body as Record<string, unknown>).filter(
+          (entry): entry is [string, string] =>
+            entry[0] !== "csrf" && typeof entry[1] === "string",
+        )
+      : [];
+  return layout({
+    title: "Envío pendiente",
+    session: null,
+    content: html`<h1>Tu envío no se ha guardado todavía</h1>
+      <p>
+        Renovaste la sesión mientras se enviaba este formulario, y llegó con la
+        anterior. No se ha guardado ni se ha perdido nada: lo que enviaste está
+        en esta página.
+      </p>
+      ${
+        ROUTE_TARGET.test(target)
+          ? html`<form method="post" action="${target}" data-replay>
+              <input type="hidden" name="csrf" value="" />
+              ${fields.map(
+                ([name, value]) =>
+                  html`<input type="hidden" name="${name}" value="${value}" />`,
+              )}
+              <button type="submit" data-busy="Enviando…">
+                Enviar de nuevo
+              </button>
+              <p class="hint" role="status" data-replay-status></p>
+            </form>`
+          : null
+      }
+      <p><a href="/">Ir al inicio sin enviarlo</a></p>`,
+  });
+}
+
+// Destino de una acción: solo rutas propias de la interfaz de acciones.
+const ROUTE_TARGET = /^\/api\/[a-z0-9/-]+$/;
+
 // Página de producto: sin sesión lleva a la entrada; con la contraseña
 // inicial pendiente, al cambio de contraseña; sin el perfil exigido, responde
 // 403.
@@ -803,8 +945,15 @@ export function protectedPage(
 ): GetServerSideProps {
   return page((req, res, runtime, correlationId, param) => {
     const { config, identity } = runtime;
-    const session = identity.resolveSession(readCookie(req, config, "session"));
+    const sessionCookie = readCookie(req, config, "session");
+    const session = identity.resolveSession(sessionCookie);
     if (session === null) {
+      if (identity.wasRenewed(sessionCookie)) {
+        // La petición salió antes de que el navegador recibiera la sesión
+        // nueva. No se borra la cookie: borraría la nueva.
+        sendPage(res, 409, renewedPage(), []);
+        return;
+      }
       seeOther(res, "/login", [clearCookie(config, "session")]);
       return;
     }
@@ -845,6 +994,14 @@ export interface ActionReply {
 // Acción que no lleva a otra página: responde 204, sin cuerpo.
 export interface DoneReply {
   readonly done: true;
+}
+
+// Acción que responde con datos a una petición del script de la página.
+export interface DataReply {
+  readonly status: number;
+  readonly data: Readonly<Record<string, string | number>>;
+  // Valor nuevo de la cookie de sesión.
+  readonly sessionCookie?: string;
 }
 
 export interface ActionInput {
@@ -1001,7 +1158,7 @@ export function protectedAction(
   options: AccessOptions,
   handle: (
     input: ProtectedActionInput,
-  ) => Promise<ActionReply | PageReply | DoneReply>,
+  ) => Promise<ActionReply | PageReply | DoneReply | DataReply>,
 ): NextApiHandler {
   return action(async (req, res, runtime, correlationId) => {
     const { config, identity, audit } = runtime;
@@ -1009,28 +1166,50 @@ export function protectedAction(
       return;
     }
     const sessionCookie = readCookie(req, config, "session");
-    const session = identity.resolveSession(sessionCookie);
-    if (session === null) {
+    const body: unknown = req.body;
+    const denied = (actorId: string | null, reason: string): void => {
+      audit.record({
+        actorId,
+        action: "request.denied",
+        targetKind: null,
+        targetId: null,
+        result: "denied",
+        correlationId,
+        details: { operation: options.operation, reason },
+      });
+    };
+    // Primero sin anotar actividad: una petición que se va a rechazar no
+    // mantiene viva la sesión.
+    const found = identity.resolveSession(sessionCookie, { touch: false });
+    if (found === null) {
+      if (identity.wasRenewed(sessionCookie)) {
+        // Salió con la sesión anterior a una renovación. Ni se ejecuta ni se
+        // borra la cookie, que ya es la de la sesión nueva: se devuelve lo
+        // enviado para repetirlo con ella.
+        denied(null, "session_renewed");
+        sendPage(res, 409, replayPage(req, body, options), []);
+        return;
+      }
       seeOther(res, "/login", [
         clearCookie(config, "session"),
         setCookie(config, "notice", "signin_expired", 60),
       ]);
       return;
     }
-    const body: unknown = req.body;
-    if (!safeEqual(session.csrfToken, fieldOf(body, "csrf"))) {
-      audit.record({
-        actorId: session.user.id,
-        action: "request.denied",
-        targetKind: null,
-        targetId: null,
-        result: "denied",
-        correlationId,
-        details: { operation: options.operation, reason: "csrf" },
-      });
+    const csrf = fieldOf(body, "csrf");
+    if (!safeEqual(found.csrfToken, csrf)) {
+      if (identity.isPreviousToken(sessionCookie, csrf)) {
+        // Un formulario abierto antes de renovar: tampoco se ejecuta.
+        denied(found.user.id, "csrf_renewed");
+        sendPage(res, 409, replayPage(req, body, options), []);
+        return;
+      }
+      denied(found.user.id, "csrf");
       sendEmpty(res, 403);
       return;
     }
+    // Aceptada: ahora sí cuenta como actividad.
+    const session = identity.resolveSession(sessionCookie) ?? found;
     if (
       session.user.mustChangePassword &&
       !options.allowPendingPasswordChange
@@ -1052,6 +1231,26 @@ export function protectedAction(
     });
     if ("done" in reply) {
       sendEmpty(res, 204);
+    } else if ("data" in reply) {
+      const text = JSON.stringify(reply.data);
+      send(
+        res,
+        reply.status,
+        {
+          "Cache-Control": "no-store",
+          "Content-Type": "application/json; charset=utf-8",
+          "Content-Length": String(Buffer.byteLength(text)),
+          "X-Content-Type-Options": "nosniff",
+          ...(reply.sessionCookie === undefined
+            ? {}
+            : {
+                "Set-Cookie": [
+                  setCookie(config, "session", reply.sessionCookie),
+                ],
+              }),
+        },
+        text,
+      );
     } else if ("page" in reply) {
       // Un conflicto o un bloqueo: se explica en una página, sin guardar
       // nada y sin redirigir, para conservar lo que el usuario envió.
@@ -1151,14 +1350,17 @@ export function protectedUpload(
     if (!admitted(req, res, runtime, options.operation, correlationId, PDF)) {
       return;
     }
-    const session = identity.resolveSession(readCookie(req, config, "session"));
-    if (session === null) {
+    // Como en las demás acciones: una subida que se rechaza por su testigo
+    // no cuenta como actividad.
+    const uploadCookie = readCookie(req, config, "session");
+    const found = identity.resolveSession(uploadCookie, { touch: false });
+    if (found === null) {
       sendEmpty(res, 401);
       return;
     }
-    if (!safeEqual(session.csrfToken, header(req, "x-aulanorma-csrf") ?? "")) {
+    if (!safeEqual(found.csrfToken, header(req, "x-aulanorma-csrf") ?? "")) {
       audit.record({
-        actorId: session.user.id,
+        actorId: found.user.id,
         action: "request.denied",
         targetKind: null,
         targetId: null,
@@ -1169,6 +1371,7 @@ export function protectedUpload(
       sendEmpty(res, 403);
       return;
     }
+    const session = identity.resolveSession(uploadCookie) ?? found;
     if (
       (session.user.mustChangePassword &&
         !options.allowPendingPasswordChange) ||

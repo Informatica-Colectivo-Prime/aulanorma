@@ -1,8 +1,8 @@
 # Recorrido manual de accesibilidad
 
 Para el operador. Completa lo que las pruebas automáticas no pueden acreditar: uso con
-teclado, con lector de pantalla y con ampliación, en la interfaz y en el paquete. Dura unos
-45 minutos. **Hasta que se haga y se registre aquí, T082 sigue abierta.**
+teclado, con lector de pantalla y con ampliación, en la interfaz y en el paquete. Dura alrededor
+de una hora. **Hasta que se haga y se registre aquí, T082 sigue abierta.**
 
 Anota en cada fila lo que observes, también si falla. Un fallo se registra como fallo: no se
 repite hasta que salga bien.
@@ -48,7 +48,21 @@ Sin tocar el ratón. Repite la parte A en un segundo navegador.
 | A8 | Abre «Historial» y entra en el de un tema | Los enlaces dicen adónde llevan; la tabla se alcanza y se desplaza | | |
 | A9 | En ninguna página el foco queda atrapado ni desaparece | — | | |
 
-## B. Aviso de sesión
+## B. Aviso, ampliación y renovación de la sesión
+
+Es la tarea T091. Para ver el aviso de fin de sesión sin esperar doce horas, acerca el final
+de tu sesión en la base de datos del ensayo, con el servidor en marcha, y recarga la página:
+
+```bash
+sqlite3 <directorio de datos>/aulanorma.db \
+  "UPDATE session SET expires_at = CAST(strftime('%s','now') AS INTEGER) * 1000 + 420000 \
+   WHERE revoked_at IS NULL AND user_id IS NOT NULL;"
+```
+
+Con eso la sesión termina en siete minutos y el aviso de renovación aparece a los cinco de
+que acabe, es decir, a los dos minutos. Hazlo solo en un directorio de datos de ensayo.
+
+### Inactividad
 
 | Paso | Qué hacer | Qué debe pasar | Observado | Estado |
 | ---- | --------- | -------------- | --------- | ------ |
@@ -59,6 +73,22 @@ Sin tocar el ratón. Repite la parte A en un segundo navegador.
 | B5 | Sal en una pestaña | La otra dice «Tu sesión ha terminado» y ofrece volver a entrar | | |
 | B6 | Entra, no toques nada cinco minutos | La página dice que la sesión ha terminado; lo escrito sigue a la vista para copiarlo | | |
 | B7 | Desde ahí, intenta guardar | Lleva a la entrada; no se guarda nada | | |
+
+### Renovación
+
+| Paso | Qué hacer | Qué debe pasar | Observado | Estado |
+| ---- | --------- | -------------- | --------- | ------ |
+| B8 | Acerca el final de la sesión, abre la edición de un bloque en dos pestañas y escribe algo en cada una | A los dos minutos, las dos muestran «Tu sesión está a punto de terminar», con un campo de contraseña. El foco está en el aviso, no en el campo | | |
+| B9 | Sigue tecleando sin mirar | Lo que tecleas no aparece en el campo de contraseña | | |
+| B10 | Pulsa Tabulador | El foco llega al campo «Contraseña», y se ve | | |
+| B11 | Escribe una contraseña equivocada y pulsa Intro | «La contraseña no es correcta», junto al campo, que queda vacío y con el foco | | |
+| B12 | Pega la contraseña correcta, o rellénala con tu gestor de contraseñas, y pulsa Intro | El aviso desaparece, el foco vuelve a donde escribías y lo escrito sigue ahí. La página no se ha recargado | | |
+| B13 | Mira la otra pestaña, sin tocarla antes | Ya no avisa y su texto sigue ahí; no ha pedido contraseña | | |
+| B14 | Guarda el bloque en cada pestaña | Las dos se guardan | | |
+| B15 | Repite B8 a B10 y falla la contraseña tres veces; después escribe la correcta | A la cuarta, «Demasiados intentos seguidos»; pasados unos segundos, la correcta renueva | | |
+| B16 | Repite B8 y no renueves | Al acabar el tiempo, «Tu sesión ha terminado»; lo escrito sigue a la vista | | |
+| B17 | Con lector de pantalla, repite B8, B11 y B12 | Se oyen el título y el texto del aviso, la etiqueta del campo, el error al fallar y «Sesión renovada» al acertar | | |
+| B18 | Deja la página de entrada abierta veinte minutos, escribe tus credenciales y entra | Se entra a la primera, sin tener que escribirlas otra vez | | |
 
 ## C. Interfaz, con lector de pantalla
 
@@ -73,7 +103,7 @@ VoiceOver con Safari en macOS, o NVDA con Firefox en Windows. Anota cuál.
 | C5 | Recorre un tema | En cada bloque se oye si es «Requisito extraído del BOE» o «Desarrollo didáctico generado» | | |
 | C6 | Entra en la tabla de cobertura de un índice | El título de la tabla y, en cada celda, su cabecera | | |
 | C7 | Aprueba un tema | El aviso de que se ha aprobado | | |
-| C8 | Espera el aviso de sesión | Su título y su texto al aparecer; después, solo «Queda 1 minuto», «Quedan 30 segundos» y «Quedan 10 segundos» | | |
+| C8 | Espera el aviso de inactividad | Su título y su texto al aparecer; después, solo «Queda 1 minuto», «Quedan 30 segundos» y «Quedan 10 segundos» | | |
 | C9 | Continúa la sesión | «Sesión ampliada» | | |
 | C10 | En «Historial», una etiqueta «Vigente» o «Sin vigencia» | Se oye como texto, no depende del color | | |
 

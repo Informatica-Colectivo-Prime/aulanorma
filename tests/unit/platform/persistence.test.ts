@@ -214,6 +214,7 @@ describe("PLATFORM_MIGRATIONS", () => {
       "0007_outline",
       "0008_syllabus",
       "0009_content_export",
+      "0010_session_renewal",
     ]);
     expect(tables(db)).toEqual([
       "audit_event",

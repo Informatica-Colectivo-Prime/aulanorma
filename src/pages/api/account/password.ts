@@ -10,6 +10,7 @@ export default protectedAction(
     role: null,
     operation: "account.password.change",
     allowPendingPasswordChange: true,
+    secretFields: true,
   },
   async ({ field, runtime, correlationId, session }) => {
     const result = await runtime.identity.changePassword({

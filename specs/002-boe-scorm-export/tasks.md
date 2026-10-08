@@ -257,8 +257,9 @@ marcado, pruebas automáticas y cálculo de contraste, con tres defectos corregi
 evaluación con teclado, lector de pantalla y ampliación en navegadores reales, en la
 interfaz y en el paquete, con el recorrido de
 [`accessibility-walkthrough.md`](./accessibility-walkthrough.md). La caducidad por
-inactividad ya avisa y se puede ampliar; la duración máxima de 12 horas sigue sin resolver y
-WCAG 2.2.1 no se declara cumplido ([`session-limits.md`](./session-limits.md)). **T086 no se
+inactividad avisa y se puede ampliar, y al acercarse la duración máxima la autenticación se
+renueva en la propia página (fase 12). WCAG 2.2.1 sigue sin declararse cumplido: faltan sus
+evidencias manuales y quedan puntos abiertos ([`session-limits.md`](./session-limits.md)). **T086 no se
 ha ejecutado**: es la última, y no se completa mientras T082 siga abierta y T065 pendiente.
 T085 expone las métricas en una página de administración; su alcance y sus límites están en
 la propia página y en `docs/engineering/architecture.md`.
@@ -269,6 +270,23 @@ la propia página y en `docs/engineering/architecture.md`.
 - [X] T085 Ampliar `tests/architecture/no-domain-specifics.test.ts` para las áreas y módulos nuevos (SC-045), y añadir las métricas mínimas del principio XI (errores, latencia, coste de generación y estado de exportaciones) a partir de los registros existentes
 - [ ] T086 Ejecutar `npm run check` y `npm run verify:negative`, y completar en `acceptance.md` los criterios automáticos con su evidencia, dejando en «Pendiente» los que dependan de tareas bloqueadas; esta tarea no cierra la aceptación mientras quede alguna
 - [X] T087 Crear `src/pages/history/` con el historial consultable de cada elemento (correcciones, validaciones, aprobaciones, rechazos con su motivo, generaciones, exportaciones y descargas) para `teacher` y `admin`, con pruebas en `tests/integration/history.test.ts`
+
+---
+
+## Phase 12: Límites de tiempo de la sesión
+
+**Purpose**: que ningún límite de tiempo de la sesión haga perder trabajo sin aviso ni
+salida (FR-071 a FR-073; WCAG 2.2.1), sin debilitar la revocación. Decisiones del mantenedor
+del 2026-10-08. No depende de datos externos.
+
+- [X] T088 Aviso accesible antes de la caducidad por inactividad y ampliación expresa en `src/platform/identity`, `src/platform/web` y `src/pages/api/session/extend.ts`, con pruebas en `tests/unit/platform/identity.test.ts`, `tests/contract/session.contract.test.ts` y `tests/contract/session-warning.contract.test.ts` (FR-071, SC-047). Hecha e integrada con el PR #36, antes de que existieran esta tarea y FR-071: se anota aquí después, para dejar constancia, no como trabajo planificado con antelación
+- [X] T089 Renovación de la autenticación en `src/platform/identity` y `src/pages/api/session/renew.ts`: sesión nueva y revocación de la anterior en una transacción, control de intentos de la entrada, comprobación repetida tras verificar la contraseña y registro sin secretos; migración `0010_session_renewal` (FR-072, SC-048)
+- [X] T090 Interfaz y pestañas en `src/platform/web`: formulario de renovación, testigo nuevo en los formularios sin recargar, coordinación entre pestañas sin secretos en el almacenamiento local, peticiones con la sesión o el testigo anteriores devueltas para repetirlas por decisión del usuario (sin devolver contraseñas), acciones rechazadas que no cuentan como actividad y formulario de entrada que pide un testigo vigente al enviarse (FR-071, FR-073, SC-047, SC-048)
+- [ ] T091 Recorrer a mano el aviso, la ampliación y la renovación con teclado, lector de pantalla y ampliación, siguiendo la parte B de `accessibility-walkthrough.md`, y registrar el resultado en `accessibility.md`; forma parte de T082 y decide si WCAG 2.2.1 puede declararse cumplido
+
+**Checkpoint**: con el reloj reducido en un ensayo, la sesión se amplía y se renueva sin
+perder lo escrito en dos pestañas. La evidencia automática y la del ensayo están en
+`session-limits.md`; la manual, pendiente.
 
 ---
 
@@ -299,6 +317,8 @@ FR-066, SC-005 y SC-032), antes de la fase 6. Ver las revisiones de
 - **Fase 9** depende de la fase 6 y de su dato.
 - **Fase 10**: T078 está hecha; el resto depende de la fase 7 y de sus datos.
 - **Fase 11**: T082 a T085 y T087 dependen de la fase 7; T086 es la última.
+- **Fase 12**: T088 a T090, completadas, dependían de los cimientos de identidad (T020 a
+  T028). T091 forma parte de T082.
 
 ### Qué puede ejecutarse y qué no
 
@@ -307,8 +327,8 @@ bloqueada.
 
 | Estado                                        | Tareas                                                                 |
 | --------------------------------------------- | ---------------------------------------------------------------------- |
-| Completadas                                   | T001–T064, T066–T073, T078, T083–T085, T087                            |
-| Empezada, sin cerrar                          | T082 (falta la evaluación con tecnología de apoyo)                     |
+| Completadas                                   | T001–T064, T066–T073, T078, T083–T085, T087–T090                       |
+| Empezada, sin cerrar                          | T082 (falta la evaluación con tecnología de apoyo), con T091           |
 | Ejecutable cuando T082 y T065 se cierren      | T086                                                                   |
 | Abierta por la referencia ajena               | T065 (falta un paquete completo de un tercero)                         |
 | Bloqueada por el dominio y el servidor        | T074                                                                   |
@@ -316,7 +336,7 @@ bloqueada.
 | Bloqueadas por el Moodle de pruebas           | T079; y por depender de ella, T080                                     |
 | Bloqueada por las tres anteriores             | T081, que depende de T074, T077 y T079                                 |
 
-De las 87 tareas, 77 están completadas, 1 está empezada y sin cerrar (T082), 1 espera a que se cierren T082 y T065 (T086), 1 está abierta a falta de un
+De las 91 tareas, 80 están completadas, 2 son la evaluación manual de accesibilidad, empezada y sin cerrar (T082 y T091), 1 espera a que se cierren T082 y T065 (T086), 1 está abierta a falta de un
 paquete de referencia completo de un tercero (T065) y 7 están bloqueadas. T086 no cierra la aceptación mientras quede alguna bloqueada. Ninguna evidencia
 de las tareas bloqueadas se simula: el recorrido con respuestas deterministas se registra
 como ensayo.

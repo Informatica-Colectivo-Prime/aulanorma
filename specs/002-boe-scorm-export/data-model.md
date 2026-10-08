@@ -141,7 +141,7 @@ la estrategia de comprobación aplicada, que no incluye los XSD (research R8).
 | Área         | Entidad             | Campos principales                                                                                                   | Reglas                                                                                    |
 | ------------ | ------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `identity`   | `User`              | `id`, `username`, `password_hash`, `password_params`, `roles`, `disabled`, `must_change_password`                    | `roles` ⊆ {`admin`, `teacher`}; puede estar vacío. Sin correo ni nombre real.             |
-| `identity`   | `Session`           | `id_hash`, `user_id`, `csrf_token`, `created_at`, `last_seen_at`, `expires_at`, `revoked_at`                         | Se guarda la huella del identificador. `user_id` vacío en la sesión previa de entrada.    |
+| `identity`   | `Session`           | `id_hash`, `user_id`, `csrf_token`, `created_at`, `last_seen_at`, `expires_at`, `revoked_at`, `replaced_by`                         | Se guarda la huella del identificador. `user_id` vacío en la sesión previa de entrada.    |
 | `identity`   | `SignInThrottle`    | `subject`, `failed_count`, `window_started_at`, `locked_until`                                                       | Contadores por cuenta y global para los intentos repetidos.                               |
 | `audit`      | `AuditEvent`        | `id`, `at`, `actor_id`, `action`, `target_kind`, `target_id`, `result`, `correlation_id`, `details`                  | Solo inserción, impuesta por disparadores (FR-028). Sin secretos ni contenido.            |
 | `generation` | `Budget`            | `project_limit`, `currency`, `revision`                                                                              | Fila única. Solo `admin` la modifica (FR-027).                                            |
@@ -166,6 +166,12 @@ altera las reservas existentes.
 la operación no llegó a enviarse; `sent → uncertain` si no hay consumo confirmado o si el
 proceso cae; `uncertain → settled` solo mediante una `Reconciliation`. Una reserva `sent` o
 `uncertain` nunca se libera.
+
+**Renovación de una sesión** (FR-072): al renovar la autenticación se inserta una sesión
+nueva y, en la misma transacción, la anterior queda revocada con `replaced_by` apuntando a la
+huella de la nueva. `replaced_by` no da ningún acceso: solo permite distinguir una petición
+que todavía llega con la sesión anterior de una sesión terminada, para no borrar la cookie
+nueva y devolver lo enviado. Migración `0010_session_renewal`.
 
 **Sesiones**: caducan por inactividad y por duración máxima; se revocan al cerrar sesión y al
 cambiar la contraseña, los perfiles o el estado de la cuenta. Los perfiles se leen de `User`

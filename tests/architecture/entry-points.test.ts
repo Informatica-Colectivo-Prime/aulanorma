@@ -402,6 +402,7 @@ describe("otros puntos de entrada", () => {
       "src/pages/api/outlines/resubmit.ts",
       "src/pages/api/references/check.ts",
       "src/pages/api/session/extend.ts",
+      "src/pages/api/session/renew.ts",
       "src/pages/api/session/sign-in.ts",
       "src/pages/api/session/sign-out.ts",
       "src/pages/api/syllabus/approve.ts",

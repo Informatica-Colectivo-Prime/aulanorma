@@ -1,151 +1,258 @@
 # Límites de tiempo de la sesión (WCAG 2.2.1)
 
-Fecha: 2026-10-08. Rama `feat/002-closing-tasks`.
+Fecha: 2026-10-08. Requisitos FR-071 a FR-073; criterios SC-047 y SC-048.
 
-Una sesión tiene dos límites, y son distintos:
+## Estado
 
-| Límite                         | Valor por defecto | Qué lo retrasa                                   | Estado frente a WCAG 2.2.1 |
-| ------------------------------ | ----------------- | ------------------------------------------------ | -------------------------- |
-| Inactividad                    | 30 minutos        | Cualquier petición con la sesión, o una ampliación | Aviso y ampliación, implementados |
-| Duración máxima desde la entrada | 12 horas        | Nada                                             | **Sin resolver**           |
+**WCAG 2.2.1 no se declara cumplido.** Los tres límites de tiempo tienen ya una salida
+implementada y probada en automático y en un ensayo con navegador, pero faltan las
+evidencias manuales con teclado, lector de pantalla y ampliación, y quedan puntos abiertos
+que se enumeran al final. Sustituir la sesión no acredita por sí solo el criterio.
 
-**WCAG 2.2.1 no se declara cumplido** mientras el segundo siga sin resolver.
+| Límite                             | Valor por defecto | Qué puede hacer el usuario                         | Estado                         |
+| ---------------------------------- | ----------------- | -------------------------------------------------- | ------------------------------ |
+| Inactividad                        | 30 minutos        | Ampliarla desde un aviso, dos minutos antes        | Implementado y ensayado        |
+| Duración máxima desde la entrada   | 12 horas          | Renovar la autenticación en la página, cinco minutos antes | Implementado y ensayado |
+| Formulario de entrada              | 15 minutos        | Nada: al enviarlo se pide un testigo vigente       | Implementado; sin aviso propio |
 
-## Inactividad: aviso y ampliación
+## Procedencia de los ensayos
 
-### Qué hace
+Todo lo que este documento llama ensayo se hizo en el equipo de desarrollo, con Chrome 154
+sin interfaz manejado por el protocolo de depuración, contra el proceso local de la
+aplicación (`npm run dev` en `127.0.0.1:3000`), con datos de ensayo y cuentas desechables.
+**No se ha ejecutado ni modificado nada en ningún servidor remoto**: el piloto no está
+desplegado.
+
+Los tiempos se redujeron para no esperar: un minuto de inactividad, por configuración, y el
+final de la sesión acercado a unos 50 segundos escribiendo directamente en la base de datos
+del ensayo. Con un minuto de inactividad los avisos aparecen 30 segundos antes, no dos ni
+cinco minutos.
+
+## Inactividad: aviso y ampliación (FR-071)
 
 - Dos minutos antes de caducar, o a la mitad del periodo si es más corto, cada página con
   sesión muestra un aviso al principio del documento, le lleva el foco y dice cuánto queda y
-  qué se pierde. Su único botón, «Continuar la sesión», amplía la sesión.
+  qué se pierde. Su botón, «Continuar la sesión», amplía la sesión.
 - La cuenta atrás se ve cada segundo. A la tecnología de apoyo solo se le anuncia al
   aparecer, al minuto, a los treinta segundos y a los diez.
 - Al ampliar, el aviso se oculta, se anuncia «Sesión ampliada» y el foco vuelve a donde
   estaba, con lo escrito intacto.
 - Si nadie hace nada, la página dice que la sesión ha terminado y que lo no enviado no se ha
-  guardado, y ofrece volver a entrar. No recarga ni redirige por su cuenta, para que pueda
-  copiarse lo que estuviera escrito.
+  guardado, y ofrece volver a entrar. No recarga ni redirige, para que pueda copiarse lo
+  escrito.
 
-### Quién decide
+**Decide el servidor.** `POST /api/session/extend` exige origen propio, sesión vigente y su
+testigo; responde 204 y se registra. No revive una sesión caducada, revocada, cerrada o de
+una cuenta desactivada, y no retrasa la duración máxima. El número de ampliaciones no está
+limitado: con los valores por defecto caben 23 seguidas antes de la duración máxima, y
+entonces se renueva.
 
-**El servidor.** La ampliación es la acción `POST /api/session/extend`, con las mismas
-exigencias que cualquier otra: origen propio, sesión viva y su testigo. Anota la actividad en
-ese instante, responde 204 y se registra en la auditoría. No revive una sesión caducada,
-revocada, cerrada o de una cuenta desactivada, y no retrasa la duración máxima.
+## Duración máxima: renovación en la propia página (FR-072 y FR-073)
 
-**El número de ampliaciones no está limitado.** Solo las acota la duración máxima: con los
-valores por defecto caben 23 seguidas sin ninguna otra actividad. Con otros valores pueden
-caber menos de diez: por ejemplo, con dos horas de inactividad y doce de duración máxima. Eso
-es consecuencia del segundo límite, no del aviso.
+Se mantienen las 12 horas por sesión. No se prolonga ninguna: **se sustituye**.
 
-### Qué no mantiene la sesión
+### Qué hace
 
-- El script del aviso no consulta al servidor. Su única petición es la que envía el usuario
-  al pulsar el botón. Una pestaña abierta, por sí sola, no hace nada y la sesión caduca.
-- Las pestañas se avisan entre sí por el almacenamiento local del navegador, sin pasar por el
-  servidor: la actividad o la ampliación en una retrasa el aviso en las demás, y salir en una
-  lo da por terminado en todas. Lo que una pestaña cuente a otra solo mueve su aviso: la
-  sesión vive o no según el servidor.
-- Si el servidor responde con un error interno a una ampliación, el aviso no da la sesión por
-  terminada: lo anuncia y deja reintentarlo.
-- Una petición rechazada por venir de otro origen se descarta antes de mirar la sesión y no
-  cuenta como actividad.
+- Cinco minutos antes del final, el aviso pide la contraseña y ofrece «Renovar la sesión».
+  El foco va al aviso, no al campo: lo que se estuviera tecleando no acaba en la contraseña.
+  Con Tabulador se llega al campo.
+- El campo es un campo de contraseña corriente: admite pegar y lo rellenan los gestores de
+  contraseñas, que encuentran además el nombre de la cuenta.
+- Si el servidor acepta, el testigo nuevo se pone en todos los formularios de la página, el
+  aviso se oculta, se anuncia «Sesión renovada» y el foco vuelve a donde estaba. La página no
+  se recarga y lo escrito sigue ahí. La contraseña no queda en la página.
+- Si la rechaza, lo dice en una alerta asociada al campo, que queda vacío y con el foco:
+  contraseña incorrecta, demasiados intentos o error interno, cada uno con su texto.
 
-### Cómo se ha probado
+### Qué hace el servidor
+
+`POST /api/session/renew` es una acción protegida como las demás.
+
+1. La guarda exige origen propio, una sesión vigente y su testigo. Sin eso no se llega a
+   comprobar la contraseña ni cuenta un intento.
+2. La identidad aplica **el mismo control de intentos que la entrada, con el mismo sujeto**:
+   los fallos de entrar y de renovar se suman, y el bloqueo vale para las dos.
+3. Comprueba la contraseña con el mismo coste que la entrada.
+4. Esa comprobación tarda. Al terminar, **dentro de una transacción**, vuelve a leer la
+   sesión y la cuenta: la sesión debe seguir vigente, la cuenta activa y su contraseña ser la
+   misma que se comprobó. Si algo ha cambiado, no renueva.
+5. En esa misma transacción crea la sesión nueva, con otro identificador, otro testigo y sus
+   propias 12 horas, revoca la anterior anotando cuál la sustituye, y registra el resultado.
+   O todo, o nada.
+
+Responde 200 con el testigo y los plazos nuevos y la cookie de la sesión nueva; 422, 429 o
+401 con el motivo y sin cookies; 500 sin cuerpo si falla, con la sesión como estaba.
+
+### Por qué no debilita la revocación
+
+- Renovar exige una sesión que el servidor aún reconoce **y** la contraseña vigente. Quien
+  tenga solo una cookie robada no gana nada frente a hoy.
+- Revocar las sesiones, cerrar la sesión, desactivar la cuenta y cambiar sus permisos o su
+  contraseña siguen cerrándolas todas, también una renovada. Si ocurre mientras se comprueba
+  la contraseña, la renovación no se hace.
+- Los permisos no viajan en la sesión: se leen de la cuenta en cada petición.
+- La sesión anterior no vuelve a servir: ni para páginas, ni para ampliar, ni para renovar.
+- Cada renovación y cada rechazo quedan en la auditoría, sin contraseñas, identificadores de
+  sesión ni testigos.
+
+### Varias pestañas
+
+- **Qué viaja entre pestañas**: por el almacenamiento local, solo dos cosas: cuándo caduca
+  la inactividad y el instante de la última renovación. **Nunca** contraseñas, cookies ni
+  testigos.
+- **Cómo consigue cada pestaña su testigo**: la que renueva lo recibe en la respuesta. Las
+  demás, al ver el instante de la renovación, piden una página propia
+  (`/account/password`) con la cookie nueva, que el navegador ya comparte, y leen de ella su
+  testigo y sus plazos. No piden la contraseña.
+- **Un formulario enviado antes de enterarse**: al enviar, si el testigo de la pestaña es
+  anterior a la última renovación, el envío espera, pide el testigo y sale con él y con el
+  mismo botón que se pulsó.
+- **Dos renovaciones a la vez**: solo una sustituye la sesión. La otra recibe un rechazo,
+  comprueba que la sesión sigue viva, toma el testigo vigente y continúa. No crea otra
+  sesión ni da nada por terminado.
+
+### Peticiones todavía en curso
+
+Entre que el servidor sustituye la sesión y el navegador recibe la cookie nueva, puede salir
+una petición con la sesión anterior; o con la cookie nueva y un testigo anterior.
+
+- **No se ejecutan.** Se registran como denegadas.
+- **No borran la cookie**, que ya es la de la sesión nueva. Antes se borraba al llegar una
+  sesión no vigente: tras una renovación habría cerrado la sesión recién creada.
+- **Lo enviado no se pierde**: la respuesta es una página con todo lo enviado, escapado, en
+  un formulario sin testigo. «Enviar de nuevo» lo completa con el de la sesión vigente y lo
+  envía.
+- **Nada se repite solo.** Esa página no se envía al cargarse, ni con el tiempo, ni cuando
+  otra pestaña renueva: solo al pulsar «Enviar de nuevo».
+- **Las contraseñas no se devuelven.** El cambio de contraseña y la propia renovación, si
+  llegan así, reciben una página sin formulario ni campos: hay que volver y escribirlas de
+  nuevo. Antes de la revisión final del PR #37 se devolvían como cualquier otro campo.
+- **La relación entre la sesión anterior y la nueva no da acceso.** El servidor solo la usa
+  para responder 409 en lugar de llevar a la entrada. Quien presente únicamente la cookie
+  anterior no recibe la cookie nueva, ni un testigo, ni datos de la sesión, con ningún
+  testigo que envíe. Las pestañas se recuperan porque el navegador ya tiene la cookie
+  vigente, y con ella piden una página propia.
+- Una subida de PDF en ese caso responde con un error y el fichero sigue elegido para
+  repetirla.
+
+## Actividad
+
+Cuenta como actividad una petición con una sesión vigente que **no** se rechaza por su
+origen ni por su testigo. Antes, una acción rechazada por su testigo retrasaba la caducidad;
+ya no. Una ampliación o una renovación rechazadas tampoco se anuncian a otras pestañas. La
+lectura del testigo tras una renovación sí es una petición aceptada: ocurre una vez por
+pestaña y por renovación, y la renovación ya es actividad expresa, con contraseña.
+
+## Formulario de entrada: 15 minutos
+
+El formulario de entrada lleva un testigo ligado a una sesión previa que dura 15 minutos.
+Pasado ese tiempo, enviarlo obligaba a escribir de nuevo usuario y contraseña.
+
+- **Con JavaScript**: si el formulario lleva más de cinco minutos abierto, al enviarlo pide
+  antes un testigo vigente y sale con él. Lo escrito se conserva y el límite deja de notarse.
+  No hay consultas mientras está abierto: una, al enviar.
+- **Sin JavaScript**: el servidor lo rechaza y vuelve a mostrar el formulario con el aviso
+  de que había caducado. Hay que escribir de nuevo las credenciales.
+
+No tiene aviso propio porque no hace falta ampliar nada: no hay límite que el usuario note.
+Queda como punto abierto el caso sin JavaScript.
+
+## Qué depende de JavaScript
+
+| Función                                               | Sin JavaScript                                                           |
+| ----------------------------------------------------- | ------------------------------------------------------------------------ |
+| Aviso de inactividad y ampliación                     | No hay aviso. La sesión caduca y la siguiente petición lleva a la entrada |
+| Aviso de duración máxima y renovación                 | No hay aviso ni renovación. La sesión termina y hay que entrar de nuevo   |
+| Testigo nuevo en los formularios y en otras pestañas  | No aplica: sin renovación no hay testigo nuevo                            |
+| «Enviar de nuevo» tras una petición en curso          | El formulario devuelto no tiene testigo y no puede enviarse               |
+| Formulario de entrada caducado                        | Se rechaza y hay que escribir de nuevo las credenciales                   |
+
+El resto de la aplicación funciona sin JavaScript, salvo la subida de un PDF. Con él
+desactivado, los límites de tiempo no tienen aviso ni salida: es un punto abierto.
+
+## Cómo se ha probado
 
 | Qué                                                                                   | Dónde                                                    |
 | ------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| Plazos, ampliación, más de diez ampliaciones, caducidad sin actividad, duración máxima, sesiones revocadas, cerradas o desactivadas | `tests/unit/platform/identity.test.ts` |
-| La acción por su ruta: 204, registro, CSRF, origen, método, sin sesión, contraseña inicial pendiente, dos sesiones independientes, caducidad real adelantando el reloj | `tests/contract/session.contract.test.ts` |
-| El script real sobre el marcado real, en un DOM simulado: aparición, foco, anuncios, petición enviada, ampliaciones repetidas, caducidad, red caída, varias pestañas y duración máxima | `tests/contract/session-warning.contract.test.ts` |
-| En Chrome sin interfaz, contra el proceso local de la aplicación, dos veces; la segunda, sobre el código final | Ensayo de más abajo |
+| Reglas de la sesión: plazos, ampliación, renovación, intentos compartidos con la entrada, caducidad y revocación durante la comprobación, cuenta desactivada, permisos y contraseña cambiados, dos renovaciones a la vez, fallo al guardar, testigo anterior, registro sin secretos | `tests/unit/platform/identity.test.ts` |
+| Las acciones por su ruta: respuestas, cookies, origen, testigo, sesión anterior que no revive, peticiones devueltas para repetir, fallo interno, actividad | `tests/contract/session.contract.test.ts` |
+| El script real sobre el marcado real, en un DOM simulado: avisos, foco, anuncios, peticiones enviadas, testigo nuevo, rechazos, varias pestañas, envíos que esperan, envío devuelto, formulario de entrada | `tests/contract/session-warning.contract.test.ts` |
+| En Chrome sin interfaz, contra el proceso local                                       | Ensayos de más abajo                                     |
 
-**Ensayo en navegador (2026-10-08).** Chrome 154 sin interfaz, manejado por el protocolo de
-depuración, contra `npm run dev` en `127.0.0.1:3000` en el equipo de desarrollo, con un
-minuto de inactividad para no esperar media hora y una cuenta desechable. No intervino ningún
-servidor remoto.
+Casos que pidió el mantenedor, y dónde están:
+
+| Caso                                   | Identidad | Ruta | Script | Ensayo |
+| -------------------------------------- | --------- | ---- | ------ | ------ |
+| Contraseña incorrecta                  | Sí        | Sí   | Sí     | Sí     |
+| Bloqueo por intentos                   | Sí        | Sí   | Sí     | Sí     |
+| Expiración durante la comprobación     | Sí        | —    | Sí     | —      |
+| Revocación concurrente                 | Sí        | Sí   | Sí     | —      |
+| Fallo interno                          | Sí        | Sí   | Sí     | —      |
+| Testigos antiguos                      | Sí        | Sí   | Sí     | Sí     |
+| Conservación del texto                 | —         | —    | Sí     | Sí     |
+| Dos renovaciones simultáneas           | Sí        | Sí   | Sí     | Sí     |
+| Peticiones en curso                    | —         | Sí   | Sí     | Sí     |
+
+### Ensayo de la renovación (2026-10-08)
+
+Dos pestañas con texto sin enviar, cuenta desechable.
 
 | Paso                                                                    | Observado                                                                       |
 | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Esperar con el foco en un campo con texto sin enviar                     | El aviso aparece a los 29 s, visible en pantalla, con el foco en «Continuar la sesión» y sin ninguna petición previa |
+| Esperar con el final de la sesión a 55 s                                 | El aviso de fin de sesión aparece a los 25 s en las dos pestañas, con el formulario de renovación y el foco en el aviso; ninguna petición previa |
+| Tabulador                                                                | El foco pasa al campo de contraseña                                             |
+| Contraseña equivocada e Intro                                            | 422; «La contraseña no es correcta», con el foco en el campo vacío; el testigo no cambia y la otra pestaña no hace nada |
+| Contraseña correcta, insertada de una vez, e Intro                       | 200; cookie y testigo distintos; todos los formularios de la página con el testigo nuevo; el texto sigue ahí; el foco vuelve a su campo; se anuncia «Sesión renovada» |
+| Almacenamiento local tras renovar                                        | Dos claves, con instantes; ni la contraseña, ni los testigos, ni las cookies    |
+| La otra pestaña                                                          | Una petición a una página propia; mismo testigo que la primera; su texto sigue ahí; «La sesión se ha renovado en otra pestaña» |
+| Pasado el final de la sesión anterior                                    | Las dos siguen vivas; la segunda amplía con su testigo nuevo (204)              |
+| Envío con la cookie y el testigo anteriores                              | 409, sin `Set-Cookie`; devuelve lo enviado en un formulario sin testigo         |
+| Página con la cookie anterior                                            | 409, sin `Set-Cookie`                                                           |
+| En el navegador, formulario con el testigo anterior (1)                  | 409 «Tu envío no se ha guardado todavía»; Intro sobre «Enviar de nuevo» pide el testigo y el servidor procesa el envío |
+| Tres contraseñas equivocadas y después la correcta                       | 422, 422, 422 y 429 «Demasiados intentos seguidos»                              |
+| Pasado el bloqueo, la correcta                                           | Renueva, y el texto sigue ahí                                                   |
+| Renovar en las dos pestañas a la vez                                     | Una recibe 200 y la otra 401; la segunda comprueba, toma el testigo vigente y sigue; mismo testigo en las dos, cada una con su texto; una sola sesión activa |
+| Auditoría del ensayo                                                     | 3 renovaciones correctas, 4 contraseñas incorrectas, 1 bloqueo, 1 rechazo por sesión terminada y 2 peticiones devueltas |
+| Migración                                                                | `0010_session_renewal` se aplicó al arrancar sobre una base de datos anterior   |
+
+(1) Este paso y el del envío con la cookie anterior se hicieron con el formulario de cambio
+de contraseña, antes de la revisión final. Desde ella ese formulario ya no se devuelve,
+porque lleva contraseñas, y **el ensayo en navegador no se ha repetido** con otro
+formulario: el reenvío queda cubierto solo por las pruebas automáticas, con el script real
+en un DOM simulado y por la ruta en el servidor.
+
+La consola de la pestaña que perdió la renovación simultánea anota la respuesta 401 como
+recurso fallido. No hubo ningún error de script.
+
+### Ensayo de la inactividad (2026-10-08)
+
+Hecho con la entrega anterior y repetido sobre el código de esta, con el mismo resultado.
+
+| Paso                                                                    | Observado                                                                       |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Esperar con el foco en un campo con texto sin enviar                     | El aviso aparece a los 29 s, con el foco en «Continuar la sesión» y sin ninguna petición previa |
 | Tabulador y Mayús+Tabulador                                              | El foco sale del aviso y vuelve a su botón; no queda atrapado                   |
-| Intro sobre el botón                                                     | Una petición, respuesta 204; el aviso se oculta, se anuncia «Sesión ampliada», el foco vuelve al campo y el texto sigue ahí |
-| Cargar una página en una segunda pestaña                                 | La primera no avisa cuando le tocaba; avisa 31 s después de esa carga           |
-| Espacio sobre el botón en la primera                                     | Se amplía; la segunda deja de avisar sin enviar nada                            |
-| Revocar las sesiones con `scripts/admin/users.mjs` y pulsar «Continuar» | «Tu sesión ha terminado», con el foco en «Volver a entrar»; la segunda pestaña lo muestra también, sin pedir nada |
-| Entrar de nuevo y no hacer nada                                          | A los 59 s la página dice que la sesión ha terminado, sin haber enviado ninguna petición; ir al inicio lleva a la entrada |
-| Consola del navegador                                                    | Sin errores                                                                     |
+| Intro y Espacio sobre el botón                                           | Una petición, 204; el aviso se oculta, el foco vuelve al campo y el texto sigue ahí |
+| Cargar una página en una segunda pestaña                                 | La primera avisa 31 s después de esa carga, no antes                            |
+| Revocar las sesiones con `scripts/admin/users.mjs` y pulsar «Continuar» | La pestaña comprueba una vez si la sesión sigue viva y, como no, «Tu sesión ha terminado» en las dos |
+| Entrar de nuevo y no hacer nada                                          | A los 59 s la página lo dice, sin peticiones; el servidor ya no reconoce la sesión |
 
-Es un ensayo con un navegador automatizado. **No acredita cómo anuncia el aviso un lector de
-pantalla**, ni su uso con otros navegadores: eso está en el recorrido manual de
-[`accessibility-walkthrough.md`](./accessibility-walkthrough.md).
+## Puntos sin resolver
 
-### Límites conocidos
-
-- **Sin JavaScript no hay aviso.** La sesión caduca igual y la siguiente petición lleva a la
-  entrada.
-- El aviso toma el foco. Quien esté escribiendo lo pierde un momento; al continuar vuelve al
-  mismo campo.
-- La sesión previa a la entrada, la del formulario de acceso, dura 15 minutos y no tiene
-  aviso: si caduca, el formulario se vuelve a pedir.
-- Una petición del propio origen con una sesión viva cuenta como actividad aunque se rechace
-  después por su testigo. No es una vía para mantener una sesión ajena: exige su cookie, que
-  el navegador no envía desde otro sitio.
-- Tras caducar, lo escrito y no enviado se pierde al salir de la página. El aviso lo dice.
-
-## Duración máxima de 12 horas: evaluación
-
-El aviso de inactividad no resuelve este límite: llegado el momento, la sesión termina
-aunque se esté usando y se haya ampliado. Hoy la interfaz lo avisa dos minutos antes, dice
-que no se puede ampliar y recomienda enviar o copiar lo pendiente. Eso informa, pero no da al
-usuario ninguna forma de seguir.
-
-WCAG 2.2.1 admite un límite si se puede desactivar, ajustar o ampliar, o si se da alguna de
-sus excepciones. Ninguna encaja sin más:
-
-- **Más de 20 horas.** No: son 12.
-- **Esencial.** Un límite absoluto acota el daño de una sesión robada, pero la norma pide que
-  ampliarlo invalide la actividad, y aquí no la invalida. Declararlo esencial sería una
-  decisión, no un hecho, y no la tomo yo.
-- **Tiempo real.** No aplica.
-
-### Opciones
-
-| Opción | Qué supone | Revocación | Trabajo pendiente | Coste |
-| ------ | ---------- | ---------- | ----------------- | ----- |
-| A. Subir la duración máxima por encima de 20 horas | Cambiar un valor de configuración; la aplicación admite hasta 168 | Intacta: las sesiones siguen siendo del servidor | No se pierde por este límite en una jornada | Ninguno de desarrollo. Alarga la vida de una sesión robada; la inactividad sigue cortándola a los 30 minutos |
-| B. Renovar la autenticación sin salir de la página | Antes del límite, el aviso pide la contraseña y, si es correcta, el servidor emite una sesión nueva y revoca la anterior | Intacta: solo renueva una sesión viva, con la contraseña, con el mismo freno de intentos que la entrada; revocar, desactivar o cambiar la contraseña sigue cerrándolo todo | Se conserva: la página sigue abierta y sus formularios reciben el testigo nuevo | Una acción nueva, cambio del script y pruebas |
-| C. Guardar borradores en el navegador | Lo escrito se guarda en el equipo y se recupera tras volver a entrar | Intacta | Se conserva, también tras caducar | Deja contenido en equipos compartidos; hay que acotarlo por cuenta y borrarlo al salir |
-
-### Propuesta
-
-**B, renovar la autenticación en la propia página, mientras la sesión sigue viva.**
-
-1. El aviso de la duración máxima, que ya existe, pasa a ofrecer «Renovar la sesión» con un
-   campo de contraseña, en vez de limitarse a informar.
-2. Una acción nueva, `POST /api/session/renew`, exige origen propio, sesión viva, su testigo
-   y la contraseña. La comprueba con el mismo coste y el mismo freno de intentos que la
-   entrada.
-3. Si es correcta, emite una sesión nueva, con identificador, testigo y duración máxima
-   nuevos, y **revoca la anterior en la misma transacción**. No se prolonga ninguna sesión:
-   se sustituye.
-4. La respuesta entrega el testigo nuevo y el script lo pone en los formularios de la
-   página, para que lo pendiente pueda enviarse. Las demás pestañas se enteran por el mismo
-   canal que ya usan y piden recargar.
-5. Si la sesión ya ha terminado, no hay renovación: se entra de nuevo, como hoy.
-
-**Por qué no debilita la revocación**: renovar exige una sesión que el servidor aún reconoce
-y la contraseña vigente. Una sesión revocada, de una cuenta desactivada o anterior a un
-cambio de contraseña no puede renovarse, y cada renovación queda en la auditoría. Quien robe
-una cookie sin la contraseña no gana nada frente a hoy.
-
-**Lo que B no resuelve**: quien no llegue a renovar a tiempo pierde lo no enviado. C lo
-cubriría, a cambio de dejar contenido en el navegador; lo dejaría fuera del piloto salvo que
-se pida.
-
-**A es una alternativa legítima y barata** si se prefiere no añadir código: con más de 20
-horas el límite queda dentro de una excepción expresa de la norma. Es una decisión de
-seguridad del mantenedor.
-
-No he implementado ninguna de las tres: cambian el modelo de sesión acordado en el ADR 0004 o
-su configuración, y necesitan decisión.
+1. **Evidencia manual.** Nadie ha recorrido el aviso, la ampliación y la renovación con un
+   lector de pantalla, solo con teclado en navegadores reales, ni con ampliación. Es la tarea
+   T091, parte de T082, con el recorrido de
+   [`accessibility-walkthrough.md`](./accessibility-walkthrough.md). Un navegador
+   automatizado no dice cómo se anuncia nada.
+2. **Sin JavaScript no hay aviso ni salida** para ninguno de los tres límites.
+3. **Tras terminar la sesión, lo no enviado se pierde** al salir de la página. El aviso lo
+   dice y deja copiarlo. Guardar borradores en el navegador se descartó.
+4. **El aviso toma el foco.** Quien esté escribiendo lo pierde un momento. Falta comprobar
+   con personas si resulta aceptable.
+5. **Cinco minutos para renovar.** Es un margen fijo. Falta comprobar si basta a quien
+   escribe despacio o usa un gestor de contraseñas con pasos adicionales.
+6. **Menos de diez ampliaciones con ciertas configuraciones**, por ejemplo dos horas de
+   inactividad y doce de máximo. Al llegar al máximo se puede renovar, pero la ampliación en
+   sí no llega a diez.
+7. **La renovación no reduce el coste de la contraseña**: tarda lo que una entrada. En el
+   equipo de desarrollo, menos de dos décimas de segundo; en el destino está sin medir.

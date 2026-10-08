@@ -655,6 +655,14 @@ ${appendOnly("package_export", "id = NEW.id")}
 ${appendOnly("package_download", "id = NEW.id")}
 `;
 
+// Renovación de la sesión (specs/002-boe-scorm-export: FR-071). Una sesión
+// renovada queda revocada y anota cuál la sustituye: así una petición que
+// todavía llega con ella se distingue de una sesión terminada, sin revivirla.
+const SESSION_RENEWAL = `
+ALTER TABLE session ADD COLUMN replaced_by TEXT;
+CREATE INDEX session_replaced_by ON session (replaced_by);
+`;
+
 export const PLATFORM_MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ id: "0001_audit_event", sql: AUDIT_EVENT }),
   Object.freeze({ id: "0002_identity", sql: IDENTITY }),
@@ -668,6 +676,7 @@ export const PLATFORM_MIGRATIONS: readonly Migration[] = Object.freeze([
   Object.freeze({ id: "0007_outline", sql: OUTLINE }),
   Object.freeze({ id: "0008_syllabus", sql: SYLLABUS }),
   Object.freeze({ id: "0009_content_export", sql: CONTENT_EXPORT }),
+  Object.freeze({ id: "0010_session_renewal", sql: SESSION_RENEWAL }),
 ]);
 
 // --- Almacén de ficheros direccionado por huella ---

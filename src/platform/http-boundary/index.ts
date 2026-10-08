@@ -78,6 +78,7 @@ export const ROUTES: readonly Route[] = Object.freeze([
   action("/api/session/sign-in", FORM_BODY),
   action("/api/session/sign-out", FORM_BODY),
   action("/api/session/extend", FORM_BODY),
+  action("/api/session/renew", FORM_BODY),
   action("/api/account/password", FORM_BODY),
   page("/documents"),
   page("/documents/new"),
