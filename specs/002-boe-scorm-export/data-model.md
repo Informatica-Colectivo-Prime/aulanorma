@@ -133,8 +133,8 @@ Las tablas son `package_export` y `package_download`. El paquete se guarda en el
 de datos, en `exports/`, con el identificador de su exportación como nombre, y se conserva
 aunque deje de ofrecerse (FR-053); al descargarlo se comprueba que su huella es la
 registrada. No contiene identidades de usuarios (FR-033). `validation_result` guarda el
-motivo de un fallo, los problemas hallados, si el contenido es de ensayo y que la validación
-contra los esquemas oficiales no se ejecutó.
+motivo de un fallo, los problemas hallados, si el contenido es de ensayo y el identificador de
+la estrategia de comprobación aplicada, que no incluye los XSD (research R8).
 
 ## Plataforma (`src/platform`)
 

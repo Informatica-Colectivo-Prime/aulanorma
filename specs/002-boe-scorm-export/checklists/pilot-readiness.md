@@ -221,3 +221,23 @@ ninguna prueba del producto**: el comportamiento se implementa y se comprueba en
 
 No queda ningún punto abierto en esta lista.
 
+
+## Revisión documental tras la sustitución de los XSD (2026-10-08)
+
+CHK034 se marcó cuando el criterio externo al generador era la validación del manifiesto
+contra los XSD de SCORM 1.2. Esa validación se sustituyó por decisión del mantenedor
+(research R8). El criterio externo es ahora otro, y más débil en lo que toca a la forma del
+manifiesto:
+
+| Antes                                   | Ahora                                                                    |
+| --------------------------------------- | ------------------------------------------------------------------------ |
+| XSD de SCORM 1.2                        | Analizador de XML mantenido y ajeno al generador                         |
+| Paquete de referencia ajeno             | Manifiesto de un tercero, sin modificar; falta un paquete completo (T065) |
+| Moodle, como comprobación de compatibilidad | Moodle, como **condición obligatoria de aceptación**                  |
+
+Qué comprueba cada mecanismo y qué queda fuera está en
+[`package-validation.md`](../package-validation.md). La marca no se ha tocado: corresponde
+a quien revisa decidir si la definición sigue siendo suficiente. No se ha añadido ni
+cambiado ningún requisito de la especificación: FR-037 y SC-011 piden validar la estructura
+del formato, sin nombrar los XSD, y la constitución pide validar el paquete contra las
+reglas del formato de exportación.

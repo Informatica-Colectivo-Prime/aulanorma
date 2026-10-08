@@ -174,6 +174,11 @@ los mismos. El ADR 0003 es independiente y trata de la cuarta capa.
   PDF tras la comprobación de viabilidad (research R4), en el servidor de destino y en la
   integración continua.
 - Origen de referencia y redistribución de los esquemas oficiales de SCORM 1.2 (research R8).
+  **Resuelta el 2026-10-08**: no se pudieron acreditar las condiciones de uso de los
+  esquemas, y el mantenedor sustituyó la validación con XSD por la lectura del manifiesto con
+  un analizador ajeno, las reglas del perfil exportado, pruebas negativas y referencias
+  ajenas, con la verificación en Moodle como condición obligatoria de aceptación. No equivale
+  a los XSD ni acredita conformidad completa con SCORM.
 
 **Nota de revisión (aceptación)**: antes de aceptarlo se corrigió la decisión 1, para
 recoger que las páginas escriben su respuesta con una plantilla propia, y se añadieron el área

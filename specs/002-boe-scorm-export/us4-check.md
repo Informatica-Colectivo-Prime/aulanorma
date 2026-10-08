@@ -1,8 +1,8 @@
 # Comprobación de la historia 4: exportación y descarga
 
-**Tareas**: T060 a T069 (T064 y T065, parciales) | **Fecha**: 2026-10-08 | **Datos del piloto**:
+**Tareas**: T060 a T069 (T065, parcial) | **Fecha**: 2026-10-08 | **Datos del piloto**:
 [pilot/README.md](./pilot/README.md) | **Historia anterior**: [us3-check.md](./us3-check.md) |
-**Esquemas**: [scorm-schemas.md](./scorm-schemas.md)
+**Qué se comprueba**: [package-validation.md](./package-validation.md)
 
 Registro de cómo se comprobó la fase 7 de `tasks.md`: de una versión aprobada del temario al
 paquete SCORM 1.2 descargable, con su vista previa, su comprobación, su huella, sus
@@ -24,8 +24,12 @@ retomar donde lo dejó y, con todos marcados, finalizar.
 
 - **Ninguna compatibilidad con Moodle.** El paquete no se ha importado en ninguna
   instalación. Las instrucciones y la página de exportación lo dicen. Es T079, bloqueada.
-- **Ninguna conformidad con los esquemas oficiales de SCORM 1.2.** Esa validación no se
-  ejecuta: la procedencia de los esquemas no está acreditada. T064 sigue abierta.
+- **Ninguna equivalencia con los XSD ni conformidad completa con SCORM 1.2.** La validación
+  con XSD se sustituyó por la lectura del manifiesto con un analizador ajeno, las reglas del
+  perfil exportado y referencias ajenas. Qué cubre y qué deja fuera está en
+  [package-validation.md](./package-validation.md).
+- **La aceptación.** La importación, el seguimiento, la reanudación y la finalización en un
+  Moodle real son su condición obligatoria, y siguen pendientes.
 - **Ningún temario real.** El contenido exportado en los ensayos son respuestas grabadas con
   un texto de relleno. El paquete, la vista previa, el historial y las instrucciones lo
   identifican como paquete de ensayo.
@@ -53,11 +57,14 @@ retomar donde lo dejó y, con todos marcados, finalizar.
 
 ## Decisiones tomadas al implementar
 
-- **Lector de XML propio y estricto** para releer el manifiesto, porque Node.js no trae uno y
-  `xmllint-wasm` no se ha instalado. Rechaza `DOCTYPE`, entidades propias e instrucciones de
-  procesamiento.
-- **El manifiesto no lleva `xsi:schemaLocation`** ni el paquete incluye los XSD: no pueden
-  redistribuirse mientras su licencia no esté acreditada.
+- **El manifiesto se lee con `@xmldom/xmldom`**, un analizador mantenido y ajeno al
+  generador. La primera versión de esta fase usaba un lector escrito a mano, que se retiró:
+  repetía las suposiciones de quien escribe el generador. El analizador es tolerante con
+  algunos errores de buena formación; están listados como pruebas y los que afectan al
+  manifiesto propio los rechazan reglas léxicas del perfil.
+- **El análisis sintáctico y las reglas del formato están en ficheros distintos**: `xml.ts`
+  no sabe nada de SCORM y `conformance.ts` no interpreta XML.
+- **El manifiesto no lleva `xsi:schemaLocation`** ni el paquete incluye ningún XSD.
 - **Exportaciones idénticas byte a byte** para una misma versión, aunque FR-036 solo exige
   contenido y estructura equivalentes.
 - **Paquete de ensayo**: lo es si alguno de sus temas salió del adaptador determinista o si
@@ -78,7 +85,8 @@ retomar donde lo dejó y, con todos marcados, finalizar.
 | Fichero                                             | Casos | Qué cubre                                                                                   |
 | --------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------- |
 | `tests/contract/scorm-runtime.contract.test.ts`     | 43    | Inicio, navegación, marcas, salida, reanudación, finalización, ausencia, fallos y retornos   |
-| `tests/contract/scorm-package.contract.test.ts`     | 54    | Generador, 27 paquetes incorrectos, fixture interno, manifiesto de un tercero y lector XML   |
+| `tests/contract/scorm-package.contract.test.ts`     | 71    | Generador, 52 paquetes incorrectos, ida y vuelta, fixture interno y manifiesto de un tercero |
+| `tests/unit/content-export/xml.test.ts`             | 41    | XML mal formado, espacios de nombres, referencias y tolerancias conocidas del analizador     |
 | `tests/unit/content-export/export-download.test.ts` | 24    | Vigencia y cobertura al exportar y descargar, fallos sin fichero, registros y conservación   |
 | `tests/integration/us4-export-download.test.ts`     | 10    | Escenarios 1 a 8 por las rutas reales, permisos, SC-014, SC-025 y SC-031                     |
 
@@ -138,7 +146,8 @@ enlaces de descarga fuera de la página. Se corrigió y se comprobó con otra ca
 
 ## Limitaciones
 
-- **T064 abierta**: sin validación contra los XSD oficiales.
+- **Sin validación contra los XSD**, por decisión: la comprobación no equivale a ella.
+- **T065 parcial**: ningún paquete completo de un tercero ha sido aceptado todavía.
 - **Moodle sin comprobar**: importación, seguimiento, reanudación y finalización reales.
 - **Accesibilidad**: el paquete usa encabezados jerárquicos, etiquetas de texto para la
   norma, el desarrollo y las marcas, foco visible y controles nativos. No se ha hecho una

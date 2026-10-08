@@ -191,8 +191,8 @@ huella y lo abre sin conexión.
 - [X] T061 [P] [US4] Escribir el contenido del paquete en `src/modules/content-export/package/`: `index.html` con todos los temas mediante el renderizador de T052, `assets/style.css` y `assets/app.js` con la navegación y el envoltorio mínimo de la API de SCORM 1.2, sin URL externas
 - [X] T062 [US4] Escribir `tests/contract/scorm-runtime.contract.test.ts` con `jsdom` y un doble de la API que aplica los límites del formato: inicio, `lesson_location`, `suspend_data` con mapa de bits, `exit=suspend`, `completed` solo tras «Finalizar», nunca `score` ni `passed`, ausencia de API con aviso, estado de otra versión descartado (SC-017)
 - [X] T063 [US4] Implementar el generador en `src/modules/content-export/build.ts`: manifiesto desde plantilla con escapado e identificador de versión, ZIP con `fflate` de entradas ordenadas y fechas fijas, máximo de 200 temas, huella SHA-256 del fichero final, sin datos de usuarios
-- [ ] T064 [US4] Implementar la conformidad en `src/modules/content-export/conformance.ts`: validación del manifiesto contra los XSD oficiales con `xmllint-wasm` (XSD en `tests/fixtures/scorm/xsd/` y en el recurso de ejecución, con su procedencia) y las reglas que los esquemas no expresan, releyendo el ZIP. **Parcial**: hechas las reglas propias al releer el ZIP; la validación contra los XSD queda pendiente de su procedencia y de sus condiciones de redistribución ([scorm-schemas.md](./scorm-schemas.md)), y `xmllint-wasm` no se ha instalado
-- [ ] T065 [US4] Escribir `tests/contract/scorm-package.contract.test.ts`: manifiestos y paquetes incorrectos hechos a mano que deben rechazarse, un paquete SCORM 1.2 de referencia no generado por AulaNorma que debe aceptarse, equivalencia entre dos exportaciones de la misma versión (SC-014), ausencia de URL externas, credenciales y datos de usuarios (SC-012, SC-015). **Parcial**: los casos que dependen de los XSD se añadirán con T064. La referencia ajena es el manifiesto SCORM 1.2 de `adapt-contrib-spoor`, sin modificar; un paquete completo publicado por un tercero sigue pendiente
+- [X] T064 [US4] Implementar la comprobación del paquete en `src/modules/content-export/conformance.ts` y `src/modules/content-export/xml.ts`, releyendo el ZIP: lectura del manifiesto con `@xmldom/xmldom`, un analizador mantenido y ajeno al generador, en la que cualquier diagnóstico es un rechazo; reglas del perfil SCORM 1.2 que exporta AulaNorma, separadas del análisis sintáctico; pruebas de XML mal formado, espacios de nombres, referencias, rutas y recursos en `tests/unit/content-export/xml.test.ts` y `tests/contract/scorm-package.contract.test.ts`; y `specs/002-boe-scorm-export/package-validation.md` con lo que comprueba cada mecanismo y lo que queda fuera. No equivale a validar contra los XSD ni acredita conformidad completa con SCORM; la aceptación exige la prueba en Moodle (T079). **Entregable anterior, sustituido el 2026-10-08**: «validación del manifiesto contra los XSD oficiales con `xmllint-wasm` (XSD en `tests/fixtures/scorm/xsd/` y en el recurso de ejecución, con su procedencia) y las reglas que los esquemas no expresan»; no se realizó, por no poder acreditarse las condiciones de uso de los esquemas ([scorm-schemas.md](./scorm-schemas.md); research R8)
+- [ ] T065 [US4] Escribir `tests/contract/scorm-package.contract.test.ts`: manifiestos y paquetes incorrectos hechos a mano que deben rechazarse, un paquete SCORM 1.2 de referencia no generado por AulaNorma que debe aceptarse, equivalencia entre dos exportaciones de la misma versión (SC-014), ausencia de URL externas, credenciales y datos de usuarios (SC-012, SC-015). **Parcial**: ya no depende de los XSD (research R8). La referencia ajena es el manifiesto SCORM 1.2 de `adapt-contrib-spoor`, sin modificar; un paquete completo publicado por un tercero sigue pendiente
 - [X] T066 [US4] Implementar exportar y descargar: exigen versión vigente y cobertura completa en cada petición, registran cada intento, no dejan fichero tras un fallo y deniegan la descarga de paquetes de versiones invalidadas, también con enlaces antiguos; pruebas en `tests/unit/content-export/export-download.test.ts`
 - [X] T067 [US4] Redactar las instrucciones de incorporación manual en `src/modules/content-export/instructions/`, en español claro, declarando que todavía no se ha comprobado ninguna versión de Moodle y que sustituir un paquete ya importado corresponde al usuario
 - [X] T068 [US4] Crear las páginas `src/pages/export/` (vista previa con aviso de que no acredita el seguimiento, exportar, huella, descarga del paquete y de las instrucciones, historial de exportaciones y descargas)
@@ -289,17 +289,16 @@ bloqueada.
 
 | Estado                                        | Tareas                                                                 |
 | --------------------------------------------- | ---------------------------------------------------------------------- |
-| Completadas                                   | T001–T063, T066–T069                                                   |
+| Completadas                                   | T001–T064, T066–T069                                                   |
 | Ejecutables, en este orden                    | T070–T073, T078, T082–T087                                             |
-| Abiertas por los esquemas y la referencia ajena | T064 (validación con XSD) y T065 (paquete completo de un tercero)    |
+| Abierta por la referencia ajena               | T065 (falta un paquete completo de un tercero)                         |
 | Bloqueada por el dominio y el servidor        | T074                                                                   |
 | Bloqueadas por el proveedor de generación     | T075; y por depender de ella, T076 y T077                              |
 | Bloqueadas por el Moodle de pruebas           | T079; y por depender de ella, T080                                     |
 | Bloqueada por las tres anteriores             | T081, que depende de T074, T077 y T079                                 |
 
-De las 87 tareas, 67 están completadas, 11 son ejecutables, 2 están abiertas a falta de una
-decisión sobre los esquemas y de un paquete de referencia de un tercero (T064 y T065) y 7
-están bloqueadas. T086 no cierra la aceptación mientras quede alguna bloqueada. Ninguna evidencia
+De las 87 tareas, 68 están completadas, 11 son ejecutables, 1 está abierta a falta de un
+paquete de referencia completo de un tercero (T065) y 7 están bloqueadas. T086 no cierra la aceptación mientras quede alguna bloqueada. Ninguna evidencia
 de las tareas bloqueadas se simula: el recorrido con respuestas deterministas se registra
 como ensayo.
 
@@ -314,7 +313,7 @@ Salen de [feasibility.md](./feasibility.md). No son tareas de código.
 | Ubicación de los datos del piloto                                          | `specs/002-boe-scorm-export/`            |
 | Instalación de qpdf en la integración continua, en Linux y en macOS        | Hecha en T032, como herramienta verificada |
 | Instalación de qpdf en el servidor de destino                              | Pendiente; se resuelve en T074           |
-| Origen de referencia y redistribución de los esquemas de SCORM 1.2         | Sin acreditar; ver `scorm-schemas.md`    |
+| Origen de referencia y redistribución de los esquemas de SCORM 1.2         | Sin objeto: XSD sustituidos (R8)         |
 | Límite de memoria total y corte de red de los procesos de análisis         | Pendiente; fase 8                        |
 
 ### Parallel Opportunities

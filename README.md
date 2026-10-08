@@ -369,9 +369,12 @@ Necesitas una versión del temario **aprobada y vigente** (apartado anterior). D
 
 Qué **no** acredita un paquete generado:
 
-- **Moodle.** No se ha importado en ninguna instalación. Las instrucciones lo dicen.
-- **Los esquemas oficiales de SCORM 1.2.** Esa validación no se ejecuta todavía; el motivo
-  está en [`scorm-schemas.md`](specs/002-boe-scorm-export/scorm-schemas.md).
+- **Moodle.** No se ha importado en ninguna instalación. Las instrucciones lo dicen. Esa
+  prueba es condición obligatoria para aceptar el paquete.
+- **Los esquemas XSD ni la conformidad completa con SCORM 1.2.** El paquete se comprueba con
+  un analizador de XML ajeno y con las reglas del perfil que exporta AulaNorma; qué cubre y
+  qué no está en
+  [`package-validation.md`](specs/002-boe-scorm-export/package-validation.md).
 - **Un temario real.** Con las respuestas de ensayo, el paquete se identifica como «Paquete
   de ensayo»: no lo uses con alumnado.
 

@@ -3,10 +3,14 @@
 **Fecha**: 2026-10-08 | **Tareas**: T011 y T064 | **Research**: [research.md](./research.md) (R8) |
 **Viabilidad**: [feasibility.md](./feasibility.md), apartado 3
 
-Qué se sabe, fichero a fichero, de los XSD con los que se validaría el manifiesto, y qué
-falta para poder usarlos. **Ningún XSD está en el repositorio ni en ningún paquete
-exportado, la validación contra ellos no se ejecuta y T064 sigue abierta.** Nada de este
-documento es un dictamen jurídico.
+> **Decisión posterior (2026-10-08)**. A la vista de este documento, el mantenedor sustituyó
+> la validación con XSD por otra estrategia ([package-validation.md](./package-validation.md);
+> research R8). Este documento se conserva como el motivo de esa sustitución. La alternativa
+> de diseño del final no se adoptó.
+
+Qué se sabe, fichero a fichero, de los XSD con los que se habría validado el manifiesto.
+**Ningún XSD está en el repositorio ni en ningún paquete exportado, y no se valida contra
+ellos.** Nada de este documento es un dictamen jurídico.
 
 ## Resultado
 
@@ -143,17 +147,14 @@ Lectura para cada uso:
   enlaza». Los ficheros de 2001 no enlazan a ninguna. Que esta licencia de hoy cubra
   aquellos ficheros es una interpretación razonable, no un hecho comprobado.
 
-## Qué se ha hecho en consecuencia
+## Qué se hizo en consecuencia
 
-- **No se incorpora ningún XSD**, ni se ha instalado `xmllint-wasm`.
-- **T064 sigue abierta.** Está hecha la parte que no depende de los esquemas.
-- Cada exportación registra que la validación contra los esquemas no se ejecutó, y la página
-  de exportación lo dice. Ningún texto del producto afirma conformidad con ellos.
-- La comprobación propia **no sustituye** a los esquemas: research R8 la considera circular
-  si es la única. Como contraste independiente se ha añadido el manifiesto SCORM 1.2 de un
-  tercero, sin modificar (véase `tests/fixtures/scorm/third-party/`).
+- **No se incorporó ningún XSD**, ni se instaló `xmllint-wasm`.
+- La validación con XSD dejó de formar parte del diseño. T064 se redefinió con su sustituto.
+- Ningún texto del producto afirma conformidad con los esquemas ni conformidad completa con
+  SCORM.
 
-## Alternativa de diseño que se propone
+## Alternativa de diseño que se propuso y no se adoptó
 
 **Obtener los cuatro esquemas en la preparación del entorno y validar solo allí donde se
 preparan**, sin incorporarlos al repositorio ni a ningún paquete.

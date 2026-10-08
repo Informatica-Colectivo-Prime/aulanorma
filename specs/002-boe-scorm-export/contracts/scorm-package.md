@@ -68,21 +68,34 @@ comprobación en un Moodle real es manual y está en [../quickstart.md](../quick
 - Ningún texto presenta la finalización como calificación, prueba de aprendizaje o
   acreditación, ni exige o mide tiempo (FR-046, FR-061).
 
-## Validación antes de ofrecer la descarga
+## Comprobación antes de ofrecer la descarga
 
 El paquete se relee desde el ZIP y se rechaza, sin dejar fichero descargable, si falla
 cualquiera de estas comprobaciones:
 
-1. **Esquemas oficiales**: el manifiesto es válido contra los XSD publicados de SCORM 1.2,
-   guardados con su procedencia.
-2. **Reglas que los esquemas no expresan**, tomadas de la especificación del formato:
-   manifiesto en la raíz; ficheros declarados y reales coincidentes; el recurso lanzable es
-   un SCO; ninguna URL externa; identificador de versión correcto; número de temas dentro del
-   máximo; ningún dato de usuarios.
+1. **Lectura del manifiesto** con un analizador de XML mantenido y ajeno al generador.
+   Cualquier diagnóstico del analizador es un rechazo.
+2. **Reglas del perfil que exporta AulaNorma**: manifiesto en la raíz; ficheros declarados y
+   reales coincidentes; un único recurso lanzable, que es un SCO; ninguna URL externa;
+   identificador de versión correcto; número de temas dentro del máximo; ningún dato de
+   usuarios; y forma restringida del manifiesto.
 
-Para que el validador no se limite a aceptar lo que produce el generador, las pruebas
-incluyen manifiestos y paquetes incorrectos hechos a mano, que debe rechazar, y un paquete
-SCORM 1.2 de referencia no generado por AulaNorma, que debe aceptar.
+Para que la comprobación no se limite a aceptar lo que produce el generador, las pruebas
+incluyen manifiestos y paquetes incorrectos hechos a mano, que debe rechazar, y referencias
+no generadas por AulaNorma, que debe aceptar.
+
+**Esto no es una validación contra los XSD de SCORM 1.2 ni acredita conformidad completa con
+SCORM.** La lista exacta de lo que se comprueba y de lo que queda fuera está en
+[../package-validation.md](../package-validation.md).
+
+**Condición de aceptación**: que el paquete se importe en un Moodle real y que allí
+funcionen el seguimiento, la reanudación y la finalización (SC-018 a SC-023). Es obligatoria
+y ninguna comprobación automática la sustituye.
+
+> **Historial**. Hasta el 2026-10-08 el primer punto era la validación del manifiesto contra
+> los XSD publicados de SCORM 1.2, guardados con su procedencia. Se sustituyó por decisión
+> del mantenedor al no poder acreditarse las condiciones de uso de esos esquemas
+> ([../scorm-schemas.md](../scorm-schemas.md); research R8).
 
 ## Pruebas automáticas previstas
 
