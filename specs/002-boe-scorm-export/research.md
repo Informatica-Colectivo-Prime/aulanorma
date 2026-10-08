@@ -134,6 +134,31 @@ seudónimos, sin correo ni nombre real.
 **[por verificar]**: coste de `scrypt` con esos parámetros en el servidor de destino, y que
 la página de entrada puede servirse sin recursos estáticos protegidos.
 
+> **Límites de tiempo de la sesión (2026-10-08)**. Decisión del mantenedor tras la revisión
+> de accesibilidad (WCAG 2.2.1), que añade FR-071 a FR-073:
+>
+> - **Inactividad**: aviso accesible dos minutos antes y ampliación expresa, decidida por el
+>   servidor. Sin consultas automáticas.
+> - **Duración máxima**: se mantienen las 12 horas por sesión. Al acercarse, la
+>   autenticación se renueva en la propia página con la contraseña: una sesión nueva
+>   sustituye a la anterior, que queda revocada en la misma transacción. Se descartaron subir
+>   el máximo por encima de 20 horas, que alarga la vida de una sesión robada, y guardar
+>   borradores en el navegador, que deja contenido en equipos compartidos.
+> - **Por qué no debilita la revocación**: renovar exige una sesión que el servidor aún
+>   reconoce y la contraseña vigente, con el control de intentos de la entrada. Revocar,
+>   desactivar la cuenta, cambiar sus permisos o su contraseña siguen cerrando todas las
+>   sesiones, también una renovada, y lo que ocurra mientras se comprueba la contraseña se
+>   vuelve a leer antes de sustituir nada.
+> - **Testigo de los formularios**: es de la sesión, así que cambia al renovar. La pestaña
+>   que renueva lo recibe en la respuesta; las demás solo reciben, por el almacenamiento
+>   local, el instante de la renovación, y cada una pide una página propia para leer el
+>   suyo. En el almacenamiento local nunca hay contraseñas, identificadores ni testigos.
+> - **Peticiones en curso**: una que llega con la sesión o el testigo anteriores no se
+>   ejecuta ni borra la cookie nueva; se devuelve lo enviado para repetirlo.
+>
+> El detalle, las pruebas y lo que queda sin resolver están en
+> [`session-limits.md`](./session-limits.md). No añade dependencias.
+
 ## R3. Superficie de entrega
 
 > **Resultado de la implementación (2026-10-07)**. Las páginas escriben su respuesta completa

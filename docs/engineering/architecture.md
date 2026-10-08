@@ -155,13 +155,22 @@ permisos. Cualquier error, aviso o resultado no comprobable acaba en rechazo, y 
 nunca se modifica. Es contención, no un aislamiento de seguridad. La revisión de lo extraído
 es siempre humana.
 
-### Caducidad de la sesión
+### Límites de tiempo de la sesión
 
-Una sesión caduca por inactividad y, aparte, termina al alcanzar su duración máxima. Antes de
-lo primero, cada página avisa y ofrece ampliarla con `POST /api/session/extend`, una acción
-protegida como las demás: el servidor decide, y el script del documento no hace ninguna
-consulta por su cuenta. La duración máxima no se amplía. El detalle, las pruebas y lo que
-queda sin resolver están en
+Una sesión caduca por inactividad y, aparte, termina al alcanzar su duración máxima. Las dos
+cosas las decide el servidor; el script del documento no hace ninguna consulta por su cuenta.
+
+- **Inactividad**: antes de caducar, cada página avisa y ofrece ampliar la sesión con
+  `POST /api/session/extend`. Cuenta como actividad una petición con sesión vigente que no se
+  rechaza por su origen ni por su testigo.
+- **Duración máxima**: al acercarse, la página pide la contraseña y renueva la autenticación
+  con `POST /api/session/renew`. La identidad crea una sesión nueva y revoca la anterior en
+  la misma transacción; no prolonga ninguna. El testigo nuevo llega a los formularios de la
+  página sin recargarla, y las demás pestañas leen el suyo de una página propia.
+- **Peticiones con la sesión o el testigo anteriores**: no se ejecutan ni borran la cookie
+  nueva; las guardas devuelven lo enviado para repetirlo.
+
+El detalle, las pruebas, lo que depende de JavaScript y lo que queda sin resolver están en
 [`session-limits.md`](../../specs/002-boe-scorm-export/session-limits.md).
 
 ### Historial y métricas

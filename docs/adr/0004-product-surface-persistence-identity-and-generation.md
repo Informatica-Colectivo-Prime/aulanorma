@@ -180,6 +180,17 @@ los mismos. El ADR 0003 es independiente y trata de la cuarta capa.
   ajenas, con la verificación en Moodle como condición obligatoria de aceptación. No equivale
   a los XSD ni acredita conformidad completa con SCORM.
 
+**Nota fechada (2026-10-08, límites de tiempo de la sesión)**: por decisión del mantenedor,
+tras la revisión de accesibilidad, la identidad añade dos operaciones sin cambiar el modelo
+de sesiones en el servidor ni sus límites de 30 minutos y 12 horas. Una **amplía** la
+inactividad a petición expresa del usuario. La otra **renueva la autenticación** en la propia
+página con la contraseña: crea una sesión nueva y revoca la anterior en la misma
+transacción, con el control de intentos de la entrada. No se prolonga ninguna sesión, y
+revocar, desactivar la cuenta o cambiar sus permisos o su contraseña siguen cerrándolas
+todas. La tabla de sesiones gana una columna que anota qué sesión sustituyó a otra, sin dar
+acceso. Requisitos FR-071 a FR-073; detalle en
+[`session-limits.md`](../../specs/002-boe-scorm-export/session-limits.md).
+
 **Nota de revisión (aceptación)**: antes de aceptarlo se corrigió la decisión 1, para
 recoger que las páginas escriben su respuesta con una plantilla propia, y se añadieron el área
 `web` y tres puntos a la lista de sustituciones del ADR 0001. Lo descubrió la implementación.

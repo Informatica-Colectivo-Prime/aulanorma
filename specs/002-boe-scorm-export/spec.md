@@ -177,6 +177,24 @@ del mantenedor, recibidas ese mismo día sin pregunta previa.
   por sí solos, y una operación incierta conserva su reserva, no se reenvía automáticamente
   y sigue el procedimiento de conciliación.
 
+### Session 2026-10-08
+
+Decisiones expresas del mantenedor sobre los límites de tiempo de la sesión, tomadas al
+revisar la accesibilidad (WCAG 2.2.1). No responden a una pregunta formal.
+
+- Decisión del mantenedor (caducidad por inactividad): antes de que una sesión caduque por
+  inactividad, la página lo avisa de forma accesible, dos minutos antes, con una acción
+  expresa para continuar. La ampliación la decide el servidor, con sesión vigente y
+  comprobación de petición falsificada, y admite al menos diez ampliaciones. Ni una consulta
+  automática ni una pestaña abierta mantienen la sesión.
+- Decisión del mantenedor (duración máxima): se mantiene el máximo de 12 horas por sesión.
+  Para seguir trabajando al alcanzarlo, la autenticación se renueva en la propia página con
+  la contraseña actual: se crea una sesión nueva y se revoca la anterior. No se prolonga
+  ninguna sesión. Se descartan subir el máximo por encima de 20 horas y guardar borradores
+  en el navegador.
+- Decisión del mantenedor (actividad): una acción rechazada por su origen o por su testigo
+  no cuenta como actividad ni se anuncia a otras pestañas.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Incorporar el documento oficial y revisar su interpretación (Priority: P1)
@@ -440,6 +458,15 @@ las instrucciones, se recorre con un alumno de prueba, se abandona, se reanuda y
   aceptado. No se promete más, y lo observado en Moodle se anota en la comprobación manual.
 - Se rechaza un tema de un temario ya aprobado en parte: el tema queda como borrador con su
   motivo, y la versión no puede aprobarse hasta que vuelva a revisión y se apruebe.
+- Una sesión alcanza su duración máxima mientras el docente edita un tema: unos minutos
+  antes la página se lo avisa y le pide la contraseña; al darla, sigue trabajando en la misma
+  página, con lo escrito intacto. Si no la da a tiempo, la sesión termina y lo no enviado no
+  se guarda.
+- El docente renueva la sesión en una pestaña con otra abierta: la otra continúa con la
+  sesión nueva sin pedirle la contraseña, y un formulario suyo enviado justo en ese momento
+  ni se ejecuta con la sesión anterior ni se pierde.
+- Se revoca la sesión, o se desactiva la cuenta, mientras se comprueba la contraseña de una
+  renovación: no se renueva nada.
 - Se hace una copia de seguridad mientras hay una generación en curso: tras restaurarla, esa
   operación figura como de resultado incierto y sigue contando contra el presupuesto.
 - El alumno inicia un intento nuevo en Moodle: el recorrido del intento anterior no se
@@ -646,6 +673,31 @@ las instrucciones, se recorre con un alumno de prueba, se abandona, se reanuda y
   sus permisos; un cambio de permisos se aplica desde la siguiente petición. La entrada DEBE
   protegerse frente a intentos repetidos y frente a peticiones falsificadas, y su mensaje de
   error NO DEBE revelar si una cuenta existe.
+- **FR-071**: Antes de que una sesión caduque por inactividad, cada página con sesión DEBE
+  avisarlo de forma accesible, al menos dos minutos antes o a la mitad del periodo si este es
+  más corto, y ofrecer una acción expresa para continuar. La ampliación DEBE decidirla el
+  servidor, exigir origen propio, una sesión vigente y su testigo, y poder repetirse al menos
+  diez veces mientras lo permita la duración máxima. NO DEBE revivir una sesión caducada o
+  revocada ni retrasar la duración máxima. Ninguna consulta automática ni la mera presencia
+  de una pestaña abierta DEBEN mantener viva una sesión. Una acción rechazada por su origen
+  o por su testigo NO DEBE contar como actividad.
+- **FR-072**: Al acercarse la duración máxima, la página DEBE ofrecer renovar la
+  autenticación sin salir de ella. La renovación DEBE exigir origen propio, una sesión
+  todavía vigente, su testigo y la contraseña actual, con el mismo control de intentos que
+  la entrada. Si es correcta, DEBE crear una sesión nueva, con otro identificador, otro
+  testigo y su propia duración máxima, y revocar la anterior, las dos cosas o ninguna. NO
+  DEBE renovarse una sesión caducada, revocada, de una cuenta desactivada o cuya contraseña
+  o permisos hayan cambiado, tampoco si eso ocurre mientras se comprueba la contraseña. La
+  sesión anterior NO DEBE volver a servir por ninguna vía. El resultado DEBE registrarse sin
+  contraseñas, identificadores de sesión ni testigos.
+- **FR-073**: Tras una renovación, los formularios abiertos, también en otras pestañas,
+  DEBEN poder continuar con la sesión nueva sin recargar la página ni perder lo escrito, y
+  sin que el navegador guarde contraseñas, identificadores de sesión ni testigos fuera de la
+  memoria de la página. Una petición que llegue con la sesión o el testigo anteriores a la
+  renovación NO DEBE ejecutarse ni hacer perder la sesión nueva, y lo enviado DEBE poder
+  repetirse con ella. La caducidad del formulario de entrada NO DEBE obligar a repetir lo
+  escrito. Lo que de esto dependa de la ejecución de scripts en el navegador DEBE estar
+  documentado.
 - **FR-027**: La capacidad de aprobar y la de exportar DEBEN poder concederse solo a docentes
   autorizados, y un usuario sin esa capacidad NO DEBE poder ejercerla por ninguna vía. Solo el
   administrador DEBE poder fijar y modificar el límite de coste del proyecto; el docente
@@ -842,6 +894,18 @@ Esta funcionalidad los necesita; su elección técnica corresponde al plan.
   inactividad, tras la duración máxima, al cerrarla, al cambiar la contraseña, al desactivar
   la cuenta y al cambiar sus permisos. Sin sesión, solo responde la entrada, que no devuelve
   ningún dato de producto. En el piloto desplegado, ninguna operación responde sin HTTPS.
+- **SC-047**: En una prueba con el reloj controlado, el aviso de inactividad aparece antes de
+  la caducidad y recibe el foco; la sesión puede ampliarse más de diez veces seguidas sin
+  otra actividad; sin ampliarla caduca a su hora en el 100 % de los casos, y ninguna petición
+  sale de la página sin una acción del usuario. Una ampliación rechazada por su origen o su
+  testigo no retrasa la caducidad.
+- **SC-048**: Una renovación con la contraseña correcta sustituye la sesión y permite enviar,
+  sin recargar, lo que estaba escrito, en esa pestaña y en otra. En el 100 % de los casos
+  probados (contraseña incorrecta, bloqueo por intentos, caducidad o revocación durante la
+  comprobación, cuenta desactivada, permisos cambiados, dos renovaciones a la vez y fallo
+  interno) no queda más de una sesión nueva ni vuelve a servir la anterior, y ni el registro
+  ni el almacenamiento del navegador contienen contraseñas, identificadores de sesión ni
+  testigos.
 - **SC-040**: Una copia de seguridad hecha con operaciones en curso se restaura en un entorno
   limpio: el servicio arranca, el 100 % de las referencias tienen su fichero con la huella
   correcta, las generaciones que estaban enviadas figuran como inciertas y ninguna sesión

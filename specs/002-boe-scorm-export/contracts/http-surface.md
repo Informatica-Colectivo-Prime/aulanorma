@@ -164,6 +164,8 @@ tamaño máximo configurado.
 | Comprobar estado (`GET /api/health`)         | ninguno           | Contrato de 001, sin cambios                                       | —                          |
 | Ver el formulario de entrada e iniciar sesión | ninguno          | Testigo de la sesión previa; retraso y bloqueo por intentos; auditado | FR-026, FR-054          |
 | Cerrar sesión y cambiar la contraseña        | sesión            | Cambiar la contraseña revoca las demás sesiones                    | FR-026                     |
+| Ampliar la sesión (`POST /api/session/extend`) | sesión          | Responde 204; no revive ni retrasa la duración máxima              | FR-071                     |
+| Renovar la autenticación (`POST /api/session/renew`) | sesión    | Contraseña actual y control de intentos de la entrada; responde con datos | FR-072, FR-073      |
 | Registrar documento (cuerpo `application/pdf`) | `teacher`       | Validación del fichero; opcionalmente, documento al que sustituye | FR-001 a FR-003, FR-067    |
 | Ver documento, página y texto extraído       | `teacher`         | —                                                                  | FR-008                     |
 | Resolver página sin texto                    | `teacher`         | Confirmación expresa                                               | FR-064                     |
@@ -191,6 +193,39 @@ tamaño máximo configurado.
 | Conciliar una operación incierta             | `admin`           | Registra actor, fecha e importe confirmado                         | FR-021, FR-028             |
 
 `admin` no incluye `teacher`: una persona puede tener ambos perfiles.
+
+## Respuestas de la renovación
+
+`POST /api/session/renew` responde al script de la página, no con una redirección:
+
+| Estado | Cuándo                                                                 | Cuerpo y cookies                                                    |
+| ------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| 200    | Contraseña correcta                                                    | JSON con el testigo nuevo y los plazos; `Set-Cookie` con la sesión nueva |
+| 422    | Contraseña incorrecta                                                  | JSON con el motivo; sin cookies                                     |
+| 429    | Bloqueo por intentos, compartido con la entrada                        | JSON con el motivo; sin cookies                                     |
+| 401    | La sesión dejó de estar vigente mientras se comprobaba la contraseña   | JSON con el motivo; sin cookies                                     |
+| 403    | Origen ajeno o testigo que no es de la sesión                          | Sin cuerpo; no se comprueba la contraseña ni cuenta un intento      |
+| 303    | Sin sesión, o con una sesión caducada, revocada o desactivada          | Lleva a la entrada                                                  |
+| 500    | Fallo interno                                                          | Sin cuerpo; la sesión queda como estaba                             |
+
+## Peticiones que llegan con una sesión o un testigo anteriores a una renovación
+
+Valen para todas las rutas con sesión. Ninguna se ejecuta, y ninguna borra la cookie de
+sesión, que ya es la de la sesión nueva.
+
+- **Acción con la cookie de la sesión sustituida**, o **con la cookie nueva y el testigo de
+  la sesión sustituida**: 409 con una página que devuelve lo enviado en un formulario sin
+  testigo. El script lo completa con el de la sesión vigente antes de enviarlo de nuevo. Se
+  registra como petición denegada.
+- **Página con la cookie de la sesión sustituida**: 409 con una página que pide volver a
+  cargarla.
+- Un testigo que no es ni el de la sesión ni el de la que esta sustituyó sigue siendo un 403
+  sin cuerpo.
+
+## Actividad
+
+Cuenta como actividad una petición con una sesión vigente que no se rechaza por su origen ni
+por su testigo. Las rechazadas no retrasan la caducidad por inactividad.
 
 ## Pruebas de contrato previstas
 

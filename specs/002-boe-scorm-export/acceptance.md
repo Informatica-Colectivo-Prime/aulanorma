@@ -31,8 +31,8 @@ quien lo cambia la enlaza. Nadie ha validado el piloto.
 
 ## Criterios
 
-La tarea T078 nombra los criterios SC-001 a SC-041. La especificación tiene hoy 46, hasta
-SC-046: se incluyen todos.
+La tarea T078 nombra los criterios SC-001 a SC-041. La especificación tiene hoy 48, hasta
+SC-048: se incluyen todos.
 
 | Criterio | Resumen | Estado | Evidencia |
 | -------- | ------- | ------ | --------- |
@@ -82,6 +82,8 @@ SC-046: se incluyen todos.
 | SC-044 | El 100 % de las generaciones registradas indican el proveedor, el modelo, la versión del prompt, el coste estimado y si el resultado fue válido | Pendiente | — |
 | SC-045 | Una comprobación automática no encuentra los códigos del certificado ni de la unidad formativa del piloto en el código del producto ni en sus… | Pendiente | — |
 | SC-046 | Con un tema de prueba cuyo texto contiene marcado HTML y código de script, el 100 % de las vistas del producto y el paquete exportado lo muestran… | Pendiente | — |
+| SC-047 | En una prueba con el reloj controlado, el aviso de inactividad aparece antes de la caducidad y recibe el foco, y la sesión puede ampliarse más de diez veces | Pendiente | — |
+| SC-048 | Una renovación con la contraseña correcta sustituye la sesión y permite enviar, sin recargar, lo que estaba escrito, en esa pestaña y en otra | Pendiente | — |
 
 El texto completo y vinculante de cada criterio es el de `spec.md`; el resumen solo ayuda a
 localizarlo.
