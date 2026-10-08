@@ -380,6 +380,30 @@ Qué **no** acredita un paquete generado:
 
 El detalle está en [`us4-check.md`](specs/002-boe-scorm-export/us4-check.md).
 
+### 3 septies. Consultar el historial y las métricas
+
+- «Historial», en la cabecera, lista los documentos, las interpretaciones, los índices y los
+  temas. La página de cada uno reúne por orden de fecha quién hizo cada cosa, cuándo y con qué
+  resultado: correcciones, validaciones, aprobaciones, rechazos con su motivo, generaciones,
+  exportaciones y descargas. Es de solo lectura, para docente y administración.
+- «Métricas», solo para administración, cuenta errores, latencia de las llamadas de
+  generación, coste y estado de las exportaciones a partir de lo ya registrado. No hay
+  series temporales ni alertas, y con las respuestas de ensayo las cifras no son las de
+  ningún proveedor.
+
+### 3 octies. Copiar y restaurar los datos
+
+```bash
+NODE_ENV=development node scripts/ops/backup.mjs <directorio de copias>
+node scripts/ops/verify-restore.mjs <copia> <directorio limpio>
+```
+
+El primero copia la base de datos y los ficheros sin detener el servicio y verifica la copia;
+el segundo la restaura en un directorio vacío, la comprueba, revoca las sesiones y deja como
+inciertas las generaciones que estaban enviadas. El procedimiento completo, con el
+despliegue, está en [`deployment.md`](docs/engineering/deployment.md). No se ha ejecutado en
+ningún servidor.
+
 ### 4. Comprobar el rechazo de una configuración inválida
 
 En desarrollo, con un valor inválido en la terminal, que prevalece sobre

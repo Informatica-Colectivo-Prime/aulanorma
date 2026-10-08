@@ -242,7 +242,7 @@ llamada de pago antes.
 **Independent Test**: el paquete del piloto, incorporado siguiendo solo las instrucciones, se
 recorre, se abandona, se reanuda y se finaliza con un alumno de prueba.
 
-- [ ] T078 [US5] Crear `specs/002-boe-scorm-export/acceptance.md` con una fila por criterio (SC-001 a SC-041), todos en «Pendiente», y la plantilla de evidencia de la parte 3 de `quickstart.md`
+- [X] T078 [US5] Crear `specs/002-boe-scorm-export/acceptance.md` con una fila por criterio (SC-001 a SC-041), todos en «Pendiente», y la plantilla de evidencia de la parte 3 de `quickstart.md`
 - [ ] T079 [US5] ⛔ BLOQUEADA (Moodle de pruebas y su versión) Ejecutar la parte 3 de `quickstart.md` y registrar en `acceptance.md` la versión exacta de Moodle, la configuración de la actividad, la fecha, la huella del paquete y el resultado de cada paso (SC-018 a SC-023), incluidos los fallidos
 - [ ] T080 [US5] ⛔ BLOQUEADA (T079) Actualizar las instrucciones de T067 para nombrar únicamente la versión y la configuración verificadas
 - [ ] T081 ⛔ BLOQUEADA (T074, T077 y T079) Ejecutar el recorrido funcional de la parte 2 de `quickstart.md` por HTTPS y con el proveedor real, y registrar en `acceptance.md` quién lo ejecuta y con qué perfil (SC-024); un recorrido con respuestas simuladas se anota como ensayo, no como aceptación
@@ -251,12 +251,20 @@ recorre, se abandona, se reanuda y se finaliza con un alumno de prueba.
 
 ## Phase 11: Polish y cierre
 
+Estado a 2026-10-08. T083, T084, T085 y T087 están hechas. **T082 está empezada y no se
+cierra**: [`accessibility.md`](./accessibility.md) registra lo comprobado por lectura del
+marcado, pruebas automáticas y cálculo de contraste, con tres defectos corregidos; falta la
+evaluación con teclado, lector de pantalla y ampliación en navegadores reales. **T086 no se
+ha ejecutado**: es la última, y no se completa mientras T082 siga abierta y T065 pendiente.
+T085 expone las métricas en una página de administración; su alcance y sus límites están en
+la propia página y en `docs/engineering/architecture.md`.
+
 - [ ] T082 [P] Ejecutar la lista de comprobación WCAG 2.2 AA sobre la interfaz y sobre el paquete, registrarla en `specs/002-boe-scorm-export/accessibility.md` y corregir lo que falle
-- [ ] T083 [P] Revisar todos los textos de interfaz, errores e instrucciones: español claro, sin jerga, sin afirmar compatibilidad, calificación, acreditación ni evaluación pedagógica
-- [ ] T084 [P] Actualizar `README.md`, `docs/engineering/architecture.md` y `docs/engineering/quality-controls.md` con la estructura y los controles nuevos
-- [ ] T085 Ampliar `tests/architecture/no-domain-specifics.test.ts` para las áreas y módulos nuevos (SC-045), y añadir las métricas mínimas del principio XI (errores, latencia, coste de generación y estado de exportaciones) a partir de los registros existentes
+- [X] T083 [P] Revisar todos los textos de interfaz, errores e instrucciones: español claro, sin jerga, sin afirmar compatibilidad, calificación, acreditación ni evaluación pedagógica
+- [X] T084 [P] Actualizar `README.md`, `docs/engineering/architecture.md` y `docs/engineering/quality-controls.md` con la estructura y los controles nuevos
+- [X] T085 Ampliar `tests/architecture/no-domain-specifics.test.ts` para las áreas y módulos nuevos (SC-045), y añadir las métricas mínimas del principio XI (errores, latencia, coste de generación y estado de exportaciones) a partir de los registros existentes
 - [ ] T086 Ejecutar `npm run check` y `npm run verify:negative`, y completar en `acceptance.md` los criterios automáticos con su evidencia, dejando en «Pendiente» los que dependan de tareas bloqueadas; esta tarea no cierra la aceptación mientras quede alguna
-- [ ] T087 Crear `src/pages/history/` con el historial consultable de cada elemento (correcciones, validaciones, aprobaciones, rechazos con su motivo, generaciones, exportaciones y descargas) para `teacher` y `admin`, con pruebas en `tests/integration/history.test.ts`
+- [X] T087 Crear `src/pages/history/` con el historial consultable de cada elemento (correcciones, validaciones, aprobaciones, rechazos con su motivo, generaciones, exportaciones y descargas) para `teacher` y `admin`, con pruebas en `tests/integration/history.test.ts`
 
 ---
 
@@ -285,7 +293,7 @@ FR-066, SC-005 y SC-032), antes de la fase 6. Ver las revisiones de
 - **T058** se apoya en T040 y condiciona la aprobación de T046 y T054 tras un sustituto.
 - **Fase 8**: T070 a T073, completadas, dependían de T014 a T016; T072, además, de T050 y T066. T074 sigue bloqueada.
 - **Fase 9** depende de la fase 6 y de su dato.
-- **Fase 10**: T078 puede hacerse ya; el resto depende de la fase 7 y de sus datos.
+- **Fase 10**: T078 está hecha; el resto depende de la fase 7 y de sus datos.
 - **Fase 11**: T082 a T085 y T087 dependen de la fase 7; T086 es la última.
 
 ### Qué puede ejecutarse y qué no
@@ -295,15 +303,16 @@ bloqueada.
 
 | Estado                                        | Tareas                                                                 |
 | --------------------------------------------- | ---------------------------------------------------------------------- |
-| Completadas                                   | T001–T064, T066–T073                                                   |
-| Ejecutables, en este orden                    | T078, T082–T087                                                        |
+| Completadas                                   | T001–T064, T066–T073, T078, T083–T085, T087                            |
+| Empezada, sin cerrar                          | T082 (falta la evaluación con tecnología de apoyo)                     |
+| Ejecutable cuando T082 y T065 se cierren      | T086                                                                   |
 | Abierta por la referencia ajena               | T065 (falta un paquete completo de un tercero)                         |
 | Bloqueada por el dominio y el servidor        | T074                                                                   |
 | Bloqueadas por el proveedor de generación     | T075; y por depender de ella, T076 y T077                              |
 | Bloqueadas por el Moodle de pruebas           | T079; y por depender de ella, T080                                     |
 | Bloqueada por las tres anteriores             | T081, que depende de T074, T077 y T079                                 |
 
-De las 87 tareas, 72 están completadas, 7 son ejecutables, 1 está abierta a falta de un
+De las 87 tareas, 77 están completadas, 1 está empezada y sin cerrar (T082), 1 espera a que se cierren T082 y T065 (T086), 1 está abierta a falta de un
 paquete de referencia completo de un tercero (T065) y 7 están bloqueadas. T086 no cierra la aceptación mientras quede alguna bloqueada. Ninguna evidencia
 de las tareas bloqueadas se simula: el recorrido con respuestas deterministas se registra
 como ensayo.

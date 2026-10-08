@@ -26,7 +26,12 @@ src/
 │   ├── account/password.ts        # Cambio de contraseña
 │   ├── documents/                 # Documentos: lista, subida, registro, página y PDF original
 │   ├── interpretations/           # Interpretación: inventario y formularios de corrección
-│   └── api/                       # Acciones: session, account, documents e interpretations
+│   ├── outlines/  syllabus/  topics/  # Índice, temario y temas
+│   ├── export/                    # Exportación, vista previa y descargas
+│   ├── budget/                    # Presupuesto de generación
+│   ├── history/                   # Historial de cada elemento, de solo lectura
+│   ├── metrics/                   # Métricas mínimas, para administración
+│   └── api/                       # Acciones: una por operación que cambia estado
 ├── views/                 # Vistas HTML que comparten páginas y acciones
 ├── platform/              # Utilidades transversales; API pública: el índice de cada área
 │   ├── config/  logging/  http-boundary/  health/  version/
@@ -149,6 +154,20 @@ la salida validada por esquema. Los de Node.js llevan además límite de montón
 permisos. Cualquier error, aviso o resultado no comprobable acaba en rechazo, y el fichero
 nunca se modifica. Es contención, no un aislamiento de seguridad. La revisión de lo extraído
 es siempre humana.
+
+### Historial y métricas
+
+Las páginas de `src/pages/history/` reúnen, por orden de fecha, lo que cada capa ya tiene
+registrado de un elemento: correcciones, validaciones, aprobaciones, rechazos con su motivo,
+generaciones con su proveedor, modelo y versión de las instrucciones, exportaciones y
+descargas. Son de solo lectura, para docente y administración, y no añaden ningún registro:
+cada dato sale de la API pública de su capa. Los inicios de sesión y los intentos denegados
+quedan en la auditoría, que no se consulta desde ahí.
+
+`src/pages/metrics/` muestra a administración las métricas mínimas del principio XI:
+errores, latencia, coste de generación y estado de las exportaciones. Son recuentos de lo ya
+registrado, calculados al abrir la página. Solo se mide la latencia de las llamadas de
+generación; la de las peticiones web no se registra. No hay series temporales ni alertas.
 
 ## Matriz de dependencias
 

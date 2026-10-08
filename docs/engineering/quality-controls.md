@@ -74,6 +74,26 @@ una directiva `zizmor: ignore`, y ejecuta zizmor con `--no-config` y `--no-ignor
 excepciones de secretos y de dependencias siguen el registro de
 [`security-exceptions.md`](security-exceptions.md) y `security/audit-exceptions.json`.
 
+## Comprobaciones del producto dentro de las pruebas
+
+La categoría de pruebas incluye comprobaciones que protegen decisiones del producto. No son
+controles aparte: fallan con `npm run check:test`.
+
+| Qué protege                                                                                                                                                                                        | Dónde                                                                              |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Límites de importación entre capas y áreas                                                                                                                                                         | `tests/architecture/import-boundaries.test.ts`                                     |
+| Lista cerrada de rutas, y ninguna ruta de producto sin guarda de acceso                                                                                                                            | `tests/architecture/public-routes.test.ts` y `entry-points.test.ts`                |
+| Ningún código del certificado ni de la unidad del piloto en el código, las pruebas, los scripts, las instrucciones de generación ni la integración continua; y recorridos con una unidad sintética | `tests/architecture/no-domain-specifics.test.ts`                                   |
+| Todo texto pasa por la plantilla que lo escapa                                                                                                                                                     | `tests/unit/platform/markup.test.ts`                                               |
+| Registro de auditoría que no se altera                                                                                                                                                             | `tests/contract/audit-immutability.contract.test.ts`                               |
+| El paquete generado: lectura estricta, reglas propias y seguimiento                                                                                                                                | `tests/contract/scorm-package.contract.test.ts` y `scorm-runtime.contract.test.ts` |
+| Un fichero se publica del todo antes de confirmar su referencia                                                                                                                                    | `tests/integration/publication-order.test.ts`                                      |
+| Copia verificada y restauración que no deja nada si falla                                                                                                                                          | `tests/integration/backup-restore.test.ts`                                         |
+| Historial de solo lectura, métricas mínimas y estructura de su marcado                                                                                                                             | `tests/integration/history.test.ts`                                                |
+
+Ninguna de ellas sustituye a las comprobaciones que siguen pendientes: la importación en un
+Moodle real, la evaluación de accesibilidad con tecnología de apoyo y el despliegue.
+
 ## Qué comandos necesitan red
 
 - `npm run check:deps`: consulta la base de avisos y el registro de npm.
