@@ -719,6 +719,7 @@ export function createOutlines({
     promptVersion: prompt.version,
     instructions: prompt.instructions,
     input,
+    outputSchema: OUTLINE_OUTPUT,
     maxOutputTokens: MAX_OUTPUT_TOKENS,
   });
 

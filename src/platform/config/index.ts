@@ -3,8 +3,11 @@
 // `server.mjs` lo cargan directamente con Node.js, así que solo importa
 // paquetes npm y usa sintaxis TypeScript borrable.
 //
-// Las tres operaciones devuelven la misma unión discriminada y nunca
-// devuelven ni registran valores. Es el único módulo que lee `process.env`.
+// Las tres operaciones devuelven la misma unión discriminada y sus problemas
+// nunca llevan valores; ninguna registra nada. Es el único módulo que lee
+// `process.env`. La configuración válida lleva un secreto, la clave del
+// proveedor de generación, cuando ese proveedor está activado: quien la
+// recibe no la registra ni la muestra.
 import nextEnv from "@next/env";
 import { z } from "zod";
 
@@ -33,6 +36,26 @@ export interface Config {
   // Coste máximo de una operación de generación, en millonésimas de la
   // moneda del presupuesto.
   readonly generationMaxOperationCost: number;
+  // Proveedor de generación: el determinista si no se indica otro.
+  readonly generationProvider: GenerationProviderName;
+  // Solo con el proveedor `openai`.
+  readonly openai: OpenAiConfig | null;
+}
+
+export interface OpenAiConfig {
+  // Secreto: no se registra ni se muestra.
+  readonly apiKey: string;
+  readonly model: string;
+  readonly reasoningEffort: ReasoningEffort;
+  // Tokens reservados para el razonamiento, además del límite de cada tarea.
+  readonly reasoningTokenReserve: number;
+  // Segundos de espera máxima de una operación.
+  readonly timeoutSeconds: number;
+  // Precios, en millonésimas de USD por millón de tokens.
+  readonly priceInput: number;
+  readonly priceCachedInput: number;
+  readonly priceCacheWrite: number;
+  readonly priceOutput: number;
 }
 
 export type ConfigResult =
@@ -55,6 +78,12 @@ const LOG_LEVEL = z.enum([
 // en modo desarrollo.
 const ENVIRONMENT = z.enum(["development", "test", "ci", "production"]);
 
+// Proveedor de generación. Sin la clave, se usa el determinista.
+const GENERATION_PROVIDER = z.enum(["deterministic", "openai"]);
+const REASONING_EFFORT = z.enum(["low", "medium", "high", "xhigh", "max"]);
+
+export type GenerationProviderName = z.infer<typeof GENERATION_PROVIDER>;
+export type ReasoningEffort = z.infer<typeof REASONING_EFFORT>;
 export type LogLevel = z.infer<typeof LOG_LEVEL>;
 export type Environment = z.infer<typeof ENVIRONMENT>;
 
@@ -125,7 +154,39 @@ const GENERATION_MAX_OPERATION_COST = z
   .transform(Number)
   .refine((value) => value <= 1_000_000_000);
 
-// Esquema: cada variable de entorno con los valores que admite.
+// Entero sin signo escrito en decimal, sin ceros iniciales, entre dos cotas.
+function integerBetween(minimum: number, maximum: number) {
+  return z
+    .string()
+    .regex(/^(?:0|[1-9]\d{0,9})$/)
+    .transform(Number)
+    .refine((value) => value >= minimum && value <= maximum);
+}
+// Clave de la API: caracteres imprimibles sin espacios. No se comprueba
+// contra el proveedor.
+const OPENAI_API_KEY = z.string().regex(/^[\x21-\x7e]{20,400}$/);
+const OPENAI_MODEL = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/);
+// Hasta 1000 USD por millón de tokens, en millonésimas de USD.
+const OPENAI_PRICE = integerBetween(0, 1_000_000_000);
+
+// Claves del proveedor `openai`: obligatorias con él. Con otro proveedor
+// pueden estar definidas, se validan igual y no se usan.
+const OPENAI_SCHEMA = {
+  AULANORMA_OPENAI_API_KEY: OPENAI_API_KEY,
+  AULANORMA_OPENAI_MODEL: OPENAI_MODEL,
+  AULANORMA_OPENAI_REASONING_EFFORT: REASONING_EFFORT,
+  AULANORMA_OPENAI_REASONING_TOKEN_RESERVE: integerBetween(0, 100_000),
+  AULANORMA_OPENAI_TIMEOUT_SECONDS: integerBetween(30, 900),
+  AULANORMA_OPENAI_PRICE_INPUT: OPENAI_PRICE,
+  AULANORMA_OPENAI_PRICE_CACHED_INPUT: OPENAI_PRICE,
+  AULANORMA_OPENAI_PRICE_CACHE_WRITE: OPENAI_PRICE,
+  AULANORMA_OPENAI_PRICE_OUTPUT: OPENAI_PRICE,
+} as const;
+type OpenAiKey = keyof typeof OPENAI_SCHEMA;
+const OPENAI_KEYS = Object.keys(OPENAI_SCHEMA) as OpenAiKey[];
+const PROVIDER_KEY = "AULANORMA_GENERATION_PROVIDER";
+
+// Esquema: cada variable de entorno obligatoria con los valores que admite.
 const SCHEMA = {
   AULANORMA_LOG_LEVEL: LOG_LEVEL,
   AULANORMA_ENVIRONMENT: ENVIRONMENT,
@@ -206,8 +267,38 @@ export function validateConfig(source: ConfigSource): ConfigResult {
       problems.push({ key, problem: "invalid_value" });
     }
   }
+  // Proveedor de generación: opcional, y con él sus claves.
+  const providerValue = source[PROVIDER_KEY];
+  const provider =
+    providerValue === undefined || providerValue === ""
+      ? ({ success: true, data: "deterministic" } as const)
+      : GENERATION_PROVIDER.safeParse(providerValue);
+  if (!provider.success) {
+    problems.push({ key: PROVIDER_KEY, problem: "invalid_value" });
+  }
+  const openaiValues = new Map<OpenAiKey, string | number>();
+  for (const key of OPENAI_KEYS) {
+    const value = source[key];
+    if (value === undefined || value === "") {
+      if (provider.success && provider.data === "openai") {
+        problems.push({ key, problem: "missing" });
+      }
+      continue;
+    }
+    const parsed = OPENAI_SCHEMA[key].safeParse(value);
+    if (parsed.success) {
+      openaiValues.set(key, parsed.data);
+    } else {
+      problems.push({ key, problem: "invalid_value" });
+    }
+  }
   for (const key of Object.keys(source)) {
-    if (key.startsWith(PREFIX) && !Object.hasOwn(SCHEMA, key)) {
+    if (
+      key.startsWith(PREFIX) &&
+      !Object.hasOwn(SCHEMA, key) &&
+      !Object.hasOwn(OPENAI_SCHEMA, key) &&
+      key !== PROVIDER_KEY
+    ) {
       problems.push({ key, problem: "unknown_key" });
     }
   }
@@ -221,10 +312,13 @@ export function validateConfig(source: ConfigSource): ConfigResult {
     !pdfMaxMib.success ||
     !pdfMaxPages.success ||
     !generationMaxOperationCost.success ||
+    !provider.success ||
     problems.length > 0
   ) {
     return failure(problems);
   }
+  const text = (key: OpenAiKey): string => String(openaiValues.get(key));
+  const integer = (key: OpenAiKey): number => Number(openaiValues.get(key));
   return {
     ok: true,
     config: Object.freeze({
@@ -237,6 +331,25 @@ export function validateConfig(source: ConfigSource): ConfigResult {
       pdfMaxMib: pdfMaxMib.data,
       pdfMaxPages: pdfMaxPages.data,
       generationMaxOperationCost: generationMaxOperationCost.data,
+      generationProvider: provider.data,
+      openai:
+        provider.data === "openai"
+          ? Object.freeze({
+              apiKey: text("AULANORMA_OPENAI_API_KEY"),
+              model: text("AULANORMA_OPENAI_MODEL"),
+              reasoningEffort: REASONING_EFFORT.parse(
+                openaiValues.get("AULANORMA_OPENAI_REASONING_EFFORT"),
+              ),
+              reasoningTokenReserve: integer(
+                "AULANORMA_OPENAI_REASONING_TOKEN_RESERVE",
+              ),
+              timeoutSeconds: integer("AULANORMA_OPENAI_TIMEOUT_SECONDS"),
+              priceInput: integer("AULANORMA_OPENAI_PRICE_INPUT"),
+              priceCachedInput: integer("AULANORMA_OPENAI_PRICE_CACHED_INPUT"),
+              priceCacheWrite: integer("AULANORMA_OPENAI_PRICE_CACHE_WRITE"),
+              priceOutput: integer("AULANORMA_OPENAI_PRICE_OUTPUT"),
+            })
+          : null,
     }),
   };
 }

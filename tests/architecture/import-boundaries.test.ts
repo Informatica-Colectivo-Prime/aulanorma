@@ -569,6 +569,55 @@ for (const area of ["identity", "audit", "web", "health", "version"]) {
   });
 }
 
+// SDK del proveedor de generación: solo lo importa su adaptador.
+const OPENAI_ADAPTER = "src/platform/generation/adapters/openai.ts";
+allowed.push({
+  name: `${OPENAI_ADAPTER} → openai`,
+  file: OPENAI_ADAPTER,
+  code: importOf("openai"),
+});
+for (const file of [
+  "src/platform/generation/index.ts",
+  "src/platform/generation/adapters/otro.ts",
+  "src/platform/web/index.ts",
+  "src/platform/config/index.ts",
+  "src/modules/didactic-content/index.ts",
+  "src/views/index.ts",
+  PRODUCT_ACTION,
+]) {
+  forbidden.push(
+    { name: `${file} → openai`, file, code: importOf("openai") },
+    {
+      name: `${file} → openai/<interno>`,
+      file,
+      code: importOf("openai/helpers/zod"),
+    },
+  );
+}
+// El adaptador conserva las demás restricciones de su área.
+forbidden.push(
+  {
+    name: `${OPENAI_ADAPTER} → @/modules/didactic-content`,
+    file: OPENAI_ADAPTER,
+    code: importOf("@/modules/didactic-content"),
+  },
+  {
+    name: `${OPENAI_ADAPTER} → node:https`,
+    file: OPENAI_ADAPTER,
+    code: importOf("node:https"),
+  },
+  {
+    name: `process.env en ${OPENAI_ADAPTER}`,
+    file: OPENAI_ADAPTER,
+    code: "export const value = process.env.AULANORMA_OPENAI_API_KEY;\n",
+  },
+  {
+    name: `fetch en ${OPENAI_ADAPTER}`,
+    file: OPENAI_ADAPTER,
+    code: 'export const value = fetch("https://example.com");\n',
+  },
+);
+
 let eslint: ESLint;
 
 // Esta prueba verifica las reglas de arquitectura con entradas sintéticas en

@@ -81,6 +81,11 @@ export type ReconcileResult =
       readonly reason: "not_found" | "not_uncertain" | "invalid";
     };
 
+// `amounts_without_currency`: hay un límite o importes anotados cuando la
+// moneda aún no estaba fijada, y no se les puede asignar una después.
+export type FixCurrencyResult =
+  "ok" | "other_currency" | "amounts_without_currency";
+
 interface Actor {
   readonly actorId: string;
   readonly correlationId: string;
@@ -88,6 +93,10 @@ interface Actor {
 
 export interface Budget {
   status(): BudgetStatus;
+  // Fija la moneda del presupuesto, que nace sin fijar, cuando se activa un
+  // proveedor con precios. Solo con el límite a cero y sin ningún importe
+  // anotado; con la moneda ya fijada, solo comprueba que es la misma.
+  fixCurrency(currency: string): FixCurrencyResult;
   // Reserva el coste máximo de una operación, o no reserva nada.
   reserve(input: {
     readonly runId: string;
@@ -218,6 +227,41 @@ export function createBudget({
 
   return {
     status,
+
+    fixCurrency(currency) {
+      return transaction(db, (): FixCurrencyResult => {
+        const current = status();
+        if (current.currency === currency) {
+          return "ok";
+        }
+        const result: FixCurrencyResult =
+          current.currency !== "XXX" || !/^[A-Z]{3}$/.test(currency)
+            ? "other_currency"
+            : current.limit !== 0 ||
+                current.settled !== 0 ||
+                current.reserved !== 0 ||
+                current.uncertain !== 0
+              ? "amounts_without_currency"
+              : "ok";
+        // Solo queda registrado el cambio: un intento rechazado se repite en
+        // cada petición mientras no se corrija, y no añade nada.
+        if (result === "ok") {
+          db.prepare("UPDATE budget SET currency = ? WHERE id = 1").run(
+            currency,
+          );
+          audit.record({
+            actorId: null,
+            action: "budget.currency",
+            targetKind: "budget",
+            targetId: null,
+            result: "ok",
+            correlationId: "startup",
+            details: { currency },
+          });
+        }
+        return result;
+      });
+    },
 
     reserve({ runId, task, maxCost }) {
       // La comprobación y la inserción van en la misma transacción de

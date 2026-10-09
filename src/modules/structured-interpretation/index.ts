@@ -703,6 +703,7 @@ export function createStructuredInterpretation({
     promptVersion: prompt.version,
     instructions: prompt.instructions,
     input: { unitCode, pages },
+    outputSchema: INTERPRETATION_OUTPUT,
     maxOutputTokens: MAX_OUTPUT_TOKENS,
   });
 

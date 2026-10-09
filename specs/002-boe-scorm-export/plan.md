@@ -43,7 +43,7 @@ Tres ideas sostienen el diseño:
 4.6.5, Pino 10.3.1). Nuevas de producción: `pdfjs-dist`, `fflate` y `libxml2-wasm` (esta última sustituye desde
 el 2026-10-08 a `xmllint-wasm`, que no llegó a instalarse). Nueva de
 desarrollo: `jsdom`. Herramienta externa nueva: `qpdf`, para la inspección estructural de los
-PDF, instalada como binario verificado y no como paquete de npm. Ningún SDK de proveedor de generación por ahora. Versiones exactas por
+PDF, instalada como binario verificado y no como paquete de npm. Desde el 2026-10-09, el SDK `openai`, solo para el adaptador del proveedor real (research R6 y R10). Versiones exactas por
 fijar al añadirlas (research R10).
 
 **Storage**: SQLite en un fichero, con `node:sqlite` (en estado *release candidate* en Node.js

@@ -319,6 +319,22 @@ es una tarea posterior, bloqueada por ese dato. Toda salida se pide con un esque
 valida con Zod antes de guardarse; una salida inválida se rechaza y se registra. En el
 piloto no hay reintentos automáticos (FR-019): otro intento es una acción explícita. Los prompts son ficheros versionados del repositorio.
 
+**Revisión del 2026-10-09**: el mantenedor concreta el proveedor. **OpenAI**, con la
+Responses API y su SDK oficial; modelo candidato `gpt-6.1-sol`, procesamiento estándar y
+razonamiento `medium`, configurables en el servidor; moneda, USD. Anthropic deja de ser
+candidato para el piloto. El adaptador existe y está probado con respuestas simuladas; **no
+se ha hecho ninguna llamada de pago** y el presupuesto propuesto (25 USD acumulados y 2 USD
+por operación) **no está aprobado**. Precios, cálculo de reservas y consumo, configuración y
+lo pendiente: [openai-provider.md](./openai-provider.md).
+
+**Alternativas consideradas para el adaptador**: llamar a la API sin SDK (habría que
+mantener a mano el transporte, los errores y los tipos de una API que cambia a menudo); el
+ayudante del SDK para esquemas Zod (rechaza los campos opcionales y deja fuera de control
+qué se relaja del esquema del producto); Chat Completions (el proveedor dirige el uso nuevo
+a la Responses API); reintentos del SDK (contrarios a FR-019 y a una reserva por envío); y
+el modo en segundo plano o la transmisión por partes del proveedor (más estados que
+conciliar, sin necesidad mientras una operación quepa en su tiempo máximo).
+
 **Lo que acredita cada adaptador**: el determinista acredita los contratos, los bloqueos y
 el presupuesto. No acredita la calidad de la generación ni el coste real. La aceptación del
 recorrido (SC-024) exige el proveedor real.
@@ -523,6 +539,7 @@ al final.
 | `fflate`       | producción | Crear y releer el ZIP del paquete          | Escritor ZIP propio             |
 | `libxml2-wasm` | producción | Leer el manifiesto con un analizador ajeno | Lector de XML propio          |
 | `jsdom`        | desarrollo | Prueba de contrato del seguimiento         | Navegador automatizado          |
+| `openai`       | producción | SDK oficial de la Responses API de OpenAI  | Cliente HTTP propio             |
 
 `xmllint-wasm` figuraba aquí como dependencia de producción para validar contra los XSD. Se
 retiró el 2026-10-08 sin llegar a instalarse, y la sustituye `libxml2-wasm` (MIT, sin
@@ -534,7 +551,10 @@ viabilidad), para la inspección estructural de los PDF. Se instalaría como las
 de seguridad ya existentes: binario oficial con su huella fijada y verificada. Su coste
 operativo está en [feasibility.md](./feasibility.md).
 
-El SDK de un proveedor de generación **no se añade todavía**: se decidirá con el proveedor.
+El SDK del proveedor de generación se añade el 2026-10-09, con el proveedor ya decidido:
+`openai` 7.30.0 (Apache-2.0, sin dependencias propias de ejecución). Solo lo importa su
+adaptador, lo que impone una regla de ESLint. Se fija la versión publicada el 2026-10-06 y
+no la del mismo día de la elección.
 Persistencia, identidad, sesiones y criptografía no añaden ninguna dependencia. Las versiones
 se fijan exactas al añadirlas y pasan por el control `dependencies` existente.
 

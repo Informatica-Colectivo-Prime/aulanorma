@@ -7,15 +7,18 @@
 // registra cada llamada con qué se hizo, su coste estimado y si el resultado
 // fue válido. Una salida inválida nunca se repara ni se guarda.
 //
-// El único adaptador que existe es el determinista, con respuestas grabadas.
-// El proveedor real no está seleccionado: no hay ningún SDK instalado ni se
-// hace ninguna llamada de pago.
+// Hay dos adaptadores. El determinista, con respuestas grabadas, es el de las
+// pruebas y la integración continua, y el que se usa si la configuración no
+// dice otra cosa. El de OpenAI (`./adapters/openai`) es el proveedor real: solo
+// se activa desde la configuración del servidor y es el único fichero de
+// `src/` que importa un SDK de proveedor.
 //
 // Presupuesto: ninguna operación se envía sin una reserva de su coste máximo
 // dentro de los límites (`./budget`). El envío se anota antes de llamar al
 // proveedor; con el consumo confirmado la reserva se liquida, y si no puede
 // confirmarse (sin datos de consumo, tiempo agotado o fallo) queda incierta y
-// sigue contando.
+// sigue contando. Al agotarse el tiempo se avisa al adaptador para que cierre
+// la petición; la operación no se reenvía.
 import { createHash, randomBytes } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { z } from "zod";
@@ -24,12 +27,26 @@ import type { Budget, ReserveRefusal } from "./budget";
 
 export { recoverInterruptedReservations } from "./recovery";
 
+export {
+  createOpenAiProvider,
+  OPENAI_CURRENCY,
+  OPENAI_PROVIDER,
+  openAiCost,
+  strictJsonSchema,
+} from "./adapters/openai";
+export type {
+  OpenAiPrices,
+  OpenAiSettings,
+  OpenAiUsage,
+} from "./adapters/openai";
+
 export { createBudget, MAX_AMOUNT } from "./budget";
 export type {
   Budget,
   BudgetChange,
   BudgetChangeResult,
   BudgetStatus,
+  FixCurrencyResult,
   ReconcileResult,
   Reservation,
   ReservationState,
@@ -52,7 +69,18 @@ export interface ProviderRequest {
   readonly promptVersion: string;
   readonly instructions: string;
   readonly input: unknown;
+  // Esquema versionado que debe cumplir la salida. Un adaptador puede usarlo
+  // para pedir una salida estructurada; cumplirlo lo comprueba `Generation`,
+  // nunca el adaptador.
+  readonly outputSchema: z.ZodType;
+  // Límite de la salida visible. Un adaptador puede añadir su propia reserva
+  // para lo que el proveedor factura además, y la incluye en `maxCost`.
   readonly maxOutputTokens: number;
+}
+
+export interface ProviderCallOptions {
+  // Se activa cuando se agota el tiempo de espera de la operación.
+  readonly signal: AbortSignal;
 }
 
 export interface Usage {
@@ -79,7 +107,10 @@ export interface GenerationProvider {
   estimateCost(request: ProviderRequest): number;
   // Coste máximo de la operación: lo que se reserva antes de enviarla.
   maxCost(request: ProviderRequest): number;
-  generate(request: ProviderRequest): Promise<ProviderReply>;
+  generate(
+    request: ProviderRequest,
+    options?: ProviderCallOptions,
+  ): Promise<ProviderReply>;
 }
 
 export interface CostEstimate {
@@ -88,7 +119,6 @@ export interface CostEstimate {
 }
 
 export interface GenerationRequest<Output> extends ProviderRequest {
-  // Esquema versionado que debe cumplir la salida.
   readonly outputSchema: z.ZodType<Output>;
   // Lo que el esquema no puede comprobar. Si devuelve `false`, la salida se
   // rechaza y se registra, igual que una que no cumple el esquema.
@@ -154,6 +184,11 @@ export interface RunCost {
 export interface Generation {
   readonly provider: string;
   readonly budget: Budget;
+  // Tiempo máximo de espera de una operación, en milisegundos.
+  readonly callTimeoutMs: number;
+  // Tras un arranque: una ejecución que constaba en curso no sigue en ningún
+  // proceso y queda incompleta. Devuelve cuántas cambió.
+  recoverInterruptedRuns(): number;
   // Estimación y coste máximo de una operación, sin enviarla ni reservar.
   estimate(request: ProviderRequest): CostEstimate;
   startRun(input: {
@@ -252,11 +287,14 @@ export function createGeneration({
     request: ProviderRequest,
   ): Promise<ProviderReply | null> => {
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const controller = new AbortController();
     try {
       return await Promise.race([
-        provider.generate(request),
+        provider.generate(request, { signal: controller.signal }),
         new Promise<null>((resolve) => {
           timer = setTimeout(() => {
+            // La operación ya se envió: cerrarla no confirma su consumo.
+            controller.abort();
             resolve(null);
           }, callTimeoutMs);
         }),
@@ -304,6 +342,18 @@ export function createGeneration({
   return {
     provider: provider.name,
     budget,
+    callTimeoutMs,
+
+    recoverInterruptedRuns() {
+      return Number(
+        db
+          .prepare(
+            "UPDATE generation_run SET status = 'incomplete', " +
+              "finished_at = ? WHERE status = 'running'",
+          )
+          .run(now()).changes,
+      );
+    },
 
     estimate(request) {
       return {
@@ -322,7 +372,8 @@ export function createGeneration({
     },
 
     async call(runId, request) {
-      const { outputSchema, accept, ...providerRequest } = request;
+      const { accept, ...providerRequest } = request;
+      const { outputSchema } = request;
       const estimatedCost = provider.estimateCost(providerRequest);
       // Sin reserva dentro de los límites, la operación no se envía.
       const reservation = budget.reserve({

@@ -176,6 +176,9 @@ export interface SyllabusReview {
   readonly cost: { readonly estimatedCost: number; readonly maxCost: number };
   // `true` si se ha pedido la generación y quedan temas sin desarrollar.
   readonly incomplete: boolean;
+  // Generación en curso en este proceso, con el instante en que se pidió.
+  // Mientras dura, no se admite otra.
+  readonly running: { readonly requestedAt: number } | undefined;
   readonly blockers: VersionBlockers;
   readonly versions: readonly SyllabusVersion[];
   // Estado que se confirma al aprobar la versión: cambia con cualquier
@@ -189,7 +192,9 @@ export type GenerateRejection =
   | "outline_not_approved"
   | "nothing_to_generate"
   // Las cifras que el usuario vio ya no son las actuales.
-  | "estimate_changed";
+  | "estimate_changed"
+  // Ya hay una generación de este temario en curso.
+  | "already_running";
 
 export type GenerateResult =
   | {
@@ -667,6 +672,7 @@ export function createSyllabus({
             text: item.text,
           })),
         },
+        outputSchema: TOPIC_OUTPUT,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
       },
     };
@@ -727,6 +733,11 @@ export function createSyllabus({
       development,
       toGenerate,
       cost,
+      running: generation
+        .listRuns("syllabus", review.outline.id)
+        .filter((run) => run.status === "running")
+        .map((run) => ({ requestedAt: run.requestedAt }))
+        .at(-1),
       incomplete:
         topics.some((item) => item.topic !== undefined) &&
         topics.some((item) => !developed(item.topic)),
@@ -969,6 +980,11 @@ export function createSyllabus({
         return refuse("outline_not_approved");
       }
       const before = syllabusReviewOf(review);
+      // Una generación en curso ya tiene reservas hechas para estos temas:
+      // otra en paralelo los enviaría dos veces.
+      if (before.running !== undefined) {
+        return refuse("already_running");
+      }
       if (before.toGenerate.length === 0) {
         return refuse("nothing_to_generate");
       }
@@ -1001,108 +1017,119 @@ export function createSyllabus({
       let failed = 0;
       let notSent = 0;
       let stopped = false;
-      // Uno a uno: cada tema es una operación, con su propia reserva. Los
-      // terminados quedan guardados aunque los siguientes no se generen.
-      for (const entry of before.toGenerate) {
-        if (stopped) {
-          notSent += 1;
-          continue;
-        }
-        const { request, refs } = topicRequest(review, entry);
-        const result = await generation.call(runId, {
-          ...request,
-          outputSchema: TOPIC_OUTPUT,
-          // Cada bloque cita o desarrolla requisitos de su entrada, sin
-          // repetir. Lo demás se rechaza, sin repararlo.
-          accept: (output) =>
-            output.blocks.every((block) =>
-              block.kind === "requirement"
-                ? refs.has(block.requirementRef)
-                : new Set(block.requirementRefs).size ===
-                    block.requirementRefs.length &&
-                  block.requirementRefs.every((ref) => refs.has(ref)),
-            ) &&
-            new Set(
-              output.blocks.flatMap((block) =>
-                block.kind === "requirement" ? [block.requirementRef] : [],
-              ),
-            ).size ===
-              output.blocks.filter((block) => block.kind === "requirement")
-                .length,
-        });
-        if (result.status === "budget_exceeded") {
-          // Sin reserva posible, ni esta operación ni las siguientes se
-          // envían: la generación queda incompleta (FR-021).
-          stopped = true;
-          notSent += 1;
-          continue;
-        }
-        const stored = transaction(db, (): boolean => {
-          const topic = topicOfEntry(entry.id);
-          // El índice o el tema pudieron cambiar mientras se esperaba: un
-          // resultado nunca sustituye un tema que ya tiene contenido.
-          if (
-            topic === undefined ||
-            developed(topic) ||
-            outlines.review(outlineId)?.approval?.id !== approval.id
-          ) {
-            return false;
+      try {
+        // Uno a uno: cada tema es una operación, con su propia reserva. Los
+        // terminados quedan guardados aunque los siguientes no se generen.
+        for (const entry of before.toGenerate) {
+          if (stopped) {
+            notSent += 1;
+            continue;
           }
-          if (result.status !== "ok") {
-            // Tema fallido: el resultado inválido no se guarda (FR-019).
-            db.prepare(
-              "UPDATE topic SET status = 'failed', failure = ?, " +
-                "last_call_id = ? WHERE id = ?",
-            ).run(
-              result.uncertain ? "uncertain" : result.status,
-              result.callId,
-              topic.id,
-            );
-            return false;
-          }
-          result.output.blocks.forEach((block, position) => {
-            insertBlock(
-              topic.id,
-              position,
-              block.kind,
-              block.kind === "development" ? block.content : [],
-              (block.kind === "requirement"
-                ? [block.requirementRef]
-                : block.requirementRefs
-              ).map((ref) => refs.get(ref) ?? ""),
-            );
+          const { request, refs } = topicRequest(review, entry);
+          const result = await generation.call(runId, {
+            ...request,
+            outputSchema: TOPIC_OUTPUT,
+            // Cada bloque cita o desarrolla requisitos de su entrada, sin
+            // repetir. Lo demás se rechaza, sin repararlo.
+            accept: (output) =>
+              output.blocks.every((block) =>
+                block.kind === "requirement"
+                  ? refs.has(block.requirementRef)
+                  : new Set(block.requirementRefs).size ===
+                      block.requirementRefs.length &&
+                    block.requirementRefs.every((ref) => refs.has(ref)),
+              ) &&
+              new Set(
+                output.blocks.flatMap((block) =>
+                  block.kind === "requirement" ? [block.requirementRef] : [],
+                ),
+              ).size ===
+                output.blocks.filter((block) => block.kind === "requirement")
+                  .length,
           });
-          db.prepare(
-            "UPDATE topic SET status = 'draft', failure = NULL, " +
-              "revision = ?, last_call_id = ? WHERE id = ?",
-          ).run(topic.revision + 1, result.callId, topic.id);
-          db.prepare(
-            "INSERT INTO topic_change (id, topic_id, block_id, kind, " +
-              "author, at, before, after, resulting_revision) " +
-              "VALUES (?, ?, NULL, 'generate', ?, ?, 'null', ?, ?)",
-          ).run(
-            newId(),
-            topic.id,
-            actorId,
-            now(),
-            JSON.stringify({
-              blocks: result.output.blocks.length,
-              provider: generation.provider,
-            }),
-            topic.revision + 1,
-          );
-          return true;
-        });
-        if (stored) {
-          generated += 1;
-        } else {
-          failed += 1;
+          if (result.status === "budget_exceeded") {
+            // Sin reserva posible, ni esta operación ni las siguientes se
+            // envían: la generación queda incompleta (FR-021).
+            stopped = true;
+            notSent += 1;
+            continue;
+          }
+          const stored = transaction(db, (): boolean => {
+            const topic = topicOfEntry(entry.id);
+            // El índice o el tema pudieron cambiar mientras se esperaba: un
+            // resultado nunca sustituye un tema que ya tiene contenido.
+            if (
+              topic === undefined ||
+              developed(topic) ||
+              outlines.review(outlineId)?.approval?.id !== approval.id
+            ) {
+              return false;
+            }
+            if (result.status !== "ok") {
+              // Tema fallido: el resultado inválido no se guarda (FR-019).
+              db.prepare(
+                "UPDATE topic SET status = 'failed', failure = ?, " +
+                  "last_call_id = ? WHERE id = ?",
+              ).run(
+                result.uncertain ? "uncertain" : result.status,
+                result.callId,
+                topic.id,
+              );
+              return false;
+            }
+            result.output.blocks.forEach((block, position) => {
+              insertBlock(
+                topic.id,
+                position,
+                block.kind,
+                block.kind === "development" ? block.content : [],
+                (block.kind === "requirement"
+                  ? [block.requirementRef]
+                  : block.requirementRefs
+                ).map((ref) => refs.get(ref) ?? ""),
+              );
+            });
+            db.prepare(
+              "UPDATE topic SET status = 'draft', failure = NULL, " +
+                "revision = ?, last_call_id = ? WHERE id = ?",
+            ).run(topic.revision + 1, result.callId, topic.id);
+            db.prepare(
+              "INSERT INTO topic_change (id, topic_id, block_id, kind, " +
+                "author, at, before, after, resulting_revision) " +
+                "VALUES (?, ?, NULL, 'generate', ?, ?, 'null', ?, ?)",
+            ).run(
+              newId(),
+              topic.id,
+              actorId,
+              now(),
+              JSON.stringify({
+                blocks: result.output.blocks.length,
+                provider: generation.provider,
+              }),
+              topic.revision + 1,
+            );
+            return true;
+          });
+          if (stored) {
+            generated += 1;
+          } else {
+            failed += 1;
+          }
         }
+      } finally {
+        // Si algo falla a mitad, la ejecución no queda en curso para
+        // siempre. Una ya terminada no cambia.
+        const after = outlines.review(outlineId);
+        generation.finishRun(
+          runId,
+          after === undefined || syllabusReviewOf(after).incomplete
+            ? "incomplete"
+            : "succeeded",
+        );
       }
       const after = outlines.review(outlineId);
       const incomplete =
         after === undefined || syllabusReviewOf(after).incomplete;
-      generation.finishRun(runId, incomplete ? "incomplete" : "succeeded");
       record(actor, "syllabus.generate", "syllabus", outlineId, "ok", {
         generated,
         failed,

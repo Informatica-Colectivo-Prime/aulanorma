@@ -67,6 +67,8 @@ interface Config {
   readonly pdfMaxMib: number;
   readonly pdfMaxPages: number;
   readonly generationMaxOperationCost: number;
+  readonly generationProvider: string;
+  readonly openai: unknown;
 }
 type ConfigResult =
   | { readonly ok: true; readonly config: Config }
@@ -154,6 +156,8 @@ const PRODUCT_CONFIG = {
   pdfMaxMib: 32,
   pdfMaxPages: 600,
   generationMaxOperationCost: 1_000_000,
+  generationProvider: "deterministic",
+  openai: null,
 } as const;
 function setProductVariables(): void {
   for (const [key, value] of Object.entries(PRODUCT_SOURCE)) {
@@ -171,6 +175,8 @@ const VALID_CONFIG: Config = {
   pdfMaxMib: 32,
   pdfMaxPages: 600,
   generationMaxOperationCost: 1_000_000,
+  generationProvider: "deterministic",
+  openai: null,
 };
 
 // Datos sintéticos únicos en cada ejecución. Nunca se imprimen.
@@ -293,7 +299,9 @@ function expectSuccess(result: ConfigResult, expected: Config): void {
     "dataDir",
     "environment",
     "generationMaxOperationCost",
+    "generationProvider",
     "logLevel",
+    "openai",
     "pdfMaxMib",
     "pdfMaxPages",
     "publicOrigin",

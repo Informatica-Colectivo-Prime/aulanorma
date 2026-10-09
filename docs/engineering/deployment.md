@@ -78,8 +78,8 @@ npm run build
 ## Configuración
 
 El fichero de entorno lleva las mismas claves que [`.env.example`](../../.env.example), que
-explica cada una y sus valores válidos. Ninguna es un secreto, pero el fichero se trata como
-privado. Para el despliegue cambian estas:
+explica cada una y sus valores válidos. Ninguna de las obligatorias es un secreto, pero el
+fichero se trata como privado. Para el despliegue cambian estas:
 
 | Clave                     | Valor en el piloto                                                                   |
 | ------------------------- | ------------------------------------------------------------------------------------ |
@@ -98,6 +98,25 @@ origen público no es HTTPS**. Con un origen HTTPS, las cookies de sesión lleva
 
 Las contraseñas no van en la configuración. Las cuentas se crean después, con
 `scripts/admin/users.mjs`.
+
+### Proveedor de generación
+
+Sin más configuración, el servicio usa el adaptador determinista: respuestas grabadas, sin
+llamadas externas ni coste. El proveedor real, OpenAI, se activa con
+`AULANORMA_GENERATION_PROVIDER=openai` y sus claves `AULANORMA_OPENAI_*`, que entonces son
+todas obligatorias. Sus valores, los precios vigentes, el presupuesto propuesto y lo que
+falta por comprobar están en
+[`openai-provider.md`](../../specs/002-boe-scorm-export/openai-provider.md).
+
+`AULANORMA_OPENAI_API_KEY` es **el único secreto de la configuración**. Se introduce como
+variable de entorno del servicio, en el servidor: en Easypanel, en las variables de entorno
+del servicio; con systemd, en el fichero de entorno, legible solo por la cuenta del
+servicio. No va en el repositorio, en la imagen ni en ningún argumento de construcción, y no
+se pega en un chat ni en un issue. La aplicación no la registra.
+
+Al activar el proveedor, el servicio hace llamadas salientes por HTTPS a `api.openai.com`:
+el servidor debe permitirlas. El presupuesto pasa a estar en USD, lo que exige que su límite
+esté a cero en ese momento. **No se ha desplegado ni probado con el proveedor real.**
 
 ## Servicio
 
@@ -143,8 +162,9 @@ Requisitos, sea cual sea el proxy:
 - **Límite de tamaño de petición**: al menos el valor de `AULANORMA_PDF_MAX_MIB`, y como
   mucho 64 MiB, que es el máximo que admite la aplicación para una subida. Un límite menor en
   el proxy rechaza subidas que la aplicación aceptaría, con un error que no es el suyo.
-- **Tiempo de espera** suficiente para una generación: hoy se ejecuta dentro de la petición.
-  Con el proveedor real habrá que medirlo (limitación registrada en `us3-check.md`).
+- **Tiempo de espera** de respuesta mayor que `AULANORMA_OPENAI_TIMEOUT_SECONDS`: la
+  interpretación y el índice se generan dentro de la petición, una operación cada uno. El
+  temario no depende de la petición. Los tiempos reales no están medidos.
 - El puerto 3000 no debe ser accesible desde fuera del servidor.
 
 Ejemplo para nginx, **sin probar**:

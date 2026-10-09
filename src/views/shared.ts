@@ -103,7 +103,17 @@ export function budgetNote(input: {
           : "La operación solo se envía si su coste máximo cabe en lo disponible y no supera el máximo por operación."
       }
       Sin una reserva dentro de los límites, no se envía nada.
-    </p>`;
+    </p>
+    ${
+      input.provider === "deterministic" || cost === undefined
+        ? null
+        : html`<p class="hint">
+            Cada operación se envía una sola vez y su respuesta puede tardar
+            varios minutos. No repitas la petición mientras esperas: si no llega
+            respuesta, la operación queda como incierta y un administrador la
+            concilia.
+          </p>`
+    }`;
 }
 
 // Los tres importes de una operación ya hecha, sin mezclarlos.

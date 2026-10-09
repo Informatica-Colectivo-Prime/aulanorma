@@ -73,7 +73,7 @@ cp .env.example .env.development.local
 
 [`.env.example`](.env.example) documenta las ocho variables con valores de ejemplo válidos:
 el nivel de registro, el entorno, el directorio de datos, el origen público, los dos tiempos
-de caducidad de la sesión y los dos límites de un PDF, de tamaño y de páginas. Ninguna es un secreto y no hace falta cambiarlas para probar. El
+de caducidad de la sesión y los dos límites de un PDF, de tamaño y de páginas. Ninguna es un secreto y no hace falta cambiarlas para probar. El proveedor real de generación, OpenAI, es opcional, está desactivado si no se configura y no hace falta para desarrollar ni para las pruebas: su clave es el único secreto de la configuración y se introduce solo en el servidor ([`openai-provider.md`](specs/002-boe-scorm-export/openai-provider.md)). El
 directorio de datos de ejemplo está en un temporal del sistema, que puede vaciarse al reiniciar
 el equipo: cámbialo si quieres conservar las cuentas. `.env.development.local` está excluido de Git y solo lo carga `npm run dev`. Una
 variable definida en la terminal prevalece sobre el fichero, aunque esté vacía.

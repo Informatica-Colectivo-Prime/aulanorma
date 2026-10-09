@@ -970,6 +970,8 @@ describe("presupuesto por perfil (SC-037) y límite de coste (SC-032)", () => {
       )
       .run(id, run, cost);
     client.runtime.generation.budget.markUncertain(id, null);
+    // La ejecución simulada terminó: una en curso impediría pedir otra.
+    client.runtime.generation.finishRun(run, "incomplete");
     return id;
   }
 

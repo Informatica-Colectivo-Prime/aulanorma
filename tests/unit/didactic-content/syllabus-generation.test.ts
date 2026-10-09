@@ -576,3 +576,54 @@ describe("almacenamiento (T051)", () => {
     }).toThrow(/append-only/);
   });
 });
+
+describe("generación en curso", () => {
+  test("mientras dura, el temario lo indica con su avance, y al terminar deja de estar en curso", async () => {
+    const seen: (number | undefined)[] = [];
+    fixture.topicReply = (request) => {
+      const current = review();
+      seen.push(
+        current.running === undefined
+          ? undefined
+          : current.topics.length - current.blockers.undeveloped.length,
+      );
+      return topicOutput(request);
+    };
+    expect(review().running).toBeUndefined();
+    await generate();
+    // Antes de cada tema, los ya terminados.
+    expect(seen).toEqual([0, 1, 2, 3]);
+    expect(review().running).toBeUndefined();
+  });
+
+  test("no se admite otra generación del mismo temario a la vez: ningún tema se envía dos veces", async () => {
+    const first = generate();
+    expect(await generate()).toEqual({ ok: false, reason: "already_running" });
+    expect(await first).toMatchObject({ ok: true, generated: 4 });
+    expect(topicCalls()).toHaveLength(4);
+    expect(
+      fixture.db
+        .prepare(
+          "SELECT COUNT(*) AS n FROM budget_reservation WHERE task = 'topic'",
+        )
+        .get()?.n,
+    ).toBe(4);
+  });
+
+  test("una ejecución que quedó en curso al caer el proceso pasa a incompleta al arrancar, y entonces se puede reanudar", async () => {
+    fixture.generation.startRun({
+      kind: "syllabus",
+      targetId: outlineId,
+      requestedBy: TEACHER.actorId,
+    });
+    expect(await generate()).toEqual({ ok: false, reason: "already_running" });
+    expect(fixture.generation.recoverInterruptedRuns()).toBe(1);
+    expect(fixture.generation.recoverInterruptedRuns()).toBe(0);
+    expect(
+      fixture.generation
+        .listRuns("syllabus", outlineId)
+        .map((run) => run.status),
+    ).toEqual(["incomplete"]);
+    expect(await generate()).toMatchObject({ ok: true, generated: 4 });
+  });
+});
