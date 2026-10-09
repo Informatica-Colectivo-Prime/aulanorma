@@ -104,10 +104,16 @@ recorrido (SC-024). Las pruebas del adaptador de OpenAI usan un transporte simul
 acreditan al proveedor real.
 
 Un adaptador cuyo coste máximo depende de algo que no controla puede declarar una
-comprobación previa, `admit`, sin consumo: si no puede sostener que la operación quepa en lo
+comprobación previa, `admit`, que no genera nada: si no puede sostener que la operación quepa en lo
 reservado, la operación no se envía y su reserva se libera. El de OpenAI la usa para
 contrastar la entrada reservada con el recuento del proveedor. Un consumo confirmado mayor
 que su reserva se liquida por lo que fue y queda en la auditoría.
+
+La comprobación previa es una espera, y en ella puede cambiar lo que autorizó la operación.
+Quien la pide puede pasar esa condición, `authorized`, que `Generation` comprueba de nuevo
+justo antes de anotar el envío, sin ninguna espera entre ambos. Si ya no se cumple, la
+operación no se envía, su reserva se libera y el resultado es `withdrawn`. Es una
+comprobación del dominio: ningún adaptador la conoce. La usan las tres tareas.
 
 Una generación del temario se detiene si la aprobación del índice con la que se pidió deja
 de estar vigente: el resultado en espera se descarta y los temas restantes no se envían.

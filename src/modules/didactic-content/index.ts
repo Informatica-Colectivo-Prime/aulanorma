@@ -758,6 +758,17 @@ export function createOutlines({
       if (exists()) {
         return refuse("already_exists");
       }
+      // Por qué la petición ya no procede, si algo cambió desde que se
+      // comprobó: `undefined` mientras sigue procediendo.
+      const lapsed = (): RequestRejection | undefined =>
+        interpretations.isHistorical(interpretationId)
+          ? "superseded"
+          : interpretations.currentValidation(interpretationId)?.id !==
+              validation.id
+            ? "not_validated"
+            : exists()
+              ? "already_exists"
+              : undefined;
 
       const { input, ids } = proposalInput(interpretation);
       const current = generation.estimate(providerRequest(input));
@@ -776,6 +787,9 @@ export function createOutlines({
       const result = await generation.call(runId, {
         ...providerRequest(input),
         outputSchema: OUTLINE_OUTPUT,
+        // De nuevo justo antes de enviar, tras la comprobación previa del
+        // proveedor.
+        authorized: () => lapsed() === undefined,
         // Cada entrada se apoya en requisitos que existen, sin repetir, o va
         // marcada sin respaldo y entonces no declara ninguno.
         accept: (output) =>
@@ -787,6 +801,11 @@ export function createOutlines({
               entry.requirementRefs.every((ref) => ids.has(ref)),
           ),
       });
+      if (result.status === "withdrawn") {
+        // No se envió nada y la reserva está liberada.
+        generation.finishRun(runId, "incomplete");
+        return refuse(lapsed() ?? "not_validated");
+      }
       if (result.status !== "ok") {
         generation.finishRun(
           runId,

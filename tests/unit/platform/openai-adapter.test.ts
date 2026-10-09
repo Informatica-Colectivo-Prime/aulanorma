@@ -625,6 +625,54 @@ describe("con el presupuesto", () => {
     expect(generation.budget.list()).toMatchObject([{ state: "released" }]);
   });
 
+  test("si lo que autorizó la operación deja de cumplirse con el recuento en espera, y el recuento resulta favorable, no se llama a la generación y la reserva se libera", async () => {
+    let answer: ((response: Response) => void) | undefined;
+    let arrived: (() => void) | undefined;
+    const waiting = new Promise<void>((resolve) => {
+      arrived = resolve;
+    });
+    const { generation, sent, counts, runId } = generationWith(
+      ok,
+      undefined,
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+          arrived?.();
+        }),
+    );
+    let authorized = true;
+    const pending = generation.call(runId, {
+      ...REQUEST,
+      authorized: () => authorized,
+    });
+    await waiting;
+    expect(generation.budget.list()).toMatchObject([{ state: "reserved" }]);
+
+    // Cambia en el dominio mientras el proveedor cuenta; el adaptador no lo
+    // sabe y su recuento es favorable.
+    authorized = false;
+    answer?.(counted(64));
+
+    expect(await pending).toEqual({ status: "withdrawn" });
+    expect(counts).toHaveLength(1);
+    // Ninguna petición a `responses.create`.
+    expect(sent).toHaveLength(0);
+    expect(generation.budget.list()).toMatchObject([
+      { state: "released", sentAt: null, settledCost: null },
+    ]);
+    expect(generation.listCalls(runId)).toEqual([]);
+  });
+
+  test("si sigue autorizada tras el recuento, se envía", async () => {
+    const { generation, sent, runId } = generationWith(ok);
+    expect(
+      await generation.call(runId, { ...REQUEST, authorized: () => true }),
+    ).toMatchObject({ status: "ok" });
+    expect(sent).toHaveLength(1);
+    // La comprobación del dominio no viaja al proveedor.
+    expect(JSON.stringify(sent[0]?.body)).not.toContain("authorized");
+  });
+
   test("un consumo mayor que lo reservado se liquida por lo que fue y queda registrado", async () => {
     // El proveedor factura más entrada de la que contó: la reserva no cubre
     // la operación.

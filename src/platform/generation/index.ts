@@ -107,7 +107,7 @@ export interface GenerationProvider {
   estimateCost(request: ProviderRequest): number;
   // Coste máximo de la operación: lo que se reserva antes de enviarla.
   maxCost(request: ProviderRequest): number;
-  // Comprobación previa al envío, sin consumo: `false` si el adaptador no
+  // Comprobación previa al envío, que no genera nada: `false` si el adaptador no
   // puede sostener que la operación quepa en el coste máximo que declaró.
   // Entonces la operación no se envía y su reserva se libera. Un adaptador
   // cuyo coste máximo no depende de nada externo no la necesita.
@@ -131,6 +131,11 @@ export interface GenerationRequest<Output> extends ProviderRequest {
   // Lo que el esquema no puede comprobar. Si devuelve `false`, la salida se
   // rechaza y se registra, igual que una que no cumple el esquema.
   readonly accept?: (output: Output) => boolean;
+  // Lo que autorizó la operación en el dominio, comprobado de nuevo justo
+  // antes de anotar el envío, después de cualquier espera previa. Si
+  // devuelve `false`, la operación no se envía y su reserva se libera. Es
+  // una comprobación del dominio: ningún adaptador la conoce.
+  readonly authorized?: () => boolean;
 }
 
 // `callId` identifica la llamada registrada. `uncertain` indica que el
@@ -150,7 +155,10 @@ export type GenerationResult<Output> =
       readonly uncertain: boolean;
     }
   // No había una reserva posible dentro de los límites: no se envió nada.
-  | { readonly status: "budget_exceeded"; readonly reason: ReserveRefusal };
+  | { readonly status: "budget_exceeded"; readonly reason: ReserveRefusal }
+  // Lo que autorizaba la operación dejó de cumplirse antes de enviarla: no
+  // se envió nada y su reserva quedó liberada.
+  | { readonly status: "withdrawn" };
 
 export interface GenerationCall {
   readonly id: string;
@@ -385,7 +393,7 @@ export function createGeneration({
     },
 
     async call(runId, request) {
-      const { accept, ...providerRequest } = request;
+      const { accept, authorized, ...providerRequest } = request;
       const { outputSchema } = request;
       const estimatedCost = provider.estimateCost(providerRequest);
       // Sin reserva dentro de los límites, la operación no se envía.
@@ -422,6 +430,13 @@ export function createGeneration({
           );
           return { status: "provider_error", callId, uncertain: false };
         }
+      }
+      // Mientras se esperaba la comprobación previa pudo cambiar lo que
+      // autorizó la operación. Se comprueba aquí, sin ninguna espera entre
+      // esta línea y el envío: si ya no se cumple, consta que no se envió.
+      if (authorized !== undefined && !authorized()) {
+        budget.release(reservationId);
+        return { status: "withdrawn" };
       }
       // El envío se anota antes de llamar: si el proceso cae después, la
       // reserva consta como enviada y sigue contando.

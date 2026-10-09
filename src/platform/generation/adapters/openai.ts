@@ -9,10 +9,12 @@
 // las citas y aprobar siguen siendo cosa de `Generation`, del dominio y de
 // una persona.
 //
-// - Una petición de pago por operación: sin reintentos del SDK, ni propios.
+// - Una petición de generación por operación: sin reintentos del SDK, ni
+//   propios.
 // - Antes de enviarla, el recuento de tokens de entrada del propio proveedor
 //   decide si la operación cabe en lo reservado. Si no cabe, o no puede
-//   saberse, no se envía.
+//   saberse, la generación no se envía. Que ese recuento no se facture no
+//   está confirmado.
 // - Procesamiento estándar (`service_tier: "default"`), sin caché de prompts
 //   y sin guardar la respuesta en el proveedor.
 // - El consumo solo se confirma con los datos de uso de la respuesta y si se

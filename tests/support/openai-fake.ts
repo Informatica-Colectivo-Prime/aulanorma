@@ -122,7 +122,7 @@ export function counted(tokens: number): Response {
 
 // Transporte que responde con `respond` a la petición de generación y con
 // `count` al recuento previo de tokens de entrada, y anota por separado lo
-// que recibe: `sent`, las peticiones de pago; `counts`, los recuentos.
+// que recibe: `sent`, las peticiones de generación; `counts`, los recuentos.
 export function fakeTransport(
   respond: (request: SentRequest) => Response | Promise<Response>,
   count: (request: SentRequest) => Response | Promise<Response> = () =>

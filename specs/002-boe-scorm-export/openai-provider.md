@@ -36,8 +36,8 @@ El modelo es **candidato**: la calidad de su generación no está evaluada (T077
 SDK y el único que hace llamadas externas; una regla de ESLint y una prueba de arquitectura
 lo imponen. El dominio sigue sin conocer al proveedor.
 
-- **Una petición de pago por operación**, precedida de un recuento de su entrada que no
-  genera nada. Los reintentos automáticos del SDK están desactivados
+- **Una petición de generación por operación**, precedida de un recuento de su entrada que
+  no genera nada; si ese recuento se factura está por confirmar. Los reintentos automáticos del SDK están desactivados
   (`maxRetries: 0`, en el cliente y en cada petición). Otro intento lo pide una persona, con
   su propia reserva (FR-019).
 - **Instrucciones y datos separados.** El prompt versionado va en `instructions`; la entrada
@@ -180,8 +180,9 @@ reserva, y antes de enviar se contrasta con el proveedor:
    que devuelve «el recuento exacto que recibirá el modelo». No genera nada.
 2. Si el recuento **cabe** en la entrada reservada, la operación se envía.
 3. Si **no cabe**, o el recuento falla, tarda demasiado o no es un entero, la operación **no
-   se envía**. Consta que no se envió, así que su reserva se libera, y queda registrada como
-   error del proveedor, sin consumo. El recuento tampoco se reintenta.
+   se envía**. Consta que la generación no se envió, así que su reserva se libera, y queda
+   registrada como error del proveedor. El recuento tampoco se reintenta. Que el recuento
+   en sí no se facture está por confirmar.
 4. Si, aun así, una respuesta trae un consumo mayor que lo reservado, se liquida por lo que
    fue y queda en la auditoría (`budget.reservation_exceeded`), con lo reservado y lo
    liquidado.
@@ -197,8 +198,8 @@ reserva, y antes de enviar se contrasta con el proveedor:
   frecuencia tiene. No genera salida, pero es una llamada externa más por operación. Debe
   confirmarse antes de activar el proveedor.
 - Si el margen de 512 tokens resulta corto para el formato y el esquema, las operaciones
-  con poca entrada se rechazarán sin enviarse. Falla cerrado: no cuesta nada, pero habrá
-  que ajustar el margen.
+  con poca entrada se rechazarán sin enviarse. Falla cerrado: la generación no se envía. Si el
+  recuento rechazado tiene coste está por confirmar, y habrá que ajustar el margen.
 - El recuento es anterior al envío: no sirve para la estimación ni para el máximo que se
   muestran antes de confirmar, que siguen calculándose en local.
 
@@ -309,7 +310,10 @@ despliegue probado.
   la aprobación del índice con la que se pidió la generación sigue vigente, lo que incluye
   la validación de la interpretación. Si no lo está, el resultado recibido se descarta, los
   temas restantes no se envían y la ejecución queda incompleta. La operación ya enviada se
-  paga y su consumo se liquida.
+  paga y su consumo se liquida. La misma comprobación se repite después del recuento previo
+  del proveedor y justo antes de anotar el envío: si la vigencia se perdió durante esa
+  espera, la generación no se envía y su reserva se libera. La hace `Generation` con una
+  condición que le pasa el dominio; el adaptador no interviene.
 - **Caída del proceso**: al arrancar, los temas terminados se conservan, lo enviado sin
   liquidar queda incierto y una ejecución que constaba en curso pasa a incompleta. Nada se
   reenvía al arrancar. La operación interrumpida no tiene tema anotado, así que el temario

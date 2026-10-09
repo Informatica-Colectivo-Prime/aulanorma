@@ -1044,6 +1044,8 @@ export function createSyllabus({
       let failed = 0;
       let notSent = 0;
       let discarded = 0;
+      // Reservas liberadas sin enviar por perder la vigencia tras reservar.
+      let released = 0;
       let stopped = false;
       let invalidated = false;
       // El índice aprobado y la interpretación validada con los que se pidió
@@ -1076,6 +1078,9 @@ export function createSyllabus({
           const result = await generation.call(runId, {
             ...request,
             outputSchema: TOPIC_OUTPUT,
+            // De nuevo justo antes de enviar: la comprobación previa del
+            // proveedor es una espera en la que todo puede cambiar.
+            authorized: stillCurrent,
             // Cada bloque cita o desarrolla requisitos de su entrada, sin
             // repetir. Lo demás se rechaza, sin repararlo.
             accept: (output) =>
@@ -1094,6 +1099,16 @@ export function createSyllabus({
                 output.blocks.filter((block) => block.kind === "requirement")
                   .length,
           });
+          if (result.status === "withdrawn") {
+            // Perdió la vigencia después de reservar y antes de enviar: la
+            // reserva ya está liberada y no se envía ni este tema ni los
+            // siguientes.
+            stopped = true;
+            invalidated = true;
+            released += 1;
+            notSent += 1;
+            continue;
+          }
           if (result.status === "budget_exceeded") {
             // Sin reserva posible, ni esta operación ni las siguientes se
             // envían: la generación queda incompleta (FR-021).
@@ -1187,6 +1202,7 @@ export function createSyllabus({
         notSent,
         discarded,
         invalidated,
+        released,
         incomplete,
         provider: generation.provider,
       });

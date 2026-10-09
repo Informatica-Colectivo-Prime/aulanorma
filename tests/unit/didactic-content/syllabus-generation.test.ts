@@ -786,6 +786,110 @@ describe("pérdida de vigencia durante la generación (FR-016 y FR-059)", () => 
   });
 });
 
+// Retiene la comprobación previa al envío de cada tema hasta que la prueba
+// la resuelve: la reserva está hecha y la operación, sin enviar.
+function holdAdmissions() {
+  const resolves: ((admitted: boolean) => void)[] = [];
+  const arrivals: (() => void)[] = [];
+  fixture.topicAdmit = () =>
+    new Promise<boolean>((resolve) => {
+      resolves.push(resolve);
+      arrivals.shift()?.();
+    });
+  return {
+    arrived: (total: number) =>
+      new Promise<void>((resolve) => {
+        if (resolves.length >= total) {
+          resolve();
+        } else {
+          arrivals.push(resolve);
+        }
+      }),
+    resolve: (index: number, admitted: boolean) => {
+      resolves[index]?.(admitted);
+    },
+  };
+}
+
+describe("pérdida de vigencia entre la comprobación previa y el envío", () => {
+  test.each([
+    ["el índice", editOutline],
+    ["la interpretación", editInterpretation],
+  ])(
+    "si cambia %s con la comprobación previa en espera y esta se resuelve a favor, el tema no se envía, su reserva se libera y la ejecución queda incompleta",
+    async (_label, change) => {
+      fixture.topicMaxCost = 50;
+      fixture.topicCost = 20;
+      const hold = holdAdmissions();
+      const pending = generate();
+      await hold.arrived(1);
+      // Reservado y sin enviar.
+      expect(
+        fixture.budget.list().filter((item) => item.task === "topic"),
+      ).toMatchObject([{ state: "reserved", reservedCost: 50 }]);
+
+      change();
+      expect(review().outline.approval).toBeUndefined();
+      hold.resolve(0, true);
+
+      expect(await pending).toEqual({
+        ok: true,
+        generated: 0,
+        failed: 0,
+        notSent: 4,
+        discarded: 0,
+        invalidated: true,
+        incomplete: true,
+      });
+      // La generación no llega al proveedor, ni para este tema ni para los
+      // siguientes, y no hay más comprobaciones previas.
+      expect(topicCalls()).toEqual([]);
+      await Promise.resolve();
+      expect(
+        fixture.budget.list().filter((item) => item.task === "topic"),
+      ).toMatchObject([{ state: "released", settledCost: null }]);
+      expect(fixture.budget.status()).toMatchObject({
+        reserved: 0,
+        uncertain: 0,
+        settled: 0,
+      });
+      expect(
+        count("SELECT COUNT(*) AS n FROM generation_call WHERE task = 'topic'"),
+      ).toBe(0);
+      expect(
+        count("SELECT COUNT(*) AS n FROM topic WHERE status <> 'pending'"),
+      ).toBe(0);
+      expect(lastRunStatus()).toBe("incomplete");
+      // La invalidación queda registrada.
+      expect(fixture.audit.list().at(-1)).toMatchObject({
+        action: "syllabus.generate",
+        details: {
+          invalidated: true,
+          released: 1,
+          notSent: 4,
+          discarded: 0,
+        },
+      });
+    },
+  );
+
+  test("si la comprobación previa se resuelve en contra, el tema falla sin enviarse y los demás siguen", async () => {
+    let first = true;
+    fixture.topicAdmit = () => {
+      const admitted = !first;
+      first = false;
+      return Promise.resolve(admitted);
+    };
+    expect(await generate()).toMatchObject({
+      ok: true,
+      generated: 3,
+      failed: 1,
+      invalidated: false,
+    });
+    expect(topicCalls()).toHaveLength(3);
+  });
+});
+
 describe("recuperación tras interrumpirse el proceso (FR-021 y FR-066)", () => {
   // Arranque sobre la misma base de datos, como hace el servicio: recupera
   // las reservas y las ejecuciones, con un proveedor que anota lo que recibe.
