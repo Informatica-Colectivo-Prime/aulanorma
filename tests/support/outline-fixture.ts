@@ -141,6 +141,9 @@ export interface OutlineFixture {
   // Coste máximo y consumo confirmado de cada tema; `null`, sin confirmar.
   topicMaxCost: number;
   topicCost: number | null;
+  // Si se define, la respuesta a cada tema espera a que termine: permite
+  // actuar mientras una operación está enviada y sin respuesta.
+  topicHold: ((request: ProviderRequest) => Promise<void>) | undefined;
   // Aprueba el índice y devuelve su identificador.
   approvedOutline(reply?: unknown): Promise<string>;
   readonly db: Database;
@@ -230,12 +233,14 @@ export async function createOutlineFixture(
     topicReply: TopicReply;
     topicMaxCost: number;
     topicCost: number | null;
+    topicHold: ((request: ProviderRequest) => Promise<void>) | undefined;
   } = {
     reply: proposal(),
     outlineMaxCost: 0,
     topicReply: topicOutput,
     topicMaxCost: 0,
     topicCost: 0,
+    topicHold: undefined,
   };
   const generation = createGeneration({
     db,
@@ -253,6 +258,15 @@ export async function createOutlineFixture(
       generate: (request): Promise<ProviderReply> => {
         sent.push(request);
         if (request.task === "topic") {
+          const reply = (): ProviderReply => {
+            const output = fixture.topicReply(request);
+            return output === undefined
+              ? { ok: false, usage, cost: fixture.topicCost }
+              : { ok: true, output, usage, cost: fixture.topicCost };
+          };
+          if (fixture.topicHold !== undefined) {
+            return fixture.topicHold(request).then(reply);
+          }
           const output = fixture.topicReply(request);
           return Promise.resolve(
             output === undefined
@@ -346,6 +360,14 @@ export async function createOutlineFixture(
     },
     set topicMaxCost(value: number) {
       fixture.topicMaxCost = value;
+    },
+    get topicHold() {
+      return fixture.topicHold;
+    },
+    set topicHold(
+      value: ((request: ProviderRequest) => Promise<void>) | undefined,
+    ) {
+      fixture.topicHold = value;
     },
     get topicCost() {
       return fixture.topicCost;

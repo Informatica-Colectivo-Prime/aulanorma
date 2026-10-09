@@ -86,7 +86,13 @@ export default protectedAction(
       location: `/syllabus/${outlineId}`,
       notice: {
         code: "syllabus_generated",
-        detail: [result.generated, result.failed, result.notSent].join("_"),
+        detail: [
+          result.generated,
+          result.failed,
+          result.notSent,
+          result.discarded,
+          result.invalidated ? 1 : 0,
+        ].join("_"),
       },
     };
   },

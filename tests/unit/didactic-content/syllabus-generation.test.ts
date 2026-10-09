@@ -4,7 +4,9 @@
 // límite de coste y reanudación explícita. El proveedor y sus consumos son
 // simulados.
 import { beforeEach, describe, expect, test } from "vitest";
+import { createSyllabus } from "@/modules/didactic-content";
 import type { SyllabusReview } from "@/modules/didactic-content";
+import { createBudget, createGeneration } from "@/platform/generation";
 import type { ProviderRequest } from "@/platform/generation";
 import {
   createOutlineFixture,
@@ -160,6 +162,8 @@ describe("generación completa", () => {
       generated: 4,
       failed: 0,
       notSent: 0,
+      discarded: 0,
+      invalidated: false,
       incomplete: false,
     });
     expect(topicCalls()).toEqual([
@@ -302,6 +306,8 @@ describe("temas fallidos (FR-019, SC-005)", () => {
         generated: 3,
         failed: 1,
         notSent: 0,
+        discarded: 0,
+        invalidated: false,
         incomplete: true,
       });
       expect(states()).toEqual([
@@ -364,6 +370,8 @@ describe("temas fallidos (FR-019, SC-005)", () => {
       generated: 1,
       failed: 0,
       notSent: 0,
+      discarded: 0,
+      invalidated: false,
       incomplete: false,
     });
     expect(topicCalls()).toEqual(["Tema 2"]);
@@ -460,6 +468,8 @@ describe("límite de coste (SC-032)", () => {
       generated: 2,
       failed: 0,
       notSent: 2,
+      discarded: 0,
+      invalidated: false,
       incomplete: true,
     });
     // Solo se enviaron las dos operaciones que cabían.
@@ -507,6 +517,8 @@ describe("límite de coste (SC-032)", () => {
       ok: true,
       generated: 0,
       notSent: 2,
+      discarded: 0,
+      invalidated: false,
       incomplete: true,
     });
     expect(fixture.sent).toEqual([]);
@@ -625,5 +637,286 @@ describe("generación en curso", () => {
         .map((run) => run.status),
     ).toEqual(["incomplete"]);
     expect(await generate()).toMatchObject({ ok: true, generated: 4 });
+  });
+});
+
+// Retiene la respuesta de cada tema hasta que la prueba la suelta, y avisa
+// cuando llega cada petición: la operación está enviada y sin respuesta.
+function holdTopics() {
+  const releases: (() => void)[] = [];
+  const arrivals: (() => void)[] = [];
+  fixture.topicHold = () =>
+    new Promise<void>((resolve) => {
+      releases.push(resolve);
+      arrivals.shift()?.();
+    });
+  return {
+    // Se cumple cuando hay `count` temas enviados.
+    arrived: (count: number) =>
+      new Promise<void>((resolve) => {
+        if (releases.length >= count) {
+          resolve();
+        } else {
+          arrivals.push(resolve);
+        }
+      }),
+    release: (index: number) => {
+      releases[index]?.();
+    },
+  };
+}
+
+function editOutline(): void {
+  const current = review();
+  const result = fixture.outlines.moveEntry({
+    ...TEACHER,
+    outlineId,
+    revision: current.outline.outline.revision,
+    entryId: current.topics[0]?.entry.id ?? "",
+    direction: "down",
+  });
+  expect(result.ok).toBe(true);
+}
+
+function editInterpretation(): void {
+  const interpretation = fixture.interpretations.get(fixture.interpretationId);
+  const result = fixture.interpretations.editUnit({
+    ...TEACHER,
+    interpretationId: fixture.interpretationId,
+    revision: interpretation?.revision ?? 0,
+    unit: {
+      unitTitle: "Unidad corregida",
+      durationHours: null,
+      durationSection: "",
+      durationPage: null,
+      durationQuote: null,
+    },
+  });
+  expect(result.ok).toBe(true);
+}
+
+function count(sql: string): unknown {
+  return fixture.db.prepare(sql).get()?.n;
+}
+
+function lastRunStatus(): string | undefined {
+  return fixture.generation.listRuns("syllabus", outlineId).at(-1)?.status;
+}
+
+describe("pérdida de vigencia durante la generación (FR-016 y FR-059)", () => {
+  test.each([
+    ["el índice", editOutline],
+    ["la interpretación", editInterpretation],
+  ])(
+    "si cambia %s con el primer tema en espera, su resultado se descarta, no se envía ningún tema más y la ejecución queda incompleta",
+    async (_label, change) => {
+      fixture.topicMaxCost = 50;
+      fixture.topicCost = 20;
+      const hold = holdTopics();
+      const pending = generate();
+      await hold.arrived(1);
+      expect(topicCalls()).toHaveLength(1);
+
+      change();
+      expect(review().outline.approval).toBeUndefined();
+      hold.release(0);
+
+      expect(await pending).toEqual({
+        ok: true,
+        generated: 0,
+        failed: 0,
+        notSent: 3,
+        discarded: 1,
+        invalidated: true,
+        incomplete: true,
+      });
+      // Ni un envío más que el que ya estaba hecho.
+      expect(topicCalls()).toHaveLength(1);
+      // El resultado no se guarda y ningún tema cambia de estado.
+      expect(count("SELECT COUNT(*) AS n FROM topic_block")).toBe(0);
+      expect(
+        count("SELECT COUNT(*) AS n FROM topic WHERE status <> 'pending'"),
+      ).toBe(0);
+      expect(lastRunStatus()).toBe("incomplete");
+      expect(review().running).toBeUndefined();
+      // La operación enviada se pagó: su consumo queda liquidado, y no hay
+      // ninguna otra reserva.
+      expect(
+        fixture.budget.list().filter((item) => item.task === "topic"),
+      ).toMatchObject([{ state: "settled", settledCost: 20 }]);
+      expect(fixture.audit.list().at(-1)).toMatchObject({
+        action: "syllabus.generate",
+        details: { discarded: 1, notSent: 3, invalidated: true },
+      });
+    },
+  );
+
+  test("si la vigencia se pierde a mitad, los temas ya terminados se conservan y los restantes no se envían", async () => {
+    const hold = holdTopics();
+    const pending = generate();
+    await hold.arrived(1);
+    hold.release(0);
+    await hold.arrived(2);
+    editInterpretation();
+    hold.release(1);
+
+    expect(await pending).toEqual({
+      ok: true,
+      generated: 1,
+      failed: 0,
+      notSent: 2,
+      discarded: 1,
+      invalidated: true,
+      incomplete: true,
+    });
+    expect(topicCalls()).toHaveLength(2);
+    expect(
+      count("SELECT COUNT(*) AS n FROM topic WHERE status = 'draft'"),
+    ).toBe(1);
+    expect(lastRunStatus()).toBe("incomplete");
+  });
+
+  test("con la vigencia ya perdida no se envía nada", async () => {
+    editOutline();
+    expect(await generate()).toEqual({
+      ok: false,
+      reason: "outline_not_approved",
+    });
+    expect(topicCalls()).toEqual([]);
+  });
+});
+
+describe("recuperación tras interrumpirse el proceso (FR-021 y FR-066)", () => {
+  // Arranque sobre la misma base de datos, como hace el servicio: recupera
+  // las reservas y las ejecuciones, con un proveedor que anota lo que recibe.
+  function restart() {
+    const calls: ProviderRequest[] = [];
+    let clock = Date.UTC(2026, 9, 9);
+    const now = () => (clock += 1000);
+    const budget = createBudget({
+      db: fixture.db,
+      audit: fixture.audit,
+      now,
+      maxOperationCost: 1_000_000,
+    });
+    const recovered = budget.recoverInterrupted();
+    const generation = createGeneration({
+      db: fixture.db,
+      budget,
+      now,
+      provider: {
+        name: "deterministic",
+        estimateCost: () => 0,
+        maxCost: () => 50,
+        generate: (request) => {
+          calls.push(request);
+          return Promise.resolve({
+            ok: true,
+            output: topicOutput(request),
+            usage: { model: "simulado", tokensIn: 0, tokensOut: 0 },
+            cost: 20,
+          });
+        },
+      },
+    });
+    const runs = generation.recoverInterruptedRuns();
+    const syllabus = createSyllabus({
+      db: fixture.db,
+      audit: fixture.audit,
+      interpretations: fixture.interpretations,
+      outlines: fixture.outlines,
+      generation,
+      prompt: { version: "v1", instructions: "Instrucciones del tema." },
+      now,
+    });
+    return { calls, budget, generation, syllabus, recovered, runs };
+  }
+
+  test("los temas terminados se conservan, la operación enviada queda incierta, la ejecución incompleta, y al arrancar no se repite ninguna llamada", async () => {
+    fixture.topicMaxCost = 50;
+    fixture.topicCost = 20;
+    const hold = holdTopics();
+    // El proceso se interrumpe con el segundo tema enviado y sin respuesta:
+    // esta generación no termina nunca.
+    void generate();
+    await hold.arrived(1);
+    hold.release(0);
+    await hold.arrived(2);
+    const blocks = count("SELECT COUNT(*) AS n FROM topic_block");
+    expect(blocks).not.toBe(0);
+
+    const after = restart();
+    expect(after.recovered).toEqual({ uncertain: 1, released: 0 });
+    expect(after.runs).toBe(1);
+    // Nada se envía al arrancar ni al consultar el temario.
+    const current = after.syllabus.review(outlineId);
+    expect(after.calls).toEqual([]);
+
+    // Temas terminados, conservados.
+    expect(
+      count("SELECT COUNT(*) AS n FROM topic WHERE status = 'draft'"),
+    ).toBe(1);
+    expect(count("SELECT COUNT(*) AS n FROM topic_block")).toBe(blocks);
+    // Operación enviada sin consumo: incierta, contando por su máximo.
+    expect(
+      after.budget.list().filter((item) => item.task === "topic"),
+    ).toMatchObject([
+      { state: "settled", settledCost: 20 },
+      { state: "uncertain", reservedCost: 50, callId: null },
+    ]);
+    expect(after.budget.status()).toMatchObject({
+      settled: 20,
+      uncertain: 50,
+      reserved: 0,
+    });
+    // Ejecución incompleta, ya no en curso.
+    expect(
+      after.generation.listRuns("syllabus", outlineId).map((run) => run.status),
+    ).toEqual(["incomplete"]);
+    expect(current?.running).toBeUndefined();
+    expect(current?.incomplete).toBe(true);
+    expect(current?.interrupted).toBe(1);
+  });
+
+  test("la operación interrumpida no se reenvía al reanudar: hay que conciliarla antes, y entonces solo se genera lo pendiente", async () => {
+    fixture.topicMaxCost = 50;
+    fixture.topicCost = 20;
+    fixture.budget.setLimit({
+      newLimit: 1000,
+      revision: fixture.budget.status().revision,
+      actorId: "administrador-1",
+      correlationId: "prueba",
+    });
+    const hold = holdTopics();
+    void generate();
+    await hold.arrived(1);
+    hold.release(0);
+    await hold.arrived(2);
+
+    const after = restart();
+    expect(await after.syllabus.generate({ ...TEACHER, outlineId })).toEqual({
+      ok: false,
+      reason: "awaiting_reconciliation",
+    });
+    expect(after.calls).toEqual([]);
+
+    const [uncertain] = after.budget.list("uncertain");
+    expect(
+      after.budget.reconcile({
+        reservationId: uncertain?.id ?? "",
+        confirmedCost: 20,
+        note: "Confirmado con el proveedor.",
+        actorId: "administrador-1",
+        correlationId: "prueba",
+      }),
+    ).toEqual({ ok: true });
+    // Conciliar no reanuda nada.
+    expect(after.calls).toEqual([]);
+    expect(after.syllabus.review(outlineId)?.interrupted).toBe(0);
+
+    expect(
+      await after.syllabus.generate({ ...TEACHER, outlineId }),
+    ).toMatchObject({ ok: true, generated: 3, notSent: 0 });
+    expect(after.calls).toHaveLength(3);
   });
 });

@@ -954,9 +954,11 @@ describe("presupuesto por perfil (SC-037) y límite de coste (SC-032)", () => {
   // reserva preparada ocupa el presupuesto como lo haría una operación real
   // de resultado incierto.
   function simulateUncertain(cost: number): string {
+    // De otra ejecución: una operación interrumpida de este temario
+    // impediría además generar sus temas hasta conciliarla.
     const run = client.runtime.generation.startRun({
-      kind: "syllabus",
-      targetId: outlineId,
+      kind: "outline",
+      targetId: "simulación",
       requestedBy: "simulación",
     });
     const reservation = client.runtime.db

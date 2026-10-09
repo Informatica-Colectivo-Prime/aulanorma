@@ -59,6 +59,8 @@ const GENERATE_REFUSALS: Readonly<Record<string, string>> = {
     "No hay ningún tema pendiente o fallido que se pueda generar ahora.",
   estimate_changed:
     "La estimación o el coste máximo han cambiado desde que los viste. No se ha enviado nada: revisa las cifras actuales antes de confirmar.",
+  awaiting_reconciliation:
+    "Una operación de este temario se interrumpió sin confirmar su consumo. No se ha enviado nada: un administrador debe conciliarla antes de generar más temas.",
   already_running:
     "Ya hay una generación de este temario en curso. No se ha enviado nada más: espera a que termine.",
 };
@@ -159,13 +161,22 @@ export function syllabusNotice(notice: Notice | undefined): Html | null {
     );
   }
   if (notice.code === "syllabus_generated") {
-    const [generated = "0", failed = "0", notSent = "0"] =
-      notice.detail.split("_");
-    const incomplete = failed !== "0" || notSent !== "0";
+    const [
+      generated = "0",
+      failed = "0",
+      notSent = "0",
+      discarded = "0",
+      invalidated = "0",
+    ] = notice.detail.split("_");
+    const incomplete = failed !== "0" || notSent !== "0" || discarded !== "0";
     return noticeBox(
       incomplete ? "bad" : "good",
       `Temas terminados como borrador: ${generated}. Fallidos: ${failed}. ` +
-        `No enviados por falta de presupuesto: ${notSent}.` +
+        (invalidated === "1"
+          ? "La generación se detuvo porque el índice o la interpretación " +
+            "dejaron de estar vigentes mientras se generaba. Resultados " +
+            `descartados: ${discarded}. Temas no enviados: ${notSent}.`
+          : `No enviados por falta de presupuesto: ${notSent}.`) +
         (incomplete ? " La generación está incompleta." : ""),
     );
   }
@@ -438,67 +449,79 @@ export function syllabusView(input: {
                   >.
                 </p>
               </div>`
-            : syllabus.running !== undefined
-              ? html`<p class="muted">
-                  No se puede pedir otra generación hasta que termine la que
-                  está en curso.
-                </p>`
-              : syllabus.toGenerate.length === 0
+            : syllabus.interrupted > 0
+              ? html`<div class="notice bad" role="status">
+                  <p>
+                    Operaciones de este temario que se enviaron y quedaron sin
+                    respuesta al interrumpirse el servicio:
+                    ${syllabus.interrupted}. Su consumo no está confirmado y su
+                    reserva sigue contando. No se genera ningún tema hasta que
+                    un administrador las concilie en
+                    <a href="/budget">Presupuesto</a>.
+                  </p>
+                </div>`
+              : syllabus.running !== undefined
                 ? html`<p class="muted">
-                    No hay ningún tema pendiente o fallido que se pueda generar
-                    ahora.
+                    No se puede pedir otra generación hasta que termine la que
+                    está en curso.
                   </p>`
-                : html`<form method="post" action="/api/syllabus/generate">
-                    <fieldset>
-                      <legend>
-                        ${
-                          started
-                            ? "Reanudar: generar solo lo pendiente o fallido"
-                            : "Desarrollar el temario"
-                        }
-                      </legend>
-                      <input
-                        type="hidden"
-                        name="csrf"
-                        value="${session.csrfToken}"
-                      />
-                      <input
-                        type="hidden"
-                        name="outline"
-                        value="${outlineId}"
-                      />
-                      <input
-                        type="hidden"
-                        name="shown_estimate"
-                        value="${syllabus.cost.estimatedCost}"
-                      />
-                      <input
-                        type="hidden"
-                        name="shown_max"
-                        value="${syllabus.cost.maxCost}"
-                      />
-                      <p>
-                        Temas que se generarán, uno a uno y cada uno con su
-                        propia reserva de presupuesto:
-                        ${syllabus.toGenerate.length}. Los temas ya terminados
-                        no se repiten. No hay reintentos automáticos: si un tema
-                        falla, queda señalado y puedes pedir otro intento.
-                      </p>
-                      ${entryList(syllabus.toGenerate)}
-                      ${budgetNote({
-                        budget: input.budget,
-                        cost: syllabus.cost,
-                        provider: input.provider,
-                      })}
-                      <button type="submit" data-busy="Generando los temas…">
-                        ${
-                          started
-                            ? "Confirmar y generar lo pendiente"
-                            : "Confirmar y desarrollar el temario"
-                        }
-                      </button>
-                    </fieldset>
-                  </form>`
+                : syllabus.toGenerate.length === 0
+                  ? html`<p class="muted">
+                      No hay ningún tema pendiente o fallido que se pueda
+                      generar ahora.
+                    </p>`
+                  : html`<form method="post" action="/api/syllabus/generate">
+                      <fieldset>
+                        <legend>
+                          ${
+                            started
+                              ? "Reanudar: generar solo lo pendiente o fallido"
+                              : "Desarrollar el temario"
+                          }
+                        </legend>
+                        <input
+                          type="hidden"
+                          name="csrf"
+                          value="${session.csrfToken}"
+                        />
+                        <input
+                          type="hidden"
+                          name="outline"
+                          value="${outlineId}"
+                        />
+                        <input
+                          type="hidden"
+                          name="shown_estimate"
+                          value="${syllabus.cost.estimatedCost}"
+                        />
+                        <input
+                          type="hidden"
+                          name="shown_max"
+                          value="${syllabus.cost.maxCost}"
+                        />
+                        <p>
+                          Temas que se generarán, uno a uno y cada uno con su
+                          propia reserva de presupuesto:
+                          ${syllabus.toGenerate.length}. Los temas ya terminados
+                          no se repiten. No hay reintentos automáticos: si un
+                          tema falla, queda señalado y puedes pedir otro
+                          intento.
+                        </p>
+                        ${entryList(syllabus.toGenerate)}
+                        ${budgetNote({
+                          budget: input.budget,
+                          cost: syllabus.cost,
+                          provider: input.provider,
+                        })}
+                        <button type="submit" data-busy="Generando los temas…">
+                          ${
+                            started
+                              ? "Confirmar y generar lo pendiente"
+                              : "Confirmar y desarrollar el temario"
+                          }
+                        </button>
+                      </fieldset>
+                    </form>`
       }
 
       <h2>Temas</h2>

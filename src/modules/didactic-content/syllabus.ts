@@ -179,6 +179,10 @@ export interface SyllabusReview {
   // Generación en curso en este proceso, con el instante en que se pidió.
   // Mientras dura, no se admite otra.
   readonly running: { readonly requestedAt: number } | undefined;
+  // Operaciones de este temario que se enviaron y quedaron sin respuesta al
+  // interrumpirse el proceso. No se sabe a qué tema correspondía cada una:
+  // mientras no se concilien, no se genera ningún tema (FR-066).
+  readonly interrupted: number;
   readonly blockers: VersionBlockers;
   readonly versions: readonly SyllabusVersion[];
   // Estado que se confirma al aprobar la versión: cambia con cualquier
@@ -194,7 +198,9 @@ export type GenerateRejection =
   // Las cifras que el usuario vio ya no son las actuales.
   | "estimate_changed"
   // Ya hay una generación de este temario en curso.
-  | "already_running";
+  | "already_running"
+  // Hay operaciones interrumpidas de este temario sin conciliar.
+  | "awaiting_reconciliation";
 
 export type GenerateResult =
   | {
@@ -202,8 +208,14 @@ export type GenerateResult =
       // Temas terminados como borrador en esta ejecución.
       readonly generated: number;
       readonly failed: number;
-      // Temas que no se enviaron por falta de presupuesto.
+      // Temas que no se enviaron: por falta de presupuesto o porque el
+      // índice o la interpretación dejaron de estar vigentes.
       readonly notSent: number;
+      // Resultados que llegaron con el índice o la interpretación ya sin
+      // vigencia y no se guardaron.
+      readonly discarded: number;
+      // `true` si el recorrido se detuvo por esa pérdida de vigencia.
+      readonly invalidated: boolean;
       readonly incomplete: boolean;
     }
   | { readonly ok: false; readonly reason: GenerateRejection };
@@ -727,17 +739,29 @@ export function createSyllabus({
               .map((approval) => approval.id),
       ),
     );
+    const runs = generation.listRuns("syllabus", review.outline.id);
+    const runIds = new Set(runs.map((run) => run.id));
+    // Una operación enviada cuya respuesta se perdió con el proceso queda
+    // incierta sin llamada registrada: ningún tema la tiene anotada.
+    const interrupted = generation.budget
+      .list("uncertain")
+      .filter(
+        (item) =>
+          item.task === "topic" &&
+          item.callId === null &&
+          runIds.has(item.runId),
+      ).length;
     return {
       outline: review,
       topics,
       development,
       toGenerate,
       cost,
-      running: generation
-        .listRuns("syllabus", review.outline.id)
+      running: runs
         .filter((run) => run.status === "running")
         .map((run) => ({ requestedAt: run.requestedAt }))
         .at(-1),
+      interrupted,
       incomplete:
         topics.some((item) => item.topic !== undefined) &&
         topics.some((item) => !developed(item.topic)),
@@ -985,6 +1009,9 @@ export function createSyllabus({
       if (before.running !== undefined) {
         return refuse("already_running");
       }
+      if (before.interrupted > 0) {
+        return refuse("awaiting_reconciliation");
+      }
       if (before.toGenerate.length === 0) {
         return refuse("nothing_to_generate");
       }
@@ -1016,11 +1043,31 @@ export function createSyllabus({
       let generated = 0;
       let failed = 0;
       let notSent = 0;
+      let discarded = 0;
       let stopped = false;
+      let invalidated = false;
+      // El índice aprobado y la interpretación validada con los que se pidió
+      // la generación. La aprobación solo sigue vigente si no han cambiado
+      // ni el índice ni la validación de la interpretación, y si el
+      // documento no tiene un sustituto.
+      const stillCurrent = (): boolean => {
+        const current = outlines.review(outlineId);
+        return (
+          current !== undefined &&
+          !current.historical &&
+          current.approval?.id === approval.id
+        );
+      };
       try {
         // Uno a uno: cada tema es una operación, con su propia reserva. Los
         // terminados quedan guardados aunque los siguientes no se generen.
         for (const entry of before.toGenerate) {
+          // Antes de cada envío: sin la vigencia con la que se pidió, ni
+          // este tema ni los siguientes se envían.
+          if (!stopped && !stillCurrent()) {
+            stopped = true;
+            invalidated = true;
+          }
           if (stopped) {
             notSent += 1;
             continue;
@@ -1054,15 +1101,19 @@ export function createSyllabus({
             notSent += 1;
             continue;
           }
+          // El índice o la interpretación pudieron cambiar mientras se
+          // esperaba: el resultado se descarta, el tema sigue como estaba y
+          // el recorrido se detiene.
+          if (!stillCurrent()) {
+            stopped = true;
+            invalidated = true;
+            discarded += 1;
+            continue;
+          }
           const stored = transaction(db, (): boolean => {
             const topic = topicOfEntry(entry.id);
-            // El índice o el tema pudieron cambiar mientras se esperaba: un
-            // resultado nunca sustituye un tema que ya tiene contenido.
-            if (
-              topic === undefined ||
-              developed(topic) ||
-              outlines.review(outlineId)?.approval?.id !== approval.id
-            ) {
+            // Un resultado nunca sustituye un tema que ya tiene contenido.
+            if (topic === undefined || developed(topic) || !stillCurrent()) {
               return false;
             }
             if (result.status !== "ok") {
@@ -1134,10 +1185,20 @@ export function createSyllabus({
         generated,
         failed,
         notSent,
+        discarded,
+        invalidated,
         incomplete,
         provider: generation.provider,
       });
-      return { ok: true, generated, failed, notSent, incomplete };
+      return {
+        ok: true,
+        generated,
+        failed,
+        notSent,
+        discarded,
+        invalidated,
+        incomplete,
+      };
     },
 
     getTopic,
