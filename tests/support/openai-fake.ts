@@ -115,15 +115,34 @@ function sentOf(url: unknown, init: TransportInit): SentRequest {
   };
 }
 
-// Transporte que responde con `respond` y anota cada petición recibida.
+// Recuento de tokens de entrada que devuelve el proveedor simulado.
+export function counted(tokens: number): Response {
+  return json({ object: "response.input_tokens", input_tokens: tokens });
+}
+
+// Transporte que responde con `respond` a la petición de generación y con
+// `count` al recuento previo de tokens de entrada, y anota por separado lo
+// que recibe: `sent`, las peticiones de pago; `counts`, los recuentos.
 export function fakeTransport(
   respond: (request: SentRequest) => Response | Promise<Response>,
-): { readonly fetch: Transport; readonly sent: SentRequest[] } {
+  count: (request: SentRequest) => Response | Promise<Response> = () =>
+    counted(64),
+): {
+  readonly fetch: Transport;
+  readonly sent: SentRequest[];
+  readonly counts: SentRequest[];
+} {
   const sent: SentRequest[] = [];
+  const counts: SentRequest[] = [];
   return {
     sent,
+    counts,
     fetch: async (url, init) => {
       const request = sentOf(url, init);
+      if (request.url.endsWith("/responses/input_tokens")) {
+        counts.push(request);
+        return count(request);
+      }
       sent.push(request);
       return respond(request);
     },

@@ -107,6 +107,14 @@ export interface GenerationProvider {
   estimateCost(request: ProviderRequest): number;
   // Coste máximo de la operación: lo que se reserva antes de enviarla.
   maxCost(request: ProviderRequest): number;
+  // Comprobación previa al envío, sin consumo: `false` si el adaptador no
+  // puede sostener que la operación quepa en el coste máximo que declaró.
+  // Entonces la operación no se envía y su reserva se libera. Un adaptador
+  // cuyo coste máximo no depende de nada externo no la necesita.
+  admit?(
+    request: ProviderRequest,
+    options?: ProviderCallOptions,
+  ): Promise<boolean>;
   generate(
     request: ProviderRequest,
     options?: ProviderCallOptions,
@@ -282,18 +290,18 @@ export function createGeneration({
   readonly now: () => number;
   readonly callTimeoutMs?: number;
 }): Generation {
-  // La respuesta del proveedor, o `null` si falla o agota el tiempo.
-  const ask = async (
-    request: ProviderRequest,
-  ): Promise<ProviderReply | null> => {
+  // Lo que devuelve una llamada al adaptador, o `null` si falla o agota el
+  // tiempo; al agotarlo, se le avisa para que cierre la petición.
+  const within = async <Result>(
+    start: (options: ProviderCallOptions) => Promise<Result>,
+  ): Promise<Result | null> => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const controller = new AbortController();
     try {
       return await Promise.race([
-        provider.generate(request, { signal: controller.signal }),
+        start({ signal: controller.signal }),
         new Promise<null>((resolve) => {
           timer = setTimeout(() => {
-            // La operación ya se envió: cerrarla no confirma su consumo.
             controller.abort();
             resolve(null);
           }, callTimeoutMs);
@@ -305,6 +313,11 @@ export function createGeneration({
       clearTimeout(timer);
     }
   };
+
+  // La respuesta del proveedor. Sin ella, la operación ya se envió: cerrarla
+  // no confirma su consumo.
+  const ask = (request: ProviderRequest): Promise<ProviderReply | null> =>
+    within((options) => provider.generate(request, options));
 
   const recordCall = (
     callId: string,
@@ -385,6 +398,31 @@ export function createGeneration({
         return { status: "budget_exceeded", reason: reservation.reason };
       }
       const { reservationId } = reservation;
+      // Si el adaptador no puede sostener su coste máximo para esta
+      // operación, o no puede comprobarlo, no se envía: consta que no se
+      // envió y la reserva se libera.
+      if (provider.admit !== undefined) {
+        const checkedAt = now();
+        const admitted = await within((options) =>
+          provider.admit === undefined
+            ? Promise.resolve(false)
+            : provider.admit(providerRequest, options),
+        );
+        if (admitted !== true) {
+          budget.release(reservationId);
+          const callId = randomBytes(16).toString("hex");
+          recordCall(
+            callId,
+            runId,
+            providerRequest,
+            { model: "unknown", tokensIn: 0, tokensOut: 0 },
+            Math.max(0, now() - checkedAt),
+            estimatedCost,
+            "provider_error",
+          );
+          return { status: "provider_error", callId, uncertain: false };
+        }
+      }
       // El envío se anota antes de llamar: si el proceso cae después, la
       // reserva consta como enviada y sigue contando.
       budget.markSent(reservationId);

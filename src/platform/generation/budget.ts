@@ -300,6 +300,25 @@ export function createBudget({
       if (!amount(cost)) {
         return false;
       }
+      // Un consumo mayor que lo reservado se liquida por lo que fue, y queda
+      // registrado: la reserva no cubrió la operación.
+      const reserved = db
+        .prepare(
+          "SELECT reserved_cost FROM budget_reservation " +
+            "WHERE id = ? AND state = 'sent'",
+        )
+        .get(reservationId)?.reserved_cost;
+      if (reserved !== undefined && cost > integer(reserved)) {
+        audit.record({
+          actorId: null,
+          action: "budget.reservation_exceeded",
+          targetKind: "budget_reservation",
+          targetId: reservationId,
+          result: "ok",
+          correlationId: "generation",
+          details: { reserved: integer(reserved), settled: cost },
+        });
+      }
       return changed(
         db
           .prepare(

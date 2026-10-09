@@ -29,6 +29,7 @@ import {
 import type { Database } from "@/platform/persistence";
 import {
   completed,
+  counted,
   FAKE_KEY,
   FAKE_MODEL,
   fakeTransport,
@@ -54,10 +55,12 @@ const REQUEST: ProviderRequest = {
 function providerWith(
   respond: (request: SentRequest) => Response | Promise<Response>,
   settings: Partial<OpenAiSettings> = {},
+  count?: (request: SentRequest) => Response | Promise<Response>,
 ) {
-  const transport = fakeTransport(respond);
+  const transport = fakeTransport(respond, count);
   return {
     sent: transport.sent,
+    counts: transport.counts,
     provider: createOpenAiProvider({
       ...SETTINGS,
       ...settings,
@@ -484,11 +487,19 @@ describe("con el presupuesto", () => {
   function generationWith(
     respond: (request: SentRequest) => Response | Promise<Response>,
     callTimeoutMs?: number,
-  ): { generation: Generation; sent: SentRequest[]; runId: string } {
+    count?: (request: SentRequest) => Response | Promise<Response>,
+  ): {
+    generation: Generation;
+    sent: SentRequest[];
+    counts: SentRequest[];
+    runId: string;
+    audit: ReturnType<typeof createAudit>;
+  } {
     const now = () => (clock += 7);
+    const audit = createAudit(db);
     const budget = createBudget({
       db,
-      audit: createAudit(db),
+      audit,
       now,
       // Los importes propuestos, aún sin aprobar: 2 USD por operación y 25
       // USD acumulados.
@@ -501,7 +512,7 @@ describe("con el presupuesto", () => {
       actorId: "administrador-1",
       correlationId: "prueba",
     });
-    const { provider, sent } = providerWith(respond);
+    const { provider, sent, counts } = providerWith(respond, {}, count);
     const generation = createGeneration({
       db,
       provider,
@@ -514,8 +525,138 @@ describe("con el presupuesto", () => {
       targetId: "documento",
       requestedBy: "docente-1",
     });
-    return { generation, sent, runId };
+    return { generation, sent, counts, runId, audit };
   }
+
+  // Octetos de la petición de prueba más el margen: la entrada reservada.
+  const RESERVED_INPUT =
+    new TextEncoder().encode(
+      REQUEST.instructions +
+        JSON.stringify(REQUEST.input) +
+        JSON.stringify(strictJsonSchema(SCHEMA)),
+    ).length + 512;
+
+  test("antes de enviar, el proveedor cuenta la entrada de la misma petición, sin generar nada", async () => {
+    const { generation, sent, counts, runId } = generationWith(ok);
+    await generation.call(runId, REQUEST);
+    expect(counts).toHaveLength(1);
+    expect(sent).toHaveLength(1);
+    expect(counts[0]?.url).toBe(
+      "https://api.openai.com/v1/responses/input_tokens",
+    );
+    // Lo que el proveedor cuenta como entrada es lo mismo que recibirá.
+    const keys = ["model", "instructions", "input", "text", "reasoning"];
+    expect(Object.keys(counts[0]?.body ?? {}).sort()).toEqual(keys.sort());
+    for (const key of keys) {
+      expect(counts[0]?.body[key]).toEqual(sent[0]?.body[key]);
+    }
+  });
+
+  test("si el recuento del proveedor cabe justo en la entrada reservada, la operación se envía", async () => {
+    const { generation, sent, runId } = generationWith(ok, undefined, () =>
+      counted(RESERVED_INPUT),
+    );
+    expect(await generation.call(runId, REQUEST)).toMatchObject({
+      status: "ok",
+    });
+    expect(sent).toHaveLength(1);
+  });
+
+  test("si el proveedor cuenta más entrada que la reservada, la operación no se envía y su reserva se libera", async () => {
+    const { generation, sent, counts, runId } = generationWith(
+      ok,
+      undefined,
+      () => counted(RESERVED_INPUT + 1),
+    );
+    const available = generation.budget.status().available;
+    expect(await generation.call(runId, REQUEST)).toMatchObject({
+      status: "provider_error",
+      uncertain: false,
+    });
+    expect(counts).toHaveLength(1);
+    expect(sent).toHaveLength(0);
+    expect(generation.budget.list()).toMatchObject([{ state: "released" }]);
+    expect(generation.budget.status()).toMatchObject({
+      available,
+      uncertain: 0,
+      reserved: 0,
+    });
+    expect(generation.listCalls(runId)).toMatchObject([
+      { validationResult: "provider_error", tokensIn: 0, tokensOut: 0 },
+    ]);
+  });
+
+  test.each([
+    ["responde con un error", () => json({ error: { message: "x" } }, 500)],
+    ["no responde con un recuento", () => json({ object: "otra cosa" })],
+    ["devuelve un recuento que no es un entero", () => counted(12.5)],
+    [
+      "falla la conexión",
+      () => {
+        throw new Error("sin conexión");
+      },
+    ],
+  ])(
+    "si el recuento %s, no se reintenta, la operación no se envía y su reserva se libera",
+    async (_label, count) => {
+      const { generation, sent, counts, runId } = generationWith(
+        ok,
+        undefined,
+        count,
+      );
+      expect(await generation.call(runId, REQUEST)).toMatchObject({
+        status: "provider_error",
+        uncertain: false,
+      });
+      expect(counts).toHaveLength(1);
+      expect(sent).toHaveLength(0);
+      expect(generation.budget.list()).toMatchObject([{ state: "released" }]);
+    },
+  );
+
+  test("si el recuento no llega a tiempo, se cierra, la operación no se envía y su reserva se libera", async () => {
+    const { generation, sent, counts, runId } = generationWith(ok, 30, never);
+    expect(await generation.call(runId, REQUEST)).toMatchObject({
+      status: "provider_error",
+      uncertain: false,
+    });
+    expect(counts[0]?.signal?.aborted).toBe(true);
+    expect(sent).toHaveLength(0);
+    expect(generation.budget.list()).toMatchObject([{ state: "released" }]);
+  });
+
+  test("un consumo mayor que lo reservado se liquida por lo que fue y queda registrado", async () => {
+    // El proveedor factura más entrada de la que contó: la reserva no cubre
+    // la operación.
+    const { generation, runId, audit } = generationWith(() =>
+      json(
+        completed(JSON.stringify(OUTPUT), {
+          usage: usageBody({ input: 200_000, output: 9000 }),
+        }),
+      ),
+    );
+    const { maxCost } = generation.estimate(REQUEST);
+    expect(await generation.call(runId, REQUEST)).toMatchObject({
+      status: "ok",
+      uncertain: false,
+    });
+    const [reservation] = generation.budget.list();
+    expect(reservation).toMatchObject({
+      state: "settled",
+      reservedCost: maxCost,
+      settledCost: 490_000,
+    });
+    expect(
+      audit
+        .list()
+        .filter((event) => event.action === "budget.reservation_exceeded"),
+    ).toMatchObject([
+      {
+        targetId: reservation?.id,
+        details: { reserved: maxCost, settled: 490_000 },
+      },
+    ]);
+  });
 
   test("la reserva se liquida con el consumo real, que incluye el razonamiento", async () => {
     const { generation, runId } = generationWith(ok);

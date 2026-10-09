@@ -9,7 +9,10 @@
 // las citas y aprobar siguen siendo cosa de `Generation`, del dominio y de
 // una persona.
 //
-// - Una petición por operación: sin reintentos del SDK, ni propios.
+// - Una petición de pago por operación: sin reintentos del SDK, ni propios.
+// - Antes de enviarla, el recuento de tokens de entrada del propio proveedor
+//   decide si la operación cabe en lo reservado. Si no cabe, o no puede
+//   saberse, no se envía.
 // - Procesamiento estándar (`service_tier: "default"`), sin caché de prompts
 //   y sin guardar la respuesta en el proveedor.
 // - El consumo solo se confirma con los datos de uso de la respuesta y si se
@@ -239,9 +242,12 @@ const encoder = new TextEncoder();
 interface Prepared {
   readonly schema: JsonSchema;
   readonly data: string;
-  // Cota superior de los tokens de entrada: un token ocupa al menos un octeto
-  // del texto, así que no puede haber más tokens que octetos. Supuesto sin
-  // garantía del proveedor, por validar con el consumo real.
+  // Tokens de entrada que cubre la reserva: los octetos de lo que se envía
+  // más un margen. Que el proveedor no cuente más no está garantizado: un
+  // texto no tiene más tokens que octetos, pero el proveedor añade tokens de
+  // formato y representa el esquema a su manera. Por eso la reserva no se
+  // fía de esta cifra: `admit` la contrasta con el recuento del proveedor
+  // antes de enviar.
   readonly maxInputTokens: number;
   readonly maxOutputTokens: number;
 }
@@ -294,6 +300,24 @@ export function createOpenAiProvider(
     };
   };
 
+  // Lo que comparten el recuento previo y la petición: lo que el proveedor
+  // cuenta como entrada.
+  const payload = (request: ProviderRequest, prepared: Prepared) => ({
+    model,
+    // Las instrucciones y los datos van separados (FR-004).
+    instructions: request.instructions,
+    input: prepared.data,
+    text: {
+      format: {
+        type: "json_schema" as const,
+        name: `aulanorma_${request.task}_${request.promptVersion}`,
+        strict: true,
+        schema: prepared.schema,
+      },
+    },
+    reasoning: { effort: settings.reasoningEffort },
+  });
+
   const unconfirmed = (usage?: Usage): ProviderReply => ({
     ok: false,
     usage: usage ?? { model, tokensIn: 0, tokensOut: 0 },
@@ -344,6 +368,30 @@ export function createOpenAiProvider(
       );
     },
 
+    // El proveedor cuenta los tokens de entrada de la misma petición, sin
+    // generar nada. Solo se admite la operación si ese recuento cabe en la
+    // entrada reservada; si el recuento falla, no se admite.
+    async admit(request, options) {
+      const prepared = prepare(request);
+      if (prepared === undefined) {
+        return false;
+      }
+      try {
+        const counted = await client.responses.inputTokens.count(
+          payload(request, prepared),
+          {
+            maxRetries: 0,
+            timeout: settings.timeoutMs,
+            ...(options === undefined ? {} : { signal: options.signal }),
+          },
+        );
+        const tokens = count(counted.input_tokens);
+        return tokens !== undefined && tokens <= prepared.maxInputTokens;
+      } catch {
+        return false;
+      }
+    },
+
     async generate(request, options) {
       const prepared = prepare(request);
       if (prepared === undefined) {
@@ -353,19 +401,7 @@ export function createOpenAiProvider(
       try {
         response = await client.responses.create(
           {
-            model,
-            // Las instrucciones y los datos van separados (FR-004).
-            instructions: request.instructions,
-            input: prepared.data,
-            text: {
-              format: {
-                type: "json_schema",
-                name: `aulanorma_${request.task}_${request.promptVersion}`,
-                strict: true,
-                schema: prepared.schema,
-              },
-            },
-            reasoning: { effort: settings.reasoningEffort },
+            ...payload(request, prepared),
             max_output_tokens: prepared.maxOutputTokens,
             service_tier: "default",
             // Sin puntos de caché explícitos, la petición no usa la caché de
