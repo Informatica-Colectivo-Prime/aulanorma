@@ -103,6 +103,17 @@ la calidad de la generación ni el coste real, y no sirve para declarar la acept
 recorrido (SC-024). Las pruebas del adaptador de OpenAI usan un transporte simulado: tampoco
 acreditan al proveedor real.
 
+Un adaptador cuyo coste máximo depende de algo que no controla puede declarar una
+comprobación previa, `admit`, sin consumo: si no puede sostener que la operación quepa en lo
+reservado, la operación no se envía y su reserva se libera. El de OpenAI la usa para
+contrastar la entrada reservada con el recuento del proveedor. Un consumo confirmado mayor
+que su reserva se liquida por lo que fue y queda en la auditoría.
+
+Una generación del temario se detiene si la aprobación del índice con la que se pidió deja
+de estar vigente: el resultado en espera se descarta y los temas restantes no se envían.
+Tras una caída, una operación de un tema que quedó incierta sin respuesta impide generar ese
+temario hasta que se concilie.
+
 Con un proveedor con precios, la moneda del presupuesto se fija al arrancar, solo con el
 límite a cero y sin importes anotados; si no puede fijarse, el servicio no atiende.
 
