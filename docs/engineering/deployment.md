@@ -22,6 +22,10 @@ Los ejemplos de servicio y de proxy son puntos de partida para Linux con systemd
 se han probado y deben adaptarse a lo que haya en el destino. Nada de este documento autoriza
 a modificar los servicios que ya existan en ese servidor.
 
+El despliegue de pruebas confirmado es un VPS con Easypanel, que ejecuta el servicio en un
+contenedor. Lo que cambia en ese caso está en [`easypanel.md`](easypanel.md); tampoco se ha
+ejecutado.
+
 ## Datos que faltan
 
 - Dominio público del piloto y quién gestiona su DNS.

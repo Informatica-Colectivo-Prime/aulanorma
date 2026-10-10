@@ -44,3 +44,4 @@ consideradas** y **Consecuencias**.
 | [0002](./0002-quality-ci-and-security-strategy.md) | Estrategia de calidad, integración continua y seguridad | Aceptado |
 | [0003](./0003-scorm-export-instead-of-automatic-moodle-publication.md) | Exportación SCORM en lugar de publicación automática en Moodle (sustituye parcialmente al 0001) | Aceptado |
 | [0004](./0004-product-surface-persistence-identity-and-generation.md) | Superficie de producto, persistencia, identidad y generación (sustituye parcialmente al 0001) | Aceptado |
+| [0005](./0005-container-packaging-for-easypanel.md) | Empaquetado en contenedor para el despliegue de pruebas en Easypanel | Propuesto |
