@@ -95,8 +95,8 @@ npm run dev
 ```
 
 `npm run dev` ejecuta primero una comprobación previa de la configuración y, solo si es válida,
-arranca el servidor en modo desarrollo. El servidor escucha siempre en `127.0.0.1:3000`: la
-dirección y el puerto son fijos.
+arranca el servidor en modo desarrollo. El servidor escucha en `127.0.0.1:3000`: el
+puerto es fijo y la dirección solo cambia, para un contenedor, con `AULANORMA_LISTEN_HOST`.
 
 En otra terminal:
 
@@ -520,7 +520,7 @@ Next.js.
   vuelva a validar la configuración internamente no lo convierte en un punto de entrada
   admitido.
 
-La escucha es fija en `127.0.0.1:3000`, y cualquier cambio en los ficheros `.env*` exige
+La escucha es en `127.0.0.1:3000` salvo en un contenedor (ADR 0005), y cualquier cambio en los ficheros `.env*` exige
 reiniciar.
 
 `npm run dev` compila con Webpack. `npm run build` conserva el compilador por defecto de Next.js

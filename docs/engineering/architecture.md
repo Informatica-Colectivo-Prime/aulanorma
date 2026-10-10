@@ -298,8 +298,9 @@ sus dos controles para admitir solo importaciones relativas con extensión dentr
 
 ## Frontera HTTP
 
-`server.mjs` escucha exclusivamente en `127.0.0.1:3000`, dirección y puerto fijos que no se leen
-del entorno. Cada petición pasa por la frontera de `src/platform/http-boundary` **antes** de
+`server.mjs` escucha en el puerto 3000, fijo, y en `127.0.0.1` salvo que la configuración
+validada indique `0.0.0.0`, que es para un contenedor (ADR 0005, Propuesto). No lee la dirección
+ni el puerto del entorno: la dirección le llega de `src/platform/config`. Cada petición pasa por la frontera de `src/platform/http-boundary` **antes** de
 Next.js. La frontera evalúa en este orden, y la primera regla incumplida decide la respuesta:
 
 **versión → `Host` → destino → método → cuerpo**

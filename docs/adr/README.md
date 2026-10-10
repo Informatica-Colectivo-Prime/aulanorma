@@ -40,8 +40,8 @@ consideradas** y **Consecuencias**.
 
 | ADR | Título | Estado |
 |-----|--------|--------|
-| [0001](./0001-architecture-runtime-and-modular-structure.md) | Arquitectura, runtime y estructura modular (sustituido parcialmente por el 0003 y el 0004) | Aceptado |
+| [0001](./0001-architecture-runtime-and-modular-structure.md) | Arquitectura, runtime y estructura modular (sustituido parcialmente por el 0003 y el 0004; el 0005, Propuesto, propone sustituir la dirección de escucha fija) | Aceptado |
 | [0002](./0002-quality-ci-and-security-strategy.md) | Estrategia de calidad, integración continua y seguridad | Aceptado |
 | [0003](./0003-scorm-export-instead-of-automatic-moodle-publication.md) | Exportación SCORM en lugar de publicación automática en Moodle (sustituye parcialmente al 0001) | Aceptado |
 | [0004](./0004-product-surface-persistence-identity-and-generation.md) | Superficie de producto, persistencia, identidad y generación (sustituye parcialmente al 0001) | Aceptado |
-| [0005](./0005-container-packaging-for-easypanel.md) | Empaquetado en contenedor para el despliegue de pruebas en Easypanel | Propuesto |
+| [0005](./0005-container-packaging-and-listen-address.md) | Empaquetado en contenedor y dirección de escucha configurable (sustituye parcialmente al 0001) | Propuesto |

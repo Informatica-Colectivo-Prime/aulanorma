@@ -124,8 +124,9 @@ esté a cero en ese momento. **No se ha desplegado ni probado con el proveedor r
 
 ## Servicio
 
-El proceso escucha siempre en `127.0.0.1:3000`; ni la dirección ni el puerto son
-configurables. Ejemplo de unidad de systemd, **sin probar**:
+El proceso escucha en `127.0.0.1:3000`. El puerto no es configurable. La dirección solo
+cambia con `AULANORMA_LISTEN_HOST=0.0.0.0`, que es para un contenedor y **no debe usarse en
+este tipo de despliegue**: expondría el proceso en todas las interfaces del servidor. Ejemplo de unidad de systemd, **sin probar**:
 
 ```ini
 [Unit]
