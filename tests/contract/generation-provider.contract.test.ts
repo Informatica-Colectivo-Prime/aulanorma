@@ -1,8 +1,9 @@
 // Contrato del proveedor de generación (specs/002-boe-scorm-export: T035;
 // contracts/generation-provider.md; FR-019, FR-029 y FR-055; SC-005, SC-015 y
 // SC-044). Las mismas pruebas valen para todo adaptador: `ADAPTERS` enumera
-// los disponibles, y hoy solo existe el determinista. No hay red, ningún SDK
-// ni ninguna llamada de pago.
+// los disponibles. El de OpenAI se ejecuta aquí con un transporte simulado:
+// no hay red ni ninguna llamada de pago, y eso no acredita al proveedor real,
+// que se comprueba a mano.
 import { readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,10 +14,12 @@ import {
   createBudget,
   createDeterministicProvider,
   createGeneration,
+  createOpenAiProvider,
   DETERMINISTIC_MODEL,
   DETERMINISTIC_PROVIDER,
   inputDigest,
   loadRecordings,
+  OPENAI_PROVIDER,
 } from "@/platform/generation";
 import type {
   Generation,
@@ -29,6 +32,12 @@ import {
   PLATFORM_MIGRATIONS,
 } from "@/platform/persistence";
 import type { Database } from "@/platform/persistence";
+import {
+  completed,
+  fakeTransport,
+  json,
+  SETTINGS,
+} from "../support/openai-fake";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const RECORDINGS = path.join(repoRoot, "tests/fixtures/generation");
@@ -42,6 +51,7 @@ const REQUEST: ProviderRequest = {
   promptVersion: "v1",
   instructions: "Instrucciones de prueba.",
   input: INPUT,
+  outputSchema: SCHEMA,
   maxOutputTokens: 1000,
 };
 
@@ -58,6 +68,15 @@ const ADAPTERS: readonly (readonly [string, () => GenerationProvider])[] = [
           output: OUTPUT,
         },
       ]),
+  ],
+  [
+    OPENAI_PROVIDER,
+    () =>
+      createOpenAiProvider({
+        ...SETTINGS,
+        fetch: fakeTransport(() => json(completed(JSON.stringify(OUTPUT))))
+          .fetch,
+      }),
   ],
 ];
 
@@ -264,6 +283,7 @@ describe("lo que se envía al proveedor", () => {
       "input",
       "instructions",
       "maxOutputTokens",
+      "outputSchema",
       "promptVersion",
       "task",
     ]);

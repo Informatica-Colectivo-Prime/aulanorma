@@ -226,11 +226,18 @@ restauración probada en el destino siguen siendo T074.
 ## Phase 9: Proveedor real de generación
 
 **Purpose**: sustituir las respuestas simuladas por generación real. Toda la fase depende de
-una decisión que el mantenedor no ha tomado. No se instala ningún SDK ni se hace ninguna
-llamada de pago antes.
+una decisión que el mantenedor tomó el 2026-10-09: OpenAI, con `gpt-6.1-sol` como modelo
+candidato. El presupuesto propuesto sigue **sin aprobar** y **no se ha hecho ninguna llamada
+de pago**. Estado en [openai-provider.md](./openai-provider.md).
 
-- [ ] T075 ⛔ BLOQUEADA (proveedor, modelo, moneda, precios y presupuesto, con cuenta de API) Registrar la elección y su justificación en `specs/002-boe-scorm-export/research.md` (R6) y en el ADR 0004 mientras siga Propuesto, y justificar la dependencia nueva en `plan.md`
-- [ ] T076 ⛔ BLOQUEADA (T075) Implementar el adaptador real en `src/platform/generation/adapters/`, con la clave leída de la configuración y nunca registrada, los precios por modelo en configuración, y las mismas pruebas de contrato de T035 ejecutadas a mano; resolver o validar con tiempos reales que la generación del índice y del temario se ejecute dentro de la petición (limitación registrada en `us3-check.md`)
+Estado a 2026-10-09. **T075 no se cierra**: el proveedor, el modelo, la moneda y los precios
+están registrados, pero falta aprobar el presupuesto. **T076 no se cierra**: el adaptador
+está implementado y probado con respuestas simuladas, y la generación del temario ya no
+depende de la petición, pero faltan las pruebas de contrato ejecutadas a mano contra el
+proveedor y la validación con tiempos reales. T077 sigue bloqueada.
+
+- [ ] T075 ⛔ BLOQUEADA (aprobación del presupuesto) Registrar la elección y su justificación en `specs/002-boe-scorm-export/research.md` (R6) y en el ADR 0004 mientras siga Propuesto, y justificar la dependencia nueva en `plan.md`
+- [ ] T076 ⛔ BLOQUEADA (T075: llamadas de pago) Implementar el adaptador real en `src/platform/generation/adapters/`, con la clave leída de la configuración y nunca registrada, los precios por modelo en configuración, y las mismas pruebas de contrato de T035 ejecutadas a mano; resolver o validar con tiempos reales que la generación del índice y del temario se ejecute dentro de la petición (limitación registrada en `us3-check.md`)
 - [ ] T077 ⛔ BLOQUEADA (T076) Fijar el límite del proyecto con el perfil `admin`, generar la interpretación, el índice y el temario de UF0517, y registrar el coste real y la calidad observada sin darla por aceptada
 
 ---
@@ -332,7 +339,7 @@ bloqueada.
 | Ejecutable cuando T082 y T065 se cierren      | T086                                                                   |
 | Abierta por la referencia ajena               | T065 (falta un paquete completo de un tercero)                         |
 | Bloqueada por el dominio y el servidor        | T074                                                                   |
-| Bloqueadas por el proveedor de generación     | T075; y por depender de ella, T076 y T077                              |
+| Bloqueadas por la aprobación del presupuesto  | T075; y por depender de ella, T076 (empezada) y T077                   |
 | Bloqueadas por el Moodle de pruebas           | T079; y por depender de ella, T080                                     |
 | Bloqueada por las tres anteriores             | T081, que depende de T074, T077 y T079                                 |
 

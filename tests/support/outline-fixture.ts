@@ -141,6 +141,14 @@ export interface OutlineFixture {
   // Coste máximo y consumo confirmado de cada tema; `null`, sin confirmar.
   topicMaxCost: number;
   topicCost: number | null;
+  // Si se define, la respuesta a cada tema espera a que termine: permite
+  // actuar mientras una operación está enviada y sin respuesta.
+  topicHold: ((request: ProviderRequest) => Promise<void>) | undefined;
+  // Si se define, la comprobación previa al envío de cada tema: permite
+  // actuar con la reserva hecha y la operación todavía sin enviar.
+  topicAdmit: ((request: ProviderRequest) => Promise<boolean>) | undefined;
+  // Lo mismo para la propuesta de índice.
+  outlineAdmit: (() => Promise<boolean>) | undefined;
   // Aprueba el índice y devuelve su identificador.
   approvedOutline(reply?: unknown): Promise<string>;
   readonly db: Database;
@@ -230,12 +238,18 @@ export async function createOutlineFixture(
     topicReply: TopicReply;
     topicMaxCost: number;
     topicCost: number | null;
+    topicHold: ((request: ProviderRequest) => Promise<void>) | undefined;
+    topicAdmit: ((request: ProviderRequest) => Promise<boolean>) | undefined;
+    outlineAdmit: (() => Promise<boolean>) | undefined;
   } = {
     reply: proposal(),
     outlineMaxCost: 0,
     topicReply: topicOutput,
     topicMaxCost: 0,
     topicCost: 0,
+    topicHold: undefined,
+    topicAdmit: undefined,
+    outlineAdmit: undefined,
   };
   const generation = createGeneration({
     db,
@@ -250,9 +264,24 @@ export async function createOutlineFixture(
           : request.task === "topic"
             ? fixture.topicMaxCost
             : 0,
+      admit: (request) =>
+        request.task === "topic" && fixture.topicAdmit !== undefined
+          ? fixture.topicAdmit(request)
+          : request.task === "outline" && fixture.outlineAdmit !== undefined
+            ? fixture.outlineAdmit()
+            : Promise.resolve(true),
       generate: (request): Promise<ProviderReply> => {
         sent.push(request);
         if (request.task === "topic") {
+          const reply = (): ProviderReply => {
+            const output = fixture.topicReply(request);
+            return output === undefined
+              ? { ok: false, usage, cost: fixture.topicCost }
+              : { ok: true, output, usage, cost: fixture.topicCost };
+          };
+          if (fixture.topicHold !== undefined) {
+            return fixture.topicHold(request).then(reply);
+          }
           const output = fixture.topicReply(request);
           return Promise.resolve(
             output === undefined
@@ -346,6 +375,28 @@ export async function createOutlineFixture(
     },
     set topicMaxCost(value: number) {
       fixture.topicMaxCost = value;
+    },
+    get topicHold() {
+      return fixture.topicHold;
+    },
+    set topicHold(
+      value: ((request: ProviderRequest) => Promise<void>) | undefined,
+    ) {
+      fixture.topicHold = value;
+    },
+    get topicAdmit() {
+      return fixture.topicAdmit;
+    },
+    set topicAdmit(
+      value: ((request: ProviderRequest) => Promise<boolean>) | undefined,
+    ) {
+      fixture.topicAdmit = value;
+    },
+    get outlineAdmit() {
+      return fixture.outlineAdmit;
+    },
+    set outlineAdmit(value: (() => Promise<boolean>) | undefined) {
+      fixture.outlineAdmit = value;
     },
     get topicCost() {
       return fixture.topicCost;

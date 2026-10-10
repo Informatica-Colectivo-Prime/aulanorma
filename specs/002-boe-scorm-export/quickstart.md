@@ -72,6 +72,10 @@ temario, que queda fuera de esta entrega.
 No forma parte de la integración continua. Hasta completarla, las instrucciones dicen que no
 se ha comprobado ninguna versión.
 
+La instancia de pruebas confirmada es Moodle 5.0.2; el guion detallado, con lo que hay que
+mirar en cada paso, está en [moodle-5.0.2-check.md](./moodle-5.0.2-check.md). **No se ha
+ejecutado.**
+
 **Antes de empezar, anotar**: versión exacta de Moodle, fecha, huella del paquete y la
 configuración relevante de la actividad SCORM tal como indiquen las instrucciones (método de
 calificación, número de intentos, forzar nuevo intento, modo de visualización y finalización

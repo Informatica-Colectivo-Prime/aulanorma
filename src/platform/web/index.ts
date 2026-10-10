@@ -34,10 +34,12 @@ import {
   createBudget,
   createDeterministicProvider,
   createGeneration,
+  createOpenAiProvider,
   DETERMINISTIC_PROVIDER,
   loadRecordings,
+  OPENAI_CURRENCY,
 } from "@/platform/generation";
-import type { Generation } from "@/platform/generation";
+import type { Generation, GenerationProvider } from "@/platform/generation";
 import {
   createIdentity,
   DEFAULT_PASSWORD_PARAMS,
@@ -78,8 +80,8 @@ export interface Runtime {
 }
 
 // Directorio, dentro del de datos, con las respuestas grabadas del adaptador
-// determinista de generación. Es el único adaptador que existe: no hay
-// proveedor real seleccionado.
+// determinista de generación, que es el que se usa si la configuración no
+// activa el proveedor real.
 export const RECORDINGS_DIRECTORY = "generation-recordings";
 
 const RUNTIME = Symbol.for("aulanorma.web.runtime");
@@ -110,27 +112,54 @@ export function getRuntime(): Runtime {
   // Al arrancar, una operación que constaba como enviada y no se liquidó
   // queda como incierta y sigue contando contra el presupuesto.
   budget.recoverInterrupted();
+  const { openai } = config;
+  // El proveedor real tiene precios en una moneda: el presupuesto debe estar
+  // en ella antes de reservar nada. Si no puede fijarse, el servicio no
+  // atiende: nunca se mezclan importes de dos unidades.
+  if (openai !== null && budget.fixCurrency(OPENAI_CURRENCY) !== "ok") {
+    throw new Error("La moneda del presupuesto no puede fijarse.");
+  }
+  const provider: GenerationProvider =
+    openai === null
+      ? {
+          // Las grabaciones se leen en cada operación: añadir una no exige
+          // reiniciar. El adaptador determinista no cuesta nada.
+          name: DETERMINISTIC_PROVIDER,
+          estimateCost: () => 0,
+          maxCost: () => 0,
+          generate: (request) =>
+            createDeterministicProvider(loadRecordings(recordings)).generate(
+              request,
+            ),
+        }
+      : createOpenAiProvider({
+          apiKey: openai.apiKey,
+          model: openai.model,
+          reasoningEffort: openai.reasoningEffort,
+          reasoningTokenReserve: openai.reasoningTokenReserve,
+          timeoutMs: openai.timeoutSeconds * 1000,
+          prices: {
+            input: openai.priceInput,
+            cachedInput: openai.priceCachedInput,
+            cacheWrite: openai.priceCacheWrite,
+            output: openai.priceOutput,
+          },
+        });
+  const generation = createGeneration({
+    db,
+    budget,
+    provider,
+    now: () => Date.now(),
+    ...(openai === null ? {} : { callTimeoutMs: openai.timeoutSeconds * 1000 }),
+  });
+  // Una ejecución que constaba en curso no sigue en ningún proceso.
+  generation.recoverInterruptedRuns();
   const runtime: Runtime = {
     config,
     db,
     audit,
     projectRoot: process.cwd(),
-    generation: createGeneration({
-      db,
-      budget,
-      // Las grabaciones se leen en cada operación: añadir una no exige
-      // reiniciar. El adaptador determinista no cuesta nada.
-      provider: {
-        name: DETERMINISTIC_PROVIDER,
-        estimateCost: () => 0,
-        maxCost: () => 0,
-        generate: (request) =>
-          createDeterministicProvider(loadRecordings(recordings)).generate(
-            request,
-          ),
-      },
-      now: () => Date.now(),
-    }),
+    generation,
     identity: createIdentity({
       db,
       audit: (event) => {
@@ -196,6 +225,7 @@ const NOTICE_CODES = [
   "outline_resubmitted",
   "syllabus_generated",
   "syllabus_refused",
+  "syllabus_running",
   "version_approved",
   "topic_edited",
   "topic_approved",

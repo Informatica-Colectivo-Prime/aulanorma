@@ -176,6 +176,13 @@ export interface SyllabusReview {
   readonly cost: { readonly estimatedCost: number; readonly maxCost: number };
   // `true` si se ha pedido la generación y quedan temas sin desarrollar.
   readonly incomplete: boolean;
+  // Generación en curso en este proceso, con el instante en que se pidió.
+  // Mientras dura, no se admite otra.
+  readonly running: { readonly requestedAt: number } | undefined;
+  // Operaciones de este temario que se enviaron y quedaron sin respuesta al
+  // interrumpirse el proceso. No se sabe a qué tema correspondía cada una:
+  // mientras no se concilien, no se genera ningún tema (FR-066).
+  readonly interrupted: number;
   readonly blockers: VersionBlockers;
   readonly versions: readonly SyllabusVersion[];
   // Estado que se confirma al aprobar la versión: cambia con cualquier
@@ -189,7 +196,11 @@ export type GenerateRejection =
   | "outline_not_approved"
   | "nothing_to_generate"
   // Las cifras que el usuario vio ya no son las actuales.
-  | "estimate_changed";
+  | "estimate_changed"
+  // Ya hay una generación de este temario en curso.
+  | "already_running"
+  // Hay operaciones interrumpidas de este temario sin conciliar.
+  | "awaiting_reconciliation";
 
 export type GenerateResult =
   | {
@@ -197,8 +208,14 @@ export type GenerateResult =
       // Temas terminados como borrador en esta ejecución.
       readonly generated: number;
       readonly failed: number;
-      // Temas que no se enviaron por falta de presupuesto.
+      // Temas que no se enviaron: por falta de presupuesto o porque el
+      // índice o la interpretación dejaron de estar vigentes.
       readonly notSent: number;
+      // Resultados que llegaron con el índice o la interpretación ya sin
+      // vigencia y no se guardaron.
+      readonly discarded: number;
+      // `true` si el recorrido se detuvo por esa pérdida de vigencia.
+      readonly invalidated: boolean;
       readonly incomplete: boolean;
     }
   | { readonly ok: false; readonly reason: GenerateRejection };
@@ -667,6 +684,7 @@ export function createSyllabus({
             text: item.text,
           })),
         },
+        outputSchema: TOPIC_OUTPUT,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
       },
     };
@@ -721,12 +739,29 @@ export function createSyllabus({
               .map((approval) => approval.id),
       ),
     );
+    const runs = generation.listRuns("syllabus", review.outline.id);
+    const runIds = new Set(runs.map((run) => run.id));
+    // Una operación enviada cuya respuesta se perdió con el proceso queda
+    // incierta sin llamada registrada: ningún tema la tiene anotada.
+    const interrupted = generation.budget
+      .list("uncertain")
+      .filter(
+        (item) =>
+          item.task === "topic" &&
+          item.callId === null &&
+          runIds.has(item.runId),
+      ).length;
     return {
       outline: review,
       topics,
       development,
       toGenerate,
       cost,
+      running: runs
+        .filter((run) => run.status === "running")
+        .map((run) => ({ requestedAt: run.requestedAt }))
+        .at(-1),
+      interrupted,
       incomplete:
         topics.some((item) => item.topic !== undefined) &&
         topics.some((item) => !developed(item.topic)),
@@ -969,6 +1004,14 @@ export function createSyllabus({
         return refuse("outline_not_approved");
       }
       const before = syllabusReviewOf(review);
+      // Una generación en curso ya tiene reservas hechas para estos temas:
+      // otra en paralelo los enviaría dos veces.
+      if (before.running !== undefined) {
+        return refuse("already_running");
+      }
+      if (before.interrupted > 0) {
+        return refuse("awaiting_reconciliation");
+      }
       if (before.toGenerate.length === 0) {
         return refuse("nothing_to_generate");
       }
@@ -1000,117 +1043,178 @@ export function createSyllabus({
       let generated = 0;
       let failed = 0;
       let notSent = 0;
+      let discarded = 0;
+      // Reservas liberadas sin enviar por perder la vigencia tras reservar.
+      let released = 0;
       let stopped = false;
-      // Uno a uno: cada tema es una operación, con su propia reserva. Los
-      // terminados quedan guardados aunque los siguientes no se generen.
-      for (const entry of before.toGenerate) {
-        if (stopped) {
-          notSent += 1;
-          continue;
-        }
-        const { request, refs } = topicRequest(review, entry);
-        const result = await generation.call(runId, {
-          ...request,
-          outputSchema: TOPIC_OUTPUT,
-          // Cada bloque cita o desarrolla requisitos de su entrada, sin
-          // repetir. Lo demás se rechaza, sin repararlo.
-          accept: (output) =>
-            output.blocks.every((block) =>
-              block.kind === "requirement"
-                ? refs.has(block.requirementRef)
-                : new Set(block.requirementRefs).size ===
-                    block.requirementRefs.length &&
-                  block.requirementRefs.every((ref) => refs.has(ref)),
-            ) &&
-            new Set(
-              output.blocks.flatMap((block) =>
-                block.kind === "requirement" ? [block.requirementRef] : [],
-              ),
-            ).size ===
-              output.blocks.filter((block) => block.kind === "requirement")
-                .length,
-        });
-        if (result.status === "budget_exceeded") {
-          // Sin reserva posible, ni esta operación ni las siguientes se
-          // envían: la generación queda incompleta (FR-021).
-          stopped = true;
-          notSent += 1;
-          continue;
-        }
-        const stored = transaction(db, (): boolean => {
-          const topic = topicOfEntry(entry.id);
-          // El índice o el tema pudieron cambiar mientras se esperaba: un
-          // resultado nunca sustituye un tema que ya tiene contenido.
-          if (
-            topic === undefined ||
-            developed(topic) ||
-            outlines.review(outlineId)?.approval?.id !== approval.id
-          ) {
-            return false;
+      let invalidated = false;
+      // El índice aprobado y la interpretación validada con los que se pidió
+      // la generación. La aprobación solo sigue vigente si no han cambiado
+      // ni el índice ni la validación de la interpretación, y si el
+      // documento no tiene un sustituto.
+      const stillCurrent = (): boolean => {
+        const current = outlines.review(outlineId);
+        return (
+          current !== undefined &&
+          !current.historical &&
+          current.approval?.id === approval.id
+        );
+      };
+      try {
+        // Uno a uno: cada tema es una operación, con su propia reserva. Los
+        // terminados quedan guardados aunque los siguientes no se generen.
+        for (const entry of before.toGenerate) {
+          // Antes de cada envío: sin la vigencia con la que se pidió, ni
+          // este tema ni los siguientes se envían.
+          if (!stopped && !stillCurrent()) {
+            stopped = true;
+            invalidated = true;
           }
-          if (result.status !== "ok") {
-            // Tema fallido: el resultado inválido no se guarda (FR-019).
-            db.prepare(
-              "UPDATE topic SET status = 'failed', failure = ?, " +
-                "last_call_id = ? WHERE id = ?",
-            ).run(
-              result.uncertain ? "uncertain" : result.status,
-              result.callId,
-              topic.id,
-            );
-            return false;
+          if (stopped) {
+            notSent += 1;
+            continue;
           }
-          result.output.blocks.forEach((block, position) => {
-            insertBlock(
-              topic.id,
-              position,
-              block.kind,
-              block.kind === "development" ? block.content : [],
-              (block.kind === "requirement"
-                ? [block.requirementRef]
-                : block.requirementRefs
-              ).map((ref) => refs.get(ref) ?? ""),
-            );
+          const { request, refs } = topicRequest(review, entry);
+          const result = await generation.call(runId, {
+            ...request,
+            outputSchema: TOPIC_OUTPUT,
+            // De nuevo justo antes de enviar: la comprobación previa del
+            // proveedor es una espera en la que todo puede cambiar.
+            authorized: stillCurrent,
+            // Cada bloque cita o desarrolla requisitos de su entrada, sin
+            // repetir. Lo demás se rechaza, sin repararlo.
+            accept: (output) =>
+              output.blocks.every((block) =>
+                block.kind === "requirement"
+                  ? refs.has(block.requirementRef)
+                  : new Set(block.requirementRefs).size ===
+                      block.requirementRefs.length &&
+                    block.requirementRefs.every((ref) => refs.has(ref)),
+              ) &&
+              new Set(
+                output.blocks.flatMap((block) =>
+                  block.kind === "requirement" ? [block.requirementRef] : [],
+                ),
+              ).size ===
+                output.blocks.filter((block) => block.kind === "requirement")
+                  .length,
           });
-          db.prepare(
-            "UPDATE topic SET status = 'draft', failure = NULL, " +
-              "revision = ?, last_call_id = ? WHERE id = ?",
-          ).run(topic.revision + 1, result.callId, topic.id);
-          db.prepare(
-            "INSERT INTO topic_change (id, topic_id, block_id, kind, " +
-              "author, at, before, after, resulting_revision) " +
-              "VALUES (?, ?, NULL, 'generate', ?, ?, 'null', ?, ?)",
-          ).run(
-            newId(),
-            topic.id,
-            actorId,
-            now(),
-            JSON.stringify({
-              blocks: result.output.blocks.length,
-              provider: generation.provider,
-            }),
-            topic.revision + 1,
-          );
-          return true;
-        });
-        if (stored) {
-          generated += 1;
-        } else {
-          failed += 1;
+          if (result.status === "withdrawn") {
+            // Perdió la vigencia después de reservar y antes de enviar: la
+            // reserva ya está liberada y no se envía ni este tema ni los
+            // siguientes.
+            stopped = true;
+            invalidated = true;
+            released += 1;
+            notSent += 1;
+            continue;
+          }
+          if (result.status === "budget_exceeded") {
+            // Sin reserva posible, ni esta operación ni las siguientes se
+            // envían: la generación queda incompleta (FR-021).
+            stopped = true;
+            notSent += 1;
+            continue;
+          }
+          // El índice o la interpretación pudieron cambiar mientras se
+          // esperaba: el resultado se descarta, el tema sigue como estaba y
+          // el recorrido se detiene.
+          if (!stillCurrent()) {
+            stopped = true;
+            invalidated = true;
+            discarded += 1;
+            continue;
+          }
+          const stored = transaction(db, (): boolean => {
+            const topic = topicOfEntry(entry.id);
+            // Un resultado nunca sustituye un tema que ya tiene contenido.
+            if (topic === undefined || developed(topic) || !stillCurrent()) {
+              return false;
+            }
+            if (result.status !== "ok") {
+              // Tema fallido: el resultado inválido no se guarda (FR-019).
+              db.prepare(
+                "UPDATE topic SET status = 'failed', failure = ?, " +
+                  "last_call_id = ? WHERE id = ?",
+              ).run(
+                result.uncertain ? "uncertain" : result.status,
+                result.callId,
+                topic.id,
+              );
+              return false;
+            }
+            result.output.blocks.forEach((block, position) => {
+              insertBlock(
+                topic.id,
+                position,
+                block.kind,
+                block.kind === "development" ? block.content : [],
+                (block.kind === "requirement"
+                  ? [block.requirementRef]
+                  : block.requirementRefs
+                ).map((ref) => refs.get(ref) ?? ""),
+              );
+            });
+            db.prepare(
+              "UPDATE topic SET status = 'draft', failure = NULL, " +
+                "revision = ?, last_call_id = ? WHERE id = ?",
+            ).run(topic.revision + 1, result.callId, topic.id);
+            db.prepare(
+              "INSERT INTO topic_change (id, topic_id, block_id, kind, " +
+                "author, at, before, after, resulting_revision) " +
+                "VALUES (?, ?, NULL, 'generate', ?, ?, 'null', ?, ?)",
+            ).run(
+              newId(),
+              topic.id,
+              actorId,
+              now(),
+              JSON.stringify({
+                blocks: result.output.blocks.length,
+                provider: generation.provider,
+              }),
+              topic.revision + 1,
+            );
+            return true;
+          });
+          if (stored) {
+            generated += 1;
+          } else {
+            failed += 1;
+          }
         }
+      } finally {
+        // Si algo falla a mitad, la ejecución no queda en curso para
+        // siempre. Una ya terminada no cambia.
+        const after = outlines.review(outlineId);
+        generation.finishRun(
+          runId,
+          after === undefined || syllabusReviewOf(after).incomplete
+            ? "incomplete"
+            : "succeeded",
+        );
       }
       const after = outlines.review(outlineId);
       const incomplete =
         after === undefined || syllabusReviewOf(after).incomplete;
-      generation.finishRun(runId, incomplete ? "incomplete" : "succeeded");
       record(actor, "syllabus.generate", "syllabus", outlineId, "ok", {
         generated,
         failed,
         notSent,
+        discarded,
+        invalidated,
+        released,
         incomplete,
         provider: generation.provider,
       });
-      return { ok: true, generated, failed, notSent, incomplete };
+      return {
+        ok: true,
+        generated,
+        failed,
+        notSent,
+        discarded,
+        invalidated,
+        incomplete,
+      };
     },
 
     getTopic,

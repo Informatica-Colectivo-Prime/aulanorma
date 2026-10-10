@@ -96,6 +96,8 @@ let recorded: unknown;
 let sent: ProviderRequest[];
 let superseded: Set<string>;
 let unresolved: number[];
+// Si se define, la comprobación previa al envío del proveedor simulado.
+let admit: (() => Promise<boolean>) | undefined;
 let clock = 0;
 
 const source: NormativeSource = {
@@ -151,6 +153,7 @@ beforeEach(() => {
   sent = [];
   superseded = new Set();
   unresolved = [];
+  admit = undefined;
   clock = Date.UTC(2026, 9, 7);
   generation = createGeneration({
     db,
@@ -166,6 +169,7 @@ beforeEach(() => {
       name: "deterministic",
       estimateCost: () => 0,
       maxCost: () => 0,
+      admit: () => (admit === undefined ? Promise.resolve(true) : admit()),
       generate: (request) => {
         sent.push(request);
         return createDeterministicProvider([
@@ -1112,5 +1116,50 @@ describe("estimación previa (FR-021)", () => {
       ok: false,
       reason: "superseded",
     });
+  });
+});
+
+describe("pérdida de lo que autorizó la petición antes de enviarla", () => {
+  test("si el documento recibe un sustituto con la comprobación previa en espera, y esta se resuelve a favor, no se envía la generación, la reserva se libera, no se guarda nada y la ejecución queda incompleta", async () => {
+    let resolve: ((admitted: boolean) => void) | undefined;
+    const arrived = new Promise<void>((ready) => {
+      admit = () =>
+        new Promise<boolean>((answer) => {
+          resolve = answer;
+          ready();
+        });
+    });
+    const pending = request();
+    await arrived;
+    // Reservado y sin enviar.
+    expect(generation.budget.list()).toMatchObject([{ state: "reserved" }]);
+    expect(sent).toEqual([]);
+
+    superseded.add(DOCUMENT);
+    resolve?.(true);
+
+    expect(await pending).toEqual({ ok: false, reason: "superseded" });
+    expect(sent).toEqual([]);
+    expect(generation.budget.list()).toMatchObject([
+      { state: "released", sentAt: null, settledCost: null },
+    ]);
+    expect(count("interpretation")).toBe(0);
+    expect(count("requirement")).toBe(0);
+    expect(count("generation_call")).toBe(0);
+    expect(
+      generation.listRuns("interpretation", DOCUMENT).map((run) => run.status),
+    ).toEqual(["incomplete"]);
+    expect(audit.list().at(-1)).toMatchObject({
+      action: "interpretation.request",
+      result: "failed",
+      details: { reason: "superseded" },
+    });
+  });
+
+  test("si nada cambia durante la espera, se envía y se guarda", async () => {
+    admit = () => Promise.resolve(true);
+    expect((await request()).ok).toBe(true);
+    expect(sent).toHaveLength(1);
+    expect(count("interpretation")).toBe(1);
   });
 });

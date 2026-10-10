@@ -104,6 +104,14 @@ const relativeEscape = (names) =>
     "Una importación relativa no puede cruzar a otra capa o área: usa la API pública con `@/`.",
   );
 
+// SDK de proveedores de generación: solo los importa su adaptador
+// (principio IX; contracts/generation-provider.md).
+const PROVIDER_SDK = pattern(
+  "^openai(?:/|$)",
+  "Solo `src/platform/generation/adapters/openai.ts` importa el SDK de OpenAI: el resto usa `Generation`.",
+);
+const OPENAI_ADAPTER = "src/platform/generation/adapters/openai.ts";
+
 // `process` como módulo expone `env`; fuera de `src/platform/config` no se lee.
 const PROCESS_ENV_IMPORTS = ["process", "node:process"].map((name) => ({
   name,
@@ -115,11 +123,14 @@ const PROCESS_ENV_IMPORTS = ["process", "node:process"].map((name) => ({
  * @param {readonly RestrictedPattern[]} patterns
  * @param {{ allowProcessEnv?: boolean }} [options]
  */
-const restrictedImports = (patterns, { allowProcessEnv = false } = {}) => [
+const restrictedImports = (
+  patterns,
+  { allowProcessEnv = false, allowProviderSdk = false } = {},
+) => [
   "error",
   {
     paths: allowProcessEnv ? [] : PROCESS_ENV_IMPORTS,
-    patterns: [...patterns],
+    patterns: [...patterns, ...(allowProviderSdk ? [] : [PROVIDER_SDK])],
   },
 ];
 
@@ -201,6 +212,7 @@ const restrictedProperties = ({ allowProcessEnv }) => [
  *   patterns: readonly RestrictedPattern[];
  *   allowProcessEnv?: boolean;
  *   allowHttpTypes?: boolean;
+ *   allowProviderSdk?: boolean;
  * }} location
  * @returns {import("eslint").Linter.Config}
  */
@@ -210,12 +222,16 @@ const sourceLocation = ({
   patterns,
   allowProcessEnv = false,
   allowHttpTypes = false,
+  allowProviderSdk = false,
 }) => ({
   name: `aulanorma/src/${name}`,
   files,
   rules: {
     "no-console": "error",
-    "no-restricted-imports": restrictedImports(patterns, { allowProcessEnv }),
+    "no-restricted-imports": restrictedImports(patterns, {
+      allowProcessEnv,
+      allowProviderSdk,
+    }),
     "@typescript-eslint/no-restricted-imports": networkImports({
       allowHttpTypes,
     }),
@@ -227,11 +243,15 @@ const sourceLocation = ({
 
 const OTHER_SEGMENTS = ["platform", "modules", "pages", "views", "app", "src"];
 
-/** @param {string} area */
-const platformArea = (area) =>
+/**
+ * @param {string} area
+ * @param {{ name?: string; files?: string[]; allowProviderSdk?: boolean }} [options]
+ */
+const platformArea = (area, options = {}) =>
   sourceLocation({
-    name: `platform/${area}`,
-    files: [`src/platform/${area}/**/*`],
+    name: options.name ?? `platform/${area}`,
+    files: options.files ?? [`src/platform/${area}/**/*`],
+    allowProviderSdk: options.allowProviderSdk ?? false,
     allowProcessEnv: area === "config",
     patterns: [
       pattern(
@@ -485,7 +505,13 @@ export default defineConfig([
       relativeEscape([...PLATFORM_AREAS, ...LAYERS, ...OTHER_SEGMENTS]),
     ],
   }),
-  ...PLATFORM_AREAS.map(platformArea),
+  ...PLATFORM_AREAS.map((area) => platformArea(area)),
+  // El adaptador de OpenAI: las restricciones de su área, salvo la del SDK.
+  platformArea("generation", {
+    name: "platform/generation/adapters/openai",
+    files: [OPENAI_ADAPTER],
+    allowProviderSdk: true,
+  }),
   ...PORTABLE_MODULES.map(portableModule),
   ...LAYERS.map(domainLayer),
 

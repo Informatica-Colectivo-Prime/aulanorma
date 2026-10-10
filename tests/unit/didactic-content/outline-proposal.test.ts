@@ -413,3 +413,80 @@ describe("propuesta aceptada", () => {
     );
   });
 });
+
+describe("pérdida de lo que autorizó la petición antes de enviarla", () => {
+  test("si la interpretación validada se modifica con la comprobación previa en espera, y esta se resuelve a favor, no se envía la generación, la reserva se libera, no se guarda nada y la ejecución queda incompleta", async () => {
+    fixture.outlineMaxCost = 50;
+    fixture.budget.setLimit({
+      newLimit: 1000,
+      revision: fixture.budget.status().revision,
+      actorId: "administrador-1",
+      correlationId: "prueba",
+    });
+    let resolve: ((admitted: boolean) => void) | undefined;
+    const arrived = new Promise<void>((ready) => {
+      fixture.outlineAdmit = () =>
+        new Promise<boolean>((answer) => {
+          resolve = answer;
+          ready();
+        });
+    });
+    const reservations = () =>
+      fixture.budget.list().filter((item) => item.task === "outline");
+    const pending = request();
+    await arrived;
+    // Reservado y sin enviar.
+    expect(reservations()).toMatchObject([
+      { state: "reserved", reservedCost: 50 },
+    ]);
+    expect(fixture.sent).toEqual([]);
+
+    const interpretation = fixture.interpretations.get(
+      fixture.interpretationId,
+    );
+    expect(
+      fixture.interpretations.editUnit({
+        ...TEACHER,
+        interpretationId: fixture.interpretationId,
+        revision: interpretation?.revision ?? 0,
+        unit: {
+          unitTitle: "Unidad corregida",
+          durationHours: null,
+          durationSection: "",
+          durationPage: null,
+          durationQuote: null,
+        },
+      }).ok,
+    ).toBe(true);
+    resolve?.(true);
+
+    expect(await pending).toEqual({ ok: false, reason: "not_validated" });
+    expect(fixture.sent).toEqual([]);
+    expect(reservations()).toMatchObject([
+      { state: "released", sentAt: null, settledCost: null },
+    ]);
+    expect(fixture.budget.status()).toMatchObject({
+      reserved: 0,
+      uncertain: 0,
+      settled: 0,
+    });
+    nothingStored();
+    expect(
+      fixture.db
+        .prepare(
+          "SELECT COUNT(*) AS n FROM generation_call WHERE task = 'outline'",
+        )
+        .get()?.n,
+    ).toBe(0);
+    expect(
+      fixture.generation
+        .listRuns("outline", fixture.interpretationId)
+        .map((run) => run.status),
+    ).toEqual(["incomplete"]);
+    expect(fixture.audit.list().at(-1)).toMatchObject({
+      action: "outline.request",
+      result: "failed",
+      details: { reason: "not_validated" },
+    });
+  });
+});

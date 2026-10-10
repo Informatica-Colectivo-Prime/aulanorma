@@ -703,6 +703,7 @@ export function createStructuredInterpretation({
     promptVersion: prompt.version,
     instructions: prompt.instructions,
     input: { unitCode, pages },
+    outputSchema: INTERPRETATION_OUTPUT,
     maxOutputTokens: MAX_OUTPUT_TOKENS,
   });
 
@@ -745,6 +746,10 @@ export function createStructuredInterpretation({
       const result = await generation.call(runId, {
         ...providerRequest(unitCode, pages),
         outputSchema: INTERPRETATION_OUTPUT,
+        // De nuevo justo antes de enviar, tras la comprobación previa del
+        // proveedor: el documento sin sustituto y la unidad sin interpretar.
+        authorized: () =>
+          prepare({ documentId, unitCode, pageFrom, pageTo }).ok,
         accept: (output) => {
           if (output.unit.code !== unitCode) {
             return false;
@@ -784,6 +789,12 @@ export function createStructuredInterpretation({
           return true;
         },
       });
+      if (result.status === "withdrawn") {
+        // No se envió nada y la reserva está liberada.
+        generation.finishRun(runId, "incomplete");
+        const again = prepare({ documentId, unitCode, pageFrom, pageTo });
+        return refuse(again.ok ? "superseded" : again.reason);
+      }
       if (result.status !== "ok") {
         generation.finishRun(
           runId,

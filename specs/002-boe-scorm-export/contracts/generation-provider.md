@@ -16,7 +16,7 @@ Una única operación: generar una salida estructurada.
 | `promptVersion`         | Versión del prompt, que es un fichero del repositorio                    |
 | `input`                 | Datos de la tarea; el texto del documento va marcado como dato           |
 | `outputSchema`          | Esquema versionado que debe cumplir la salida                            |
-| `maxOutputTokens`       | Límite de salida, usado también para reservar el coste                   |
+| `maxOutputTokens`       | Límite de la salida visible, usado también para reservar el coste        |
 
 | Resultado               | Descripción                                                              |
 | ----------------------- | ------------------------------------------------------------------------ |
@@ -76,8 +76,9 @@ dos importes por operación: `estimateCost`, la estimación orientativa que se m
 `maxCost`, lo que se reserva. Su respuesta lleva `cost`, el consumo confirmado, o `null` si no
 lo confirma; sin él, con el tiempo agotado (120 s por defecto) o con un fallo, la reserva
 queda `uncertain`. Una operación sin reserva posible devuelve `budget_exceeded` sin llamar al
-adaptador. Al arrancar, lo que constaba como enviado y sin liquidar pasa a `uncertain`, y lo
-reservado sin enviar se libera. El presupuesto nace con límite cero y moneda `XXX`, sin
+adaptador. Al agotarse el tiempo se avisa al adaptador para que cierre la petición, que no
+se reenvía. Al arrancar, lo que constaba como enviado y sin liquidar pasa a `uncertain`, lo
+reservado sin enviar se libera y una ejecución que constaba en curso pasa a `incomplete`. El presupuesto nace con límite cero y moneda `XXX`, sin
 fijar; una operación de coste cero cabe en un saldo cero, pero no en uno negativo. Desde la
 fase 6, el presupuesto se consulta en `/budget`, y una cuenta de administración modifica allí
 el límite y concilia las operaciones inciertas. El resultado de una operación indica además
@@ -87,17 +88,45 @@ si su consumo quedó sin confirmar, para que nadie la reenvíe por su cuenta.
 
 - **Determinista**: respuestas fijas y grabadas; es el único que usan las pruebas y la
   integración continua, que no acceden a la red.
-- **Real**: todavía no existe. El proveedor no está seleccionado; no se instala ningún SDK
-  ni se hacen llamadas de pago hasta que el mantenedor lo concrete. Su clave se leerá de la
-  configuración y nunca se registrará.
+- **OpenAI** (`src/platform/generation/adapters/openai.ts`): el proveedor real, elegido el
+  2026-10-09. Responses API con el SDK oficial, salida estructurada estricta, una petición
+  por operación y sin reintentos del SDK. Solo se activa desde la configuración del
+  servidor; su clave se lee de ella y nunca se registra. Recibe `outputSchema` para pedir la
+  salida estructurada, pero cumplirlo lo sigue comprobando `Generation`. Añade al límite de
+  salida una reserva para el razonamiento, que el proveedor factura como salida, y la
+  incluye en `maxCost`. Solo confirma un consumo con los datos de uso de la respuesta. Sus
+  precios, sus fórmulas y lo que falta por comprobar están en
+  [../openai-provider.md](../openai-provider.md). **No se ha hecho ninguna llamada real.**
 
 El adaptador determinista acredita este contrato, los bloqueos y el presupuesto. No acredita
 la calidad de la generación ni el coste real, y no sirve para declarar la aceptación del
-recorrido (SC-024).
+recorrido (SC-024). Las pruebas del adaptador de OpenAI usan un transporte simulado: tampoco
+acreditan al proveedor real.
+
+Un adaptador cuyo coste máximo depende de algo que no controla puede declarar una
+comprobación previa, `admit`, que no genera nada: si no puede sostener que la operación quepa en lo
+reservado, la operación no se envía y su reserva se libera. El de OpenAI la usa para
+contrastar la entrada reservada con el recuento del proveedor. Un consumo confirmado mayor
+que su reserva se liquida por lo que fue y queda en la auditoría.
+
+La comprobación previa es una espera, y en ella puede cambiar lo que autorizó la operación.
+Quien la pide puede pasar esa condición, `authorized`, que `Generation` comprueba de nuevo
+justo antes de anotar el envío, sin ninguna espera entre ambos. Si ya no se cumple, la
+operación no se envía, su reserva se libera y el resultado es `withdrawn`. Es una
+comprobación del dominio: ningún adaptador la conoce. La usan las tres tareas.
+
+Una generación del temario se detiene si la aprobación del índice con la que se pidió deja
+de estar vigente: el resultado en espera se descarta y los temas restantes no se envían.
+Tras una caída, una operación de un tema que quedó incierta sin respuesta impide generar ese
+temario hasta que se concilie.
+
+Con un proveedor con precios, la moneda del presupuesto se fija al arrancar, solo con el
+límite a cero y sin importes anotados; si no puede fijarse, el servicio no atiende.
 
 ## Pruebas de contrato previstas
 
-- Las mismas pruebas para todos los adaptadores, con el real ejecutado solo a mano.
+- Las mismas pruebas para todos los adaptadores. El de OpenAI las pasa con un transporte
+  simulado; contra el proveedor real se ejecutan solo a mano, y **no se han ejecutado**.
 - Salida inválida: rechazada, registrada y no guardada (SC-005).
 - Límite alcanzado a mitad del temario, reanudación y reducción del límite con operaciones
   en curso (SC-032, SC-037).

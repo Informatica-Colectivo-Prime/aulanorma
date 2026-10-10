@@ -249,18 +249,18 @@ La capa de entrega son `server.mjs` y los ficheros de `src/pages`:
 
 ## Áreas de `src/platform`
 
-| Área            | Responsabilidad                                                                                                      | Módulo portable |
-| --------------- | -------------------------------------------------------------------------------------------------------------------- | --------------- |
-| `config`        | Esquema Zod de la configuración y sus tres operaciones: `validateConfig`, `loadConfig` y `readRuntimeConfig`         | Sí              |
-| `logging`       | Registros JSON con Pino y redacción de campos sensibles: `createLogger`, `logStartupCompleted` y `logConfigInvalid`  | Sí              |
-| `http-boundary` | Decisión de la frontera HTTP y estado transitorio de cada conexión: `createHttpBoundary`                             | Sí              |
-| `health`        | Composición del estado público `{ status, version }`: `buildHealthStatus`                                            | No              |
-| `version`       | Lectura y validación de la versión SemVer básica de `package.json`: `getVersion`                                     | No              |
-| `persistence`   | Base de datos SQLite (`node:sqlite`), migraciones numeradas y almacén de ficheros por huella SHA-256                 | Sí              |
-| `audit`         | Registro de auditoría de solo inserción: `createAudit`, con `record` y `list`                                        | Sí              |
-| `identity`      | Cuentas, contraseñas con `scrypt`, sesiones, intentos repetidos, comprobación de origen y permisos: `createIdentity` | Sí              |
-| `generation`    | Interfaz propia con cualquier proveedor de IA, adaptador determinista y registro de cada llamada: `createGeneration` | No              |
-| `web`           | Servicios del proceso, cookies, documento HTML y guardas de acceso de las rutas de producto                          | No              |
+| Área            | Responsabilidad                                                                                                                           | Módulo portable |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| `config`        | Esquema Zod de la configuración y sus tres operaciones: `validateConfig`, `loadConfig` y `readRuntimeConfig`                              | Sí              |
+| `logging`       | Registros JSON con Pino y redacción de campos sensibles: `createLogger`, `logStartupCompleted` y `logConfigInvalid`                       | Sí              |
+| `http-boundary` | Decisión de la frontera HTTP y estado transitorio de cada conexión: `createHttpBoundary`                                                  | Sí              |
+| `health`        | Composición del estado público `{ status, version }`: `buildHealthStatus`                                                                 | No              |
+| `version`       | Lectura y validación de la versión SemVer básica de `package.json`: `getVersion`                                                          | No              |
+| `persistence`   | Base de datos SQLite (`node:sqlite`), migraciones numeradas y almacén de ficheros por huella SHA-256                                      | Sí              |
+| `audit`         | Registro de auditoría de solo inserción: `createAudit`, con `record` y `list`                                                             | Sí              |
+| `identity`      | Cuentas, contraseñas con `scrypt`, sesiones, intentos repetidos, comprobación de origen y permisos: `createIdentity`                      | Sí              |
+| `generation`    | Interfaz propia con cualquier proveedor de IA, adaptador determinista, adaptador de OpenAI y registro de cada llamada: `createGeneration` | No              |
+| `web`           | Servicios del proceso, cookies, documento HTML y guardas de acceso de las rutas de producto                                               | No              |
 
 Cada área expone su API pública en su `index.ts`. `platform` no depende de ninguna capa de
 dominio.

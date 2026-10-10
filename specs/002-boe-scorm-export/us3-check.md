@@ -152,11 +152,15 @@ el adaptador determinista no puede producir una: es un dato simulado.
   Las respuestas de los temas del piloto son un texto de relleno que se declara como tal.
 - **Nadie ha validado la interpretación del piloto, ni aprobado su índice, sus temas ni
   ninguna versión.** Lo hecho son ensayos automatizados.
-- **La generación se ejecuta dentro de la petición**, tema a tema, y la respuesta llega al
-  terminar el último. Con el adaptador determinista es inmediata. Con un proveedor real no
-  está comprobado que quepa en los tiempos de una petición, ni qué ve el docente mientras
-  espera o si cierra la página. Debe resolverse o validarse al incorporar el proveedor real
-  (T076 y T077); no se ha añadido ninguna infraestructura de trabajos en segundo plano.
+- **La generación del temario ya no depende de la petición** (2026-10-09). Con el adaptador
+  determinista termina al momento y la respuesta la espera, como antes. Si tarda más de tres
+  segundos, la respuesta no la espera: sigue en el proceso, y la página del temario muestra
+  que está en curso y cuántos temas han terminado, sin actualizarse sola. Mientras dura no se
+  admite otra del mismo temario, y una que quede a medias por una caída pasa a incompleta al
+  arrancar. La interpretación y el índice, de una operación cada uno, siguen dentro de la
+  petición, con el tiempo máximo del proveedor. **Los tiempos reales no están medidos**
+  (T077), y sigue sin haber una infraestructura de trabajos en segundo plano: la generación
+  no sobrevive a un reinicio. Detalle en [openai-provider.md](./openai-provider.md).
 - **Un tema con contenido no se puede regenerar.** Solo se generan temas pendientes o
   fallidos; uno terminado se edita.
 - **Un tema por entrada.** Si se quita una entrada del índice, su tema se conserva, sin
