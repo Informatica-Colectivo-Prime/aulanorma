@@ -6,7 +6,9 @@
 // Valida la configuración y aplica las migraciones de la base de datos antes
 // de cargar Next.js y de escuchar, decide cada petición con la frontera HTTP y
 // solo delega en Next.js lo que ella admite.
-// Escucha en 127.0.0.1:3000, fijos. Solo lee `process.env.NODE_ENV` y no
+// Escucha en el puerto 3000, fijo, y en la dirección de la configuración
+// validada: `127.0.0.1` salvo que se indique `0.0.0.0` de forma explícita, que
+// es el caso de un contenedor (ADR 0005). Solo lee `process.env.NODE_ENV` y no
 // registra nada por petición: sus únicos eventos son `startup.config_invalid`
 // y `startup.completed`.
 import http from "node:http";
@@ -23,7 +25,6 @@ import {
   PLATFORM_MIGRATIONS,
 } from "./src/platform/persistence/index.ts";
 
-const HOSTNAME = "127.0.0.1";
 const PORT = 3000;
 
 // Un fallo de arranque posterior a la validación termina con código 1 sin
@@ -64,10 +65,11 @@ async function main() {
   // `next()` elige Turbopack. En producción las opciones no cambian, porque el
   // servidor solo sirve lo que generó `next build`.
   const dev = mode === "development";
+  const hostname = result.config.listenHost;
   const app = next({
     dev,
     dir: import.meta.dirname,
-    hostname: HOSTNAME,
+    hostname,
     port: PORT,
     ...(dev ? { webpack: true } : {}),
   });
@@ -94,7 +96,7 @@ async function main() {
     boundary.clientError(error, socket);
   });
   server.on("error", abort);
-  server.listen(PORT, HOSTNAME, () => {
+  server.listen(PORT, hostname, () => {
     logStartupCompleted(logger);
   });
 }

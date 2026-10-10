@@ -68,6 +68,7 @@ interface Config {
   readonly pdfMaxPages: number;
   readonly generationMaxOperationCost: number;
   readonly generationProvider: string;
+  readonly listenHost: string;
   readonly openai: unknown;
 }
 type ConfigResult =
@@ -157,6 +158,7 @@ const PRODUCT_CONFIG = {
   pdfMaxPages: 600,
   generationMaxOperationCost: 1_000_000,
   generationProvider: "deterministic",
+  listenHost: "127.0.0.1",
   openai: null,
 } as const;
 function setProductVariables(): void {
@@ -176,6 +178,7 @@ const VALID_CONFIG: Config = {
   pdfMaxPages: 600,
   generationMaxOperationCost: 1_000_000,
   generationProvider: "deterministic",
+  listenHost: "127.0.0.1",
   openai: null,
 };
 
@@ -300,6 +303,7 @@ function expectSuccess(result: ConfigResult, expected: Config): void {
     "environment",
     "generationMaxOperationCost",
     "generationProvider",
+    "listenHost",
     "logLevel",
     "openai",
     "pdfMaxMib",

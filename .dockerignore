@@ -26,4 +26,3 @@ specs
 tests
 Dockerfile
 .dockerignore
-deploy
