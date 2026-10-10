@@ -1,0 +1,28 @@
+# Lo que no entra en el contexto de construcción de la imagen (Dockerfile).
+# Nunca la configuración local ni nada generado en el equipo de quien
+# construye.
+.git
+.github
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+node_modules
+.next
+.tools
+coverage
+*.tsbuildinfo
+*.log
+
+# Herramientas de desarrollo y documentación: la imagen no las necesita.
+.agents
+.claude
+.cursor
+.opencode
+.specify
+docs
+specs
+tests
+Dockerfile
+.dockerignore

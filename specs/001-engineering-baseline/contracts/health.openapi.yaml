@@ -170,7 +170,10 @@ x-aulanorma-transport-boundary:
     persisten, registran, reflejan, incluyen en el cuerpo, entregan a la lógica de estado ni
     usan con fines de negocio esos valores (FR-006 C2). En el comportamiento aprobado,
     `Accept-Encoding` solo puede provocar `Vary: Accept-Encoding`; nunca `Content-Encoding`.
-  listen: 127.0.0.1:3000, fijos; sin variables de entorno ni claves nuevas.
+  listen: >-
+    puerto 3000, fijo. Dirección 127.0.0.1, salvo que la clave opcional
+    AULANORMA_LISTEN_HOST indique 0.0.0.0, que es para un contenedor (ADR 0005,
+    Propuesto, que sustituye en esto al ADR 0001). No se lee HOSTNAME ni PORT.
   precedence:
     - version
     - host

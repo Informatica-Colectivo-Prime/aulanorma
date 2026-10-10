@@ -217,7 +217,7 @@ restauración probada en el destino siguen siendo T074.
 - [X] T071 [P] Crear `scripts/ops/verify-restore.mjs`: restaura en un directorio limpio, ejecuta la verificación de integridad de SQLite, comprueba que cada fichero referenciado existe y coincide con su huella, revoca todas las sesiones y confirma que las generaciones enviadas y sin liquidar figuran como inciertas
 - [X] T072 Escribir `tests/integration/backup-restore.test.ts`, que hace una copia con escrituras, una exportación y una generación enviada en curso, la restaura y comprueba referencias, huellas, sesiones revocadas y operaciones inciertas (SC-040); incluye el caso de un fichero publicado sin referencia, que no debe hacer fallar la copia
 - [X] T073 Escribir `docs/engineering/deployment.md`: cuenta de sistema sin privilegios, servicio propio, directorio de datos, fichero de entorno, proxy inverso con TLS y HSTS que reenvía a `127.0.0.1:3000`, origen público, límites de tamaño coherentes, copia y restauración, y los límites de SQLite y del estado *release candidate* de `node:sqlite`
-- [ ] T074 ⛔ BLOQUEADA (dominio y servidor de destino) Desplegar el piloto siguiendo `docs/engineering/deployment.md`, sin modificar los servicios existentes, medir el coste de `scrypt` en el destino y registrar una copia con su restauración probada
+- [ ] T074 ⛔ BLOQUEADA (dominio; el destino es un VPS con Easypanel, preparado en `docs/engineering/easypanel.md` y sin ejecutar) Desplegar el piloto siguiendo `docs/engineering/deployment.md`, sin modificar los servicios existentes, medir el coste de `scrypt` en el destino y registrar una copia con su restauración probada
 
 **Checkpoint**: acceso por HTTPS desde otro equipo y una restauración comprobada.
 

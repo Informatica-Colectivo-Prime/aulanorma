@@ -36,6 +36,8 @@ export interface Config {
   // Coste máximo de una operación de generación, en millonésimas de la
   // moneda del presupuesto.
   readonly generationMaxOperationCost: number;
+  // Dirección en la que escucha el servicio: la local si no se indica otra.
+  readonly listenHost: ListenHost;
   // Proveedor de generación: el determinista si no se indica otro.
   readonly generationProvider: GenerationProviderName;
   // Solo con el proveedor `openai`.
@@ -77,6 +79,16 @@ const LOG_LEVEL = z.enum([
 // él. `production` es el del piloto desplegado y exige un origen HTTPS también
 // en modo desarrollo.
 const ENVIRONMENT = z.enum(["development", "test", "ci", "production"]);
+
+// Dirección de escucha (ADR 0005). Por defecto, solo la interfaz local: el
+// proceso no es alcanzable desde otro equipo. `0.0.0.0`, todas las interfaces,
+// es para un contenedor, cuya red es propia y al que solo llega el proxy; se
+// indica de forma explícita y no hay más valores. El puerto no es
+// configurable.
+const LISTEN_HOST = z.enum(["127.0.0.1", "0.0.0.0"]);
+const LISTEN_KEY = "AULANORMA_LISTEN_HOST";
+
+export type ListenHost = z.infer<typeof LISTEN_HOST>;
 
 // Proveedor de generación. Sin la clave, se usa el determinista.
 const GENERATION_PROVIDER = z.enum(["deterministic", "openai"]);
@@ -267,6 +279,15 @@ export function validateConfig(source: ConfigSource): ConfigResult {
       problems.push({ key, problem: "invalid_value" });
     }
   }
+  // Dirección de escucha: opcional.
+  const listenValue = source[LISTEN_KEY];
+  const listenHost =
+    listenValue === undefined || listenValue === ""
+      ? ({ success: true, data: "127.0.0.1" } as const)
+      : LISTEN_HOST.safeParse(listenValue);
+  if (!listenHost.success) {
+    problems.push({ key: LISTEN_KEY, problem: "invalid_value" });
+  }
   // Proveedor de generación: opcional, y con él sus claves.
   const providerValue = source[PROVIDER_KEY];
   const provider =
@@ -297,7 +318,8 @@ export function validateConfig(source: ConfigSource): ConfigResult {
       key.startsWith(PREFIX) &&
       !Object.hasOwn(SCHEMA, key) &&
       !Object.hasOwn(OPENAI_SCHEMA, key) &&
-      key !== PROVIDER_KEY
+      key !== PROVIDER_KEY &&
+      key !== LISTEN_KEY
     ) {
       problems.push({ key, problem: "unknown_key" });
     }
@@ -313,6 +335,7 @@ export function validateConfig(source: ConfigSource): ConfigResult {
     !pdfMaxPages.success ||
     !generationMaxOperationCost.success ||
     !provider.success ||
+    !listenHost.success ||
     problems.length > 0
   ) {
     return failure(problems);
@@ -331,6 +354,7 @@ export function validateConfig(source: ConfigSource): ConfigResult {
       pdfMaxMib: pdfMaxMib.data,
       pdfMaxPages: pdfMaxPages.data,
       generationMaxOperationCost: generationMaxOperationCost.data,
+      listenHost: listenHost.data,
       generationProvider: provider.data,
       openai:
         provider.data === "openai"

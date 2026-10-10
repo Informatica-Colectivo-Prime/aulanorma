@@ -8,6 +8,12 @@ pasa de la publicación en Moodle a la exportación, y la ubicación de su módu
 `src/modules/moodle-publication` a `src/modules/content-export`. El resto de esta decisión
 sigue vigente y su texto no se modifica (nota de revisión; no cambia la decisión).
 
+**Tercera sustitución parcial, propuesta**: el [ADR 0005](./0005-container-packaging-and-listen-address.md),
+Propuesto, sustituye un elemento de la decisión 8: la dirección de escucha deja de ser fija.
+Es `127.0.0.1` por defecto y puede ser `0.0.0.0` con la clave `AULANORMA_LISTEN_HOST`. El
+puerto 3000 sigue fijo y el resto de esta decisión sigue vigente; su texto no se modifica
+(nota de revisión; no cambia la decisión).
+
 **Segunda sustitución parcial**: el [ADR 0004](./0004-product-surface-persistence-identity-and-generation.md),
 Aceptado, sustituye lo que enumera su apartado "Relación con los ADR aceptados": de la decisión
 8, la ausencia de HTML, la delegación de un único destino, el cuerpo vacío, la prueba de la

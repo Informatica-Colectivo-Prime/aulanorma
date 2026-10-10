@@ -130,3 +130,51 @@ describe("proveedor de generación", () => {
     ).toMatchObject({ ok: false });
   });
 });
+
+// Dirección de escucha (ADR 0005).
+describe("dirección de escucha", () => {
+  test("sin indicarla, o vacía, es la local: el servicio no es alcanzable desde otro equipo", () => {
+    for (const source of [BASE, { ...BASE, AULANORMA_LISTEN_HOST: "" }]) {
+      expect(validateConfig(source)).toMatchObject({
+        ok: true,
+        config: { listenHost: "127.0.0.1" },
+      });
+    }
+  });
+
+  test.each(["127.0.0.1", "0.0.0.0"])(
+    "admite %s, indicada de forma explícita",
+    (host) => {
+      expect(
+        validateConfig({ ...BASE, AULANORMA_LISTEN_HOST: host }),
+      ).toMatchObject({ ok: true, config: { listenHost: host } });
+    },
+  );
+
+  test.each([
+    "localhost",
+    "::",
+    "::1",
+    "0.0.0.0:3000",
+    "192.168.1.10",
+    "10.0.0.1",
+    "0",
+    " 0.0.0.0",
+    "aulanorma.example",
+  ])(
+    "no admite %s: no hay más direcciones ni un puerto configurable",
+    (host) => {
+      expect(validateConfig({ ...BASE, AULANORMA_LISTEN_HOST: host })).toEqual({
+        ok: false,
+        problems: [{ key: "AULANORMA_LISTEN_HOST", problem: "invalid_value" }],
+      });
+    },
+  );
+
+  test("el puerto no es configurable", () => {
+    expect(validateConfig({ ...BASE, AULANORMA_LISTEN_PORT: "8080" })).toEqual({
+      ok: false,
+      problems: [{ key: "AULANORMA_LISTEN_PORT", problem: "unknown_key" }],
+    });
+  });
+});
